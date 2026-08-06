@@ -1,0 +1,195 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 24% 97%;
+  --foreground: 222 35% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 35% 12%;
+  --primary: 162 72% 32%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 20% 94%;
+  --secondary-foreground: 222 28% 18%;
+  --muted: 210 18% 93%;
+  --muted-foreground: 215 16% 38%;
+  --accent: 198 70% 92%;
+  --accent-foreground: 200 45% 20%;
+  --destructive: 2 72% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 152 60% 36%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 48%;
+  --warning-foreground: 30 40% 12%;
+  --border: 214 20% 86%;
+  --input: 214 20% 86%;
+  --ring: 162 72% 32%;
+  --radius: 0.75rem;
+  --panel: 0 0% 100%;
+  --panel-foreground: 222 35% 12%;
+}
+
+.dark {
+  --background: 222 28% 8%;
+  --foreground: 210 25% 96%;
+  --card: 222 24% 12%;
+  --card-foreground: 210 25% 96%;
+  --primary: 162 55% 45%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 18% 18%;
+  --secondary-foreground: 210 25% 94%;
+  --muted: 220 16% 16%;
+  --muted-foreground: 214 16% 72%;
+  --accent: 200 24% 20%;
+  --accent-foreground: 200 40% 94%;
+  --destructive: 2 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 152 50% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 52%;
+  --warning-foreground: 30 40% 10%;
+  --border: 220 14% 24%;
+  --input: 220 14% 24%;
+  --ring: 162 55% 45%;
+  --panel: 222 24% 14%;
+  --panel-foreground: 210 25% 96%;
+}
+
+* {
+  @apply border-border;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(34, 160, 120, 0.14), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(40, 120, 180, 0.1), transparent 50%),
+    linear-gradient(180deg, #f5f7fa 0%, #eef2f6 100%);
+  background-attachment: fixed;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.ae-canvas {
+  background:
+    radial-gradient(ellipse 70% 50% at 20% 0%, rgba(15, 118, 110, 0.08), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 100% 10%, rgba(37, 99, 235, 0.06), transparent 50%),
+    linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
+}
+
+.ae-canvas .react-flow__node.ae-node-active > div,
+.ae-canvas .ae-node-running {
+  box-shadow:
+    0 0 0 3px rgba(16, 185, 129, 0.35),
+    0 0 28px rgba(16, 185, 129, 0.28),
+    0 16px 40px rgba(15, 23, 42, 0.12);
+}
+
+@keyframes ae-pulse-ring {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(16, 185, 129, 0.45),
+      0 0 0 3px rgba(16, 185, 129, 0.3),
+      0 16px 40px rgba(15, 23, 42, 0.12);
+  }
+  70% {
+    box-shadow:
+      0 0 0 12px rgba(16, 185, 129, 0),
+      0 0 0 3px rgba(16, 185, 129, 0.35),
+      0 16px 40px rgba(15, 23, 42, 0.12);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(16, 185, 129, 0),
+      0 0 0 3px rgba(16, 185, 129, 0.3),
+      0 16px 40px rgba(15, 23, 42, 0.12);
+  }
+}
+
+.ae-canvas .ae-node-running {
+  animation: ae-pulse-ring 1.4s ease-out infinite;
+}
+
+.ae-canvas .react-flow__edge.ae-edge-active .react-flow__edge-path {
+  stroke: #10b981 !important;
+  stroke-width: 3.5 !important;
+}
+
+.ae-canvas .react-flow__edge.ae-edge-done .react-flow__edge-path {
+  stroke: #34d399 !important;
+  stroke-width: 2.5 !important;
+  opacity: 0.9;
+}
+
+.ae-canvas .react-flow__controls-button {
+  border: none !important;
+  background: transparent !important;
+  fill: hsl(var(--muted-foreground));
+}
+
+.ae-canvas .react-flow__controls-button:hover {
+  background: hsl(var(--muted)) !important;
+}
+
+.ae-canvas .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.ae-canvas .react-flow__edge {
+  cursor: pointer;
+}
+
+.ae-canvas .react-flow__edge.selected .react-flow__edge-path,
+.ae-canvas .react-flow__edge:focus .react-flow__edge-path {
+  stroke: #0f766e !important;
+  stroke-width: 3.5 !important;
+}
+
+.ae-canvas .react-flow__edgeupdater {
+  cursor: move;
+}
+
+.dark .ae-canvas {
+  background:
+    radial-gradient(ellipse 70% 50% at 20% 0%, rgba(34, 160, 120, 0.12), transparent 55%),
+    linear-gradient(180deg, #121821 0%, #0e131a 100%);
+}
+
+.dark .ae-canvas .react-flow__controls-button {
+  fill: hsl(210 25% 88%) !important;
+}
+
+.dark .ae-canvas .react-flow__minimap {
+  background: hsl(222 24% 14%) !important;
+}
+
+.dark body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% -10%, rgba(34, 160, 120, 0.12), transparent 55%),
+    linear-gradient(180deg, #10151c 0%, #0c1016 100%);
+}
+
+/* Shared surface helpers */
+.ae-panel {
+  @apply rounded-2xl border border-border bg-card text-card-foreground shadow-panel;
+}
+
+.ae-soft {
+  @apply rounded-xl border border-border bg-secondary/60 text-foreground;
+}

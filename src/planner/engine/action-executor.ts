@@ -1,0 +1,928 @@
+import { interpolate, interpolateParams } from '@/shared/utils/interpolate'
+import { sendTabMessage } from '@/shared/messaging/bus'
+import { ensureContentScript } from '@/background/ensure-content-script'
+import { runGuardController } from '@/background/run-guard-controller'
+import { tabController } from '@/engine/automation/tab-controller'
+import { downloadManager } from '@/modules/download/download-manager'
+import { chatGptModule } from '@/modules/chatgpt/chatgpt-module'
+import { activityLog } from '@/engine/activity/activity-log'
+import { sleep } from '@/engine/retry/retry-policy'
+import { resolveTypeText, typingDelayRange } from '@/planner/engine/text-library'
+import { collectJsonParts } from '@/planner/engine/multipart-collect'
+import type { ActionHandlerResult } from '@/planner/actions/types'
+import type { AutomationCommand } from '@/shared/types/messages'
+
+async function sendDom(
+  tabId: number,
+  command: AutomationCommand,
+): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  await ensureContentScript(tabId)
+  if (runGuardController.isEnabled()) {
+    await runGuardController.lockTab(tabId)
+  }
+  return sendTabMessage(tabId, { type: 'AUTOMATION_COMMAND', payload: command })
+}
+
+async function ensureTab(activeTabId?: number): Promise<number> {
+  if (activeTabId) return activeTabId
+  const active = await tabController.getActiveTab()
+  if (!active?.id) throw new Error('No active tab')
+  return active.id
+}
+
+function evaluateCondition(
+  left: unknown,
+  operator: string,
+  right: unknown,
+): boolean {
+  const l = left == null ? '' : String(left)
+  const r = right == null ? '' : String(right)
+  switch (operator) {
+    case 'equals':
+      return l === r
+    case 'not_equals':
+      return l !== r
+    case 'contains':
+      return l.includes(r)
+    case 'starts_with':
+      return l.startsWith(r)
+    case 'ends_with':
+      return l.endsWith(r)
+    case 'gt':
+      return Number(l) > Number(r)
+    case 'lt':
+      return Number(l) < Number(r)
+    case 'empty':
+      return l.trim().length === 0
+    case 'not_empty':
+      return l.trim().length > 0
+    case 'regex':
+      return new RegExp(r).test(l)
+    default:
+      return false
+  }
+}
+
+export async function executePlannerAction(args: {
+  actionId: string
+  params: Record<string, unknown>
+  variables: Record<string, unknown>
+  activeTabId?: number
+  timeoutMs: number
+  workflowId?: string
+  nodeId?: string
+  planId?: string
+}): Promise<ActionHandlerResult> {
+  const params = interpolateParams(args.params, args.variables)
+  const selector = params.selector ? String(params.selector) : undefined
+  const fallbacks = Array.isArray(params.selectorFallbacks)
+    ? (params.selectorFallbacks as unknown[]).map(String).filter(Boolean)
+    : typeof params.selectorFallbacks === 'string'
+      ? String(params.selectorFallbacks)
+          .split(/\n|,/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : []
+  let activeTabId = args.activeTabId
+
+  const runDom = (tabId: number, command: AutomationCommand) =>
+    sendDom(tabId, { ...command, fallbacks: command.fallbacks ?? fallbacks })
+
+  try {
+    switch (args.actionId) {
+      case 'flow.start':
+      case 'flow.end':
+      case 'flow.return':
+        return { status: 'success' }
+
+      case 'flow.stop':
+        return { status: 'success', nextNodeId: null }
+
+      case 'flow.pause':
+        return { status: 'waiting' }
+
+      case 'flow.goto_step':
+        return { status: 'success', nextNodeId: String(params.targetNodeId ?? '') }
+
+      case 'flow.goto_workflow':
+        return {
+          status: 'success',
+          output: { nestedWorkflowId: String(params.workflowId ?? '') },
+          branch: 'nested',
+        }
+
+      case 'browser.open_url':
+      case 'browser.new_tab':
+      case 'ai.open_chatgpt':
+      case 'ai.open_claude':
+      case 'ai.open_gemini':
+      case 'ai.open_grok': {
+        const url = String(params.url ?? 'https://chatgpt.com/')
+        const reuse = params.reuseExisting !== false
+        // Never force the OS window forward — flow keeps working if Chrome is minimized.
+        const tab = reuse
+          ? await tabController.openUrlOrFocus(url, {
+              active: Boolean(params.active ?? true),
+              focusWindow: Boolean(params.focusWindow ?? false),
+            })
+          : await tabController.openUrl(url, Boolean(params.active ?? true))
+        if (tab.id != null && runGuardController.isEnabled()) {
+          await runGuardController.lockTab(tab.id)
+        }
+        return { status: 'success', activeTabId: tab.id, output: { tabId: tab.id, url } }
+      }
+
+      case 'browser.refresh':
+      case 'browser.reload': {
+        activeTabId = await ensureTab(activeTabId)
+        await chrome.tabs.reload(activeTabId)
+        await tabController.waitForComplete(activeTabId)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'browser.go_back': {
+        activeTabId = await ensureTab(activeTabId)
+        await chrome.tabs.goBack(activeTabId)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'browser.go_forward': {
+        activeTabId = await ensureTab(activeTabId)
+        await chrome.tabs.goForward(activeTabId)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'browser.close_tab': {
+        activeTabId = await ensureTab(activeTabId)
+        await chrome.tabs.remove(activeTabId)
+        return { status: 'success', activeTabId: undefined }
+      }
+
+      case 'browser.switch_tab':
+      case 'browser.focus_tab': {
+        // Default stays quiet so Chrome can stay minimized; set focusWindow:true only if needed
+        const focusWindow = Boolean(params.focusWindow ?? false)
+        if (params.urlIncludes) {
+          const found = await tabController.findTabByUrl(String(params.urlIncludes))
+          if (!found?.id) throw new Error('Tab not found')
+          await tabController.switchToTab(found.id, { focusWindow })
+          if (runGuardController.isEnabled()) await runGuardController.lockTab(found.id)
+          return { status: 'success', activeTabId: found.id }
+        }
+        const tabId = Number(params.tabId ?? activeTabId)
+        await tabController.switchToTab(tabId, { focusWindow })
+        if (runGuardController.isEnabled()) await runGuardController.lockTab(tabId)
+        return { status: 'success', activeTabId: tabId }
+      }
+
+      case 'browser.wait_for_page': {
+        activeTabId = await ensureTab(activeTabId)
+        await tabController.waitForComplete(activeTabId, args.timeoutMs)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'browser.scroll': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'scroll',
+          options: { y: Number(params.y ?? 600) },
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'browser.scroll_to': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'scroll',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'browser.download_file':
+      case 'downloads.download_url': {
+        const downloadId = await downloadManager.download({
+          url: String(params.url ?? ''),
+          filename: params.filename ? String(params.filename) : undefined,
+        })
+        return { status: 'success', output: { downloadId } }
+      }
+
+      case 'mouse.click': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'click',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        return { status: 'success', activeTabId }
+      }
+
+      case 'ai.click_send': {
+        activeTabId = await ensureTab(activeTabId)
+        // Wait briefly so ChatGPT enables Send after Paste/Type
+        await sleep(400)
+        const sendSelector =
+          selector ||
+          'button[data-testid="send-button"], button[data-testid="composer-send-button"], button[aria-label*="Send"]'
+        const result = await runDom(activeTabId, {
+          action: 'clickSend',
+          selector: sendSelector,
+          timeoutMs: Math.max(args.timeoutMs, 20_000),
+        })
+        if (!result.ok) throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        return { status: 'success', activeTabId }
+      }
+
+      case 'mouse.double_click':
+      case 'mouse.right_click':
+      case 'mouse.hover': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'click',
+          selector,
+          timeoutMs: args.timeoutMs,
+          options: { mode: args.actionId.replace('mouse.', '') },
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'keyboard.type_text':
+      case 'keyboard.paste_text': {
+        activeTabId = await ensureTab(activeTabId)
+        const pasteMode = args.actionId === 'keyboard.paste_text'
+
+        const resolved = await resolveTypeText({
+          params,
+          workflowId: args.workflowId,
+          nodeId: args.nodeId,
+          planId: args.planId,
+        })
+        if (!resolved.text.trim()) {
+          throw new Error(
+            pasteMode
+              ? 'Nothing to paste. Pick a Text library title, or enter manual text on Paste Text.'
+              : 'Nothing to type. Pick a Text library title, or enter manual text on TypeText.',
+          )
+        }
+
+        const delays = pasteMode
+          ? null
+          : typingDelayRange(String(params.typingSpeed ?? 'human'))
+
+        await activityLog.append(
+          'info',
+          'Planner',
+          `${pasteMode ? 'PasteText' : 'TypeText'}${resolved.meta ? ` (${resolved.meta})` : ''}: ${resolved.text.slice(0, 80)}`,
+        )
+
+        // Brief pause so ChatGPT composer is ready after "New chat" click
+        await sleep(pasteMode ? 700 : 400)
+
+        const result = await runDom(activeTabId, {
+          action: pasteMode ? 'paste' : delays ? 'type' : 'fill',
+          selector: selector || undefined,
+          value: resolved.text,
+          timeoutMs: Math.max(args.timeoutMs, pasteMode ? 60_000 : args.timeoutMs),
+          options: delays
+            ? { humanTyping: true, delayMin: delays.min, delayMax: delays.max }
+            : { humanTyping: false },
+        })
+        if (!result.ok) throw new Error(result.error)
+        // Let ChatGPT enable the Send button before the next step
+        if (pasteMode) await sleep(500)
+        return {
+          status: 'success',
+          activeTabId,
+          output: {
+            text: resolved.text,
+            meta: resolved.meta,
+            hasMore: Boolean(resolved.hasMore),
+            index: resolved.index,
+            total: resolved.total,
+            mode: pasteMode ? 'paste' : 'type',
+          },
+          variables: {
+            __lastTypedText: resolved.text,
+            __lastTypedMeta: resolved.meta ?? '',
+            __libraryHasMore: Boolean(resolved.hasMore),
+            __libraryQueueIndex: resolved.index ?? 0,
+            __libraryQueueTotal: resolved.total ?? 1,
+          },
+        }
+      }
+
+      case 'input.fill':
+      case 'ai.paste_prompt': {
+        activeTabId = await ensureTab(activeTabId)
+        const value = String(params.text ?? params.value ?? params.prompt ?? '')
+        const result = await runDom(activeTabId, {
+          action: 'fill',
+          selector,
+          value,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'input.clear': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'fill',
+          selector,
+          value: '',
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'input.append': {
+        activeTabId = await ensureTab(activeTabId)
+        const current = await runDom(activeTabId, {
+          action: 'extractAttribute',
+          selector,
+          attribute: 'value',
+          timeoutMs: args.timeoutMs,
+        })
+        const next = `${String(current.data ?? '')}${String(params.value ?? '')}`
+        const result = await runDom(activeTabId, {
+          action: 'fill',
+          selector,
+          value: next,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'input.dropdown': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'select',
+          selector,
+          value: String(params.value ?? ''),
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'keyboard.press_key': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'pressKey',
+          selector,
+          key: String(params.key ?? 'Enter'),
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.wait_visible':
+      case 'element.wait_icon':
+      case 'wait.until_element': {
+        activeTabId = await ensureTab(activeTabId)
+        if (!selector) throw new Error('Selector is required — pick the element/icon with mouse')
+        const result = await runDom(activeTabId, {
+          action: 'waitForElementVisible',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.if_visible': {
+        activeTabId = await ensureTab(activeTabId)
+        if (!selector) throw new Error('Selector is required — pick the button/element with mouse')
+        const pollMs = Math.max(
+          0,
+          Number(params.pollMs ?? args.timeoutMs ?? 2500),
+        )
+        const result = await runDom(activeTabId, {
+          action: 'checkElementVisible',
+          selector,
+          timeoutMs: pollMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        const visible = Boolean(
+          (result.data as { visible?: boolean } | undefined)?.visible,
+        )
+        return {
+          status: 'success',
+          branch: visible ? 'true' : 'false',
+          activeTabId,
+          output: { visible },
+          variables: { __lastVisible: visible },
+        }
+      }
+
+      case 'element.wait_hidden':
+      case 'wait.until_hidden': {
+        activeTabId = await ensureTab(activeTabId)
+        if (!selector) throw new Error('Selector is required — pick the element with mouse')
+        const result = await runDom(activeTabId, {
+          action: 'waitForElementHidden',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.wait_clickable':
+      case 'wait.until_clickable': {
+        activeTabId = await ensureTab(activeTabId)
+        if (!selector) throw new Error('Selector is required — pick the element with mouse')
+        const result = await runDom(activeTabId, {
+          action: 'waitForClickable',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.wait_text':
+      case 'wait.until_text': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? '')
+        if (!text.trim()) throw new Error('Text is required')
+        const result = await runDom(activeTabId, {
+          action: 'waitForText',
+          text,
+          timeoutMs: args.timeoutMs,
+          options: { matchMode: String(params.matchMode ?? 'contains') },
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.wait_exact_text': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? '')
+        if (!text.trim()) throw new Error('Exact text is required')
+        const result = await runDom(activeTabId, {
+          action: 'waitForExactText',
+          text,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.wait_text_gone': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? '')
+        if (!text.trim()) throw new Error('Text is required')
+        const result = await runDom(activeTabId, {
+          action: 'waitForTextGone',
+          text,
+          timeoutMs: args.timeoutMs,
+          options: { matchMode: String(params.matchMode ?? 'contains') },
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.wait_button':
+      case 'wait.until_button': {
+        activeTabId = await ensureTab(activeTabId)
+        const buttonText = String(params.buttonText ?? params.text ?? '')
+        if (!selector && !buttonText.trim()) {
+          throw new Error('Provide a button label or pick a selector with mouse')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'waitForButton',
+          text: buttonText,
+          selector: selector || undefined,
+          timeoutMs: args.timeoutMs,
+          options: { exact: Boolean(params.exact) },
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'ai.wait_response': {
+        activeTabId = await ensureTab(activeTabId)
+        // Prefer waiting until streaming/generation fully ends
+        const result = await runDom(activeTabId, {
+          action: 'waitForGenerationEnd',
+          timeoutMs: args.timeoutMs || 180_000,
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId }
+      }
+
+      case 'ai.collect_json_parts': {
+        activeTabId = await ensureTab(activeTabId)
+        const outputKey = String(params.outputKey ?? 'finalStoryJson')
+        const filename = interpolate(String(params.filename ?? 'chatgpt-story.json'), args.variables)
+        // Always read the latest assistant message from the page (after Wait Response)
+        const collected = await collectJsonParts({
+          activeTabId,
+          timeoutMs: args.timeoutMs || 300_000,
+          maxParts: Number(params.maxParts ?? 12),
+          filename,
+          autoDownload: params.autoDownload !== false,
+        })
+        return {
+          status: 'success',
+          activeTabId,
+          output: collected,
+          variables: {
+            [outputKey]: collected.finalJson,
+            storyPartCount: collected.partCount,
+            storyCollectMode: collected.mode,
+            storyJsonValid: collected.validJson,
+            storyDownloadId: collected.downloadId ?? null,
+            storyFilename: collected.filename,
+            aiResponse: collected.finalJson,
+          },
+        }
+      }
+
+      case 'flow.repeat_if_more': {
+        const target = String(params.targetNodeId ?? '')
+        if (!target) throw new Error('flow.repeat_if_more needs targetNodeId (e.g. New chat node id)')
+        const hasMore = Boolean(args.variables.__libraryHasMore)
+        await activityLog.append(
+          'info',
+          'Planner',
+          hasMore
+            ? `More titles remain (${String(args.variables.__libraryQueueIndex ?? '?')}/${String(args.variables.__libraryQueueTotal ?? '?')}) — jump to ${target}`
+            : 'Library queue finished — continue to End',
+        )
+        if (hasMore) {
+          return { status: 'success', nextNodeId: target }
+        }
+        return { status: 'success' }
+      }
+
+      case 'element.find': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'assertElement',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId }
+      }
+
+      case 'element.extract_text':
+      case 'ai.copy_response': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'extractText',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        const key = String(params.outputKey ?? 'extractedText')
+        return {
+          status: 'success',
+          activeTabId,
+          output: result.data,
+          variables: { [key]: result.data },
+        }
+      }
+
+      case 'element.extract_attribute': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'extractAttribute',
+          selector,
+          attribute: String(params.attribute ?? 'href'),
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        const key = String(params.outputKey ?? 'extractedAttr')
+        return {
+          status: 'success',
+          activeTabId,
+          output: result.data,
+          variables: { [key]: result.data },
+        }
+      }
+
+      case 'wait.delay': {
+        await sleep(Number(params.ms ?? 1000))
+        return { status: 'success' }
+      }
+
+      case 'wait.random': {
+        const min = Number(params.minMs ?? 500)
+        const max = Number(params.maxMs ?? 1500)
+        const ms = Math.floor(min + Math.random() * Math.max(0, max - min))
+        await sleep(ms)
+        return { status: 'success', output: { ms } }
+      }
+
+      case 'wait.until_url': {
+        activeTabId = await ensureTab(activeTabId)
+        const needle = String(params.includes ?? '')
+        const started = Date.now()
+        while (Date.now() - started < args.timeoutMs) {
+          const tab = await chrome.tabs.get(activeTabId)
+          if (tab.url?.includes(needle)) return { status: 'success', activeTabId }
+          await sleep(250)
+        }
+        const err = new Error('URL wait timed out')
+        err.name = 'TimeoutError'
+        throw err
+      }
+
+      case 'variables.set': {
+        const key = String(params.key ?? '')
+        return { status: 'success', variables: { [key]: params.value } }
+      }
+
+      case 'variables.append': {
+        const key = String(params.key ?? '')
+        if (!key) throw new Error('variables.append needs a key')
+        const prev = args.variables[key]
+        const prevText = prev == null ? '' : String(prev)
+        const nextText = interpolate(String(params.text ?? ''), args.variables)
+        const separator = String(params.separator ?? '')
+        const joined = `${prevText}${separator}${nextText}`
+        return { status: 'success', variables: { [key]: joined }, output: joined }
+      }
+
+      case 'variables.delete': {
+        return {
+          status: 'success',
+          variables: { [String(params.key ?? '')]: undefined },
+        }
+      }
+
+      case 'conditions.if': {
+        const waitBeforeMs = Math.max(0, Number(params.waitBeforeMs ?? 0))
+        if (waitBeforeMs > 0) await sleep(waitBeforeMs)
+
+        const checkType = String(params.checkType ?? 'variable')
+        const waitMs = Math.max(0, Number(params.waitMs ?? 2500))
+        const negate = Boolean(params.negate)
+        let ok = false
+        let detail: unknown = null
+
+        if (checkType === 'variable') {
+          const left = interpolate(String(params.left ?? ''), args.variables)
+          const right = interpolate(String(params.right ?? ''), args.variables)
+          ok = evaluateCondition(left, String(params.operator ?? 'equals'), right)
+          detail = { left, right, operator: params.operator }
+        } else {
+          activeTabId = await ensureTab(activeTabId)
+          const kind =
+            checkType === 'element_visible' ||
+            checkType === 'element_exists' ||
+            checkType === 'element_clickable' ||
+            checkType === 'button_name' ||
+            checkType === 'text_present' ||
+            checkType === 'text_gone'
+              ? checkType
+              : 'element_visible'
+          const result = await runDom(activeTabId, {
+            action: 'checkCondition',
+            selector: selector || String(params.selector ?? '') || undefined,
+            text: interpolate(String(params.text ?? params.buttonName ?? ''), args.variables),
+            timeoutMs: waitMs,
+            options: {
+              kind,
+              exact: Boolean(params.exact),
+              matchMode: String(params.matchMode ?? 'contains'),
+            },
+          })
+          if (!result.ok) throw new Error(result.error)
+          ok = Boolean((result.data as { matched?: boolean } | undefined)?.matched)
+          detail = result.data
+        }
+
+        if (negate) ok = !ok
+        return {
+          status: 'success',
+          branch: ok ? 'true' : 'false',
+          activeTabId,
+          output: { ok, checkType, detail },
+          variables: { __lastCondition: ok },
+        }
+      }
+
+      case 'conditions.switch': {
+        const waitBeforeMs = Math.max(0, Number(params.waitBeforeMs ?? 0))
+        if (waitBeforeMs > 0) await sleep(waitBeforeMs)
+
+        const sourceType = String(params.sourceType ?? 'variable')
+        const waitMs = Math.max(0, Number(params.waitMs ?? 2500))
+        const matchMode = String(params.matchMode ?? 'equals')
+        let value = ''
+
+        if (sourceType === 'variable') {
+          value = interpolate(String(params.value ?? ''), args.variables)
+        } else {
+          activeTabId = await ensureTab(activeTabId)
+          const kind =
+            sourceType === 'element_attribute' ? 'element_attribute' : 'element_text'
+          const result = await runDom(activeTabId, {
+            action: 'checkCondition',
+            selector: selector || String(params.selector ?? '') || undefined,
+            attribute: String(params.attribute ?? 'href'),
+            timeoutMs: waitMs,
+            options: { kind },
+          })
+          if (!result.ok) throw new Error(result.error)
+          value = String((result.data as { value?: string } | undefined)?.value ?? '')
+        }
+
+        const cases = String(params.cases ?? '')
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean)
+
+        let matched: string | undefined
+        for (const caseValue of cases) {
+          if (matchMode === 'contains' && value.includes(caseValue)) {
+            matched = caseValue
+            break
+          }
+          if (matchMode === 'starts_with' && value.startsWith(caseValue)) {
+            matched = caseValue
+            break
+          }
+          if (matchMode === 'regex') {
+            try {
+              if (new RegExp(caseValue, 'i').test(value)) {
+                matched = caseValue
+                break
+              }
+            } catch {
+              /* ignore bad regex */
+            }
+            continue
+          }
+          if (matchMode === 'equals' || !matchMode) {
+            if (value === caseValue) {
+              matched = caseValue
+              break
+            }
+          }
+        }
+
+        const branch = matched ?? 'default'
+        return {
+          status: 'success',
+          branch,
+          activeTabId,
+          output: { value, branch, cases },
+          variables: { __lastSwitchValue: value, __lastSwitchBranch: branch },
+        }
+      }
+
+      case 'ai.chatgpt_prompt': {
+        const response = await chatGptModule.runPrompt(String(params.prompt ?? ''))
+        return {
+          status: 'success',
+          output: response,
+          variables: { lastChatGptResponse: response },
+        }
+      }
+
+      case 'logging.info':
+      case 'logging.error':
+      case 'logging.success': {
+        const level =
+          args.actionId === 'logging.error'
+            ? 'error'
+            : args.actionId === 'logging.success'
+              ? 'success'
+              : 'info'
+        await activityLog.append(level, 'Planner', String(params.message ?? ''))
+        return { status: 'success' }
+      }
+
+      case 'data.json_parse': {
+        const source = interpolate(String(params.source ?? ''), args.variables)
+        const parsed = JSON.parse(source)
+        const key = String(params.outputKey ?? 'parsed')
+        return { status: 'success', variables: { [key]: parsed }, output: parsed }
+      }
+
+      case 'data.regex_extract': {
+        const source = interpolate(String(params.source ?? ''), args.variables)
+        const pattern = String(params.pattern ?? '')
+        const group = Number(params.group ?? 1)
+        const key = String(params.outputKey ?? 'extracted')
+        const match = source.match(new RegExp(pattern, 'i'))
+        const value = match?.[group] ?? match?.[0] ?? ''
+        if (!value) throw new Error(`Regex did not match: ${pattern}`)
+        return { status: 'success', variables: { [key]: value }, output: value }
+      }
+
+      case 'downloads.save_text': {
+        const text = interpolate(String(params.text ?? ''), args.variables)
+        const filename = interpolate(String(params.filename ?? 'output.json'), args.variables)
+        const url = `data:application/json;charset=utf-8,${encodeURIComponent(text)}`
+        const downloadId = await downloadManager.download({
+          url,
+          filename,
+          conflictAction: 'uniquify',
+        })
+        return { status: 'success', output: { downloadId, filename }, variables: { lastDownloadId: downloadId } }
+      }
+
+      case 'data.replace': {
+        const source = interpolate(String(params.source ?? ''), args.variables)
+        const replaced = source.replaceAll(
+          String(params.search ?? ''),
+          String(params.replaceWith ?? ''),
+        )
+        const key = String(params.outputKey ?? 'replaced')
+        return { status: 'success', variables: { [key]: replaced }, output: replaced }
+      }
+
+      case 'data.trim': {
+        const source = interpolate(String(params.source ?? ''), args.variables).trim()
+        const key = String(params.outputKey ?? 'trimmed')
+        return { status: 'success', variables: { [key]: source }, output: source }
+      }
+
+      case 'clipboard.write': {
+        // Best-effort via offscreen-less approach: store into variable mirror
+        const text = interpolate(String(params.text ?? ''), args.variables)
+        return { status: 'success', variables: { __clipboard: text }, output: text }
+      }
+
+      case 'clipboard.read': {
+        const key = String(params.outputKey ?? 'clipboard')
+        return {
+          status: 'success',
+          variables: { [key]: args.variables.__clipboard ?? '' },
+        }
+      }
+
+      case 'screenshot.full': {
+        await activityLog.append('info', 'Planner', `Screenshot marker: ${String(params.label ?? '')}`)
+        return { status: 'success' }
+      }
+
+      case 'loops.for':
+      case 'loops.while':
+      case 'loops.foreach':
+      case 'loops.break':
+      case 'loops.continue':
+        return { status: 'success', branch: args.actionId }
+
+      default:
+        await activityLog.append(
+          'warn',
+          'Planner',
+          `Action registered but executor stub: ${args.actionId}`,
+        )
+        return { status: 'success', output: { stub: true, actionId: args.actionId } }
+    }
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error))
+    const status = err.name === 'TimeoutError' ? 'timeout' : 'failed'
+    return { status, error: err.message, activeTabId }
+  }
+}

@@ -1,0 +1,448 @@
+{
+  "kind": "workflow",
+  "version": 1,
+  "exportedAt": "2026-08-06T22:11:00.965Z",
+  "workflow": {
+    "color": "#0f766e",
+    "createdAt": "2026-08-06T21:33:27.469Z",
+    "description": "Open Deepseek → paste story prompt → send → wait hidden → if preferred button visible click it, else click fallback button",
+    "edges": [
+      {
+        "id": "e_dU_YHQXY",
+        "source": "n_DBNa6qdO",
+        "target": "n_xyBal0mR",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_xyBal0mR_n__xNoZXW1_1786053104711",
+        "source": "n_xyBal0mR",
+        "target": "n__xNoZXW1",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n__xNoZXW1_n_7Vfmq8nE_1786053174410",
+        "source": "n__xNoZXW1",
+        "target": "n_7Vfmq8nE",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_7Vfmq8nE_n_dXUl4K7L_1786053294608",
+        "source": "n_7Vfmq8nE",
+        "target": "n_dXUl4K7L",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_dXUl4K7L_n_J0ED60L0_1786053331129",
+        "source": "n_dXUl4K7L",
+        "target": "n_J0ED60L0",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_J0ED60L0_n_YWtnMJ2u_1786053477256",
+        "source": "n_J0ED60L0",
+        "target": "n_YWtnMJ2u",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_YWtnMJ2u_n_c6dLchMm_1786053589390",
+        "source": "n_YWtnMJ2u",
+        "target": "n_c6dLchMm",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_c6dLchMm_n_jLCO12Ui_1786053611480",
+        "source": "n_c6dLchMm",
+        "target": "n_jLCO12Ui",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_jLCO12Ui_n_lM0UP_7y_1786053653965",
+        "source": "n_jLCO12Ui",
+        "target": "n_lM0UP_7y",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_lM0UP_7y_n_if_btn",
+        "source": "n_lM0UP_7y",
+        "target": "n_if_btn",
+        "sourceHandle": "out",
+        "animated": true
+      },
+      {
+        "id": "e_n_if_btn_true_click",
+        "source": "n_if_btn",
+        "target": "n_click_preferred",
+        "sourceHandle": "true",
+        "animated": true
+      },
+      {
+        "id": "e_n_if_btn_false_click",
+        "source": "n_if_btn",
+        "target": "n_click_fallback",
+        "sourceHandle": "false",
+        "animated": true
+      }
+    ],
+    "enabled": true,
+    "id": "vwf_3ORNJ0Ol",
+    "name": "Story Titles → ChatGPT Loop (imported)",
+    "nodes": [
+      {
+        "id": "n_DBNa6qdO",
+        "type": "start",
+        "position": {
+          "x": 309,
+          "y": -68
+        },
+        "data": {
+          "actionId": "flow.start",
+          "collapsed": false,
+          "enabled": true,
+          "favorite": false,
+          "label": "Start",
+          "params": {},
+          "timeoutMs": 5000
+        }
+      },
+      {
+        "id": "n_xyBal0mR",
+        "type": "action",
+        "position": {
+          "x": 324,
+          "y": 56
+        },
+        "data": {
+          "actionId": "ai.open_chatgpt",
+          "collapsed": false,
+          "color": "#16a34a",
+          "enabled": true,
+          "favorite": true,
+          "label": "Open / Focus Deepseek",
+          "params": {
+            "active": true,
+            "reuseExisting": true,
+            "url": "https://chat.deepseek.com/"
+          },
+          "timeoutMs": 60000
+        }
+      },
+      {
+        "id": "n__xNoZXW1",
+        "type": "action",
+        "position": {
+          "x": 333,
+          "y": 192.00568389892578
+        },
+        "data": {
+          "actionId": "element.wait_visible",
+          "label": "Wait Until Visible",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#059669",
+          "params": {
+            "selector": "textarea[name=\"search\"]"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "textarea[name=\"search\"]",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_7Vfmq8nE",
+        "type": "action",
+        "position": {
+          "x": 333,
+          "y": 312.0056838989258
+        },
+        "data": {
+          "actionId": "keyboard.paste_text",
+          "label": "Paste Text",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#7c3aed",
+          "params": {
+            "selector": "textarea[name=\"search\"]",
+            "textMode": "library",
+            "textItemIds": [
+              "ti_2",
+              "ti_3"
+            ],
+            "queueWrap": false,
+            "textLibraryId": "lib_story_title",
+            "textTemplate": "You are a Professional Cinematic Story Generator.\n\nYour ONLY responsibility is to generate a COMPLETE long-form cinematic story in a STRICT and STABLE JSON format.\n\nYou are NOT a chatbot.\n\nNever explain anything.\n\nNever ask questions.\n\nNever apologize.\n\nNever add notes.\n\nNever add comments.\n\nNever output Markdown except ONE markdown code block.\n\n==================================================\nINPUT\n==================================================\n\nThe user will ONLY provide ONE line:\n\nStory Topic: {_Story Title}\n\n==================================================\nOUTPUT FORMAT\n==================================================\n\nReturn ONLY ONE markdown code block.\n\nInside the code block there must be ONLY ONE valid JSON object.\n\nNever output anything before or after the code block.\n\nThe JSON structure MUST NEVER change between generations.\n\nEvery story must always follow the EXACT same schema.\n\n==================================================\nTARGET STORY\n==================================================\n\nGenerate a completely ORIGINAL YouTube-style cinematic storytelling script.\n\nThe story should feel like a professional narrated documentary/movie.\n\nTarget duration:\n40–50 minutes\n\nEstimated narration:\n5,500–7,500 words\n\nEstimated scenes:\n15–25\n\nNever intentionally shorten the story.\n\nGenerate as many scenes as required.\n\n==================================================\nSTORY STYLE\n==================================================\n\n• Emotional\n• Cinematic\n• Realistic\n• Hollywood quality\n• Strong hook\n• Mystery\n• Suspense\n• Emotional ending\n• High audience retention\n• Scene-to-scene continuity\n\n==================================================\nCHARACTER CONSISTENCY\n==================================================\n\nCharacters MUST remain identical from beginning to end.\n\nNever change\n\nAge\n\nFace\n\nHair\n\nClothing\n\nAccessories\n\nVoice\n\nPersonality\n\nHeight\n\nBody type\n\n==================================================\nSCENE FORMAT\n==================================================\n\nEach scene MUST contain\n\nscene_number\n\nscene_title\n\nlocation\n\ntime_of_day\n\nweather\n\nscene_summary\n\nvoice_script\n\nimage_prompt\n\nestimated_duration\n\n==================================================\nVOICE SCRIPT\n==================================================\n\nEach voice_script should\n\nNatural narration\n\nNo dialogue formatting\n\nEasy to understand\n\nEmotionally engaging\n\nHighly descriptive\n\nConnect naturally to previous scene\n\nAverage 120–180 words per scene\n\n==================================================\nIMAGE PROMPT\n==================================================\n\nEach image_prompt must be optimized for AI image generation.\n\nAlways include\n\nCharacter appearance\n\nCharacter clothing\n\nFacial expression\n\nBody language\n\nForeground\n\nBackground\n\nEnvironment\n\nWeather\n\nLighting\n\nMood\n\nCamera angle\n\nCamera lens\n\nDepth of field\n\nComposition\n\nColor grading\n\nUltra realistic\n\nPhotorealistic\n\nMovie still\n\n8K\n\nHDR\n\nCinematic\n\nHighly detailed\n\nKeep character appearance EXACTLY the same across every scene.\n\n==================================================\nJSON SCHEMA\n==================================================\n\n{\n  \"success\": true,\n  \"version\": \"1.0\",\n  \"story\": {\n    \"story_title\": \"\",\n    \"story_topic\": \"\",\n    \"genre\": \"\",\n    \"language\": \"English (US)\",\n    \"target_audience\": \"\",\n    \"estimated_duration\": \"40-50 Minutes\",\n    \"estimated_scene_count\": 0,\n    \"theme\": \"\",\n    \"hook\": \"\",\n    \"summary\": \"\",\n    \"main_character\": {\n      \"name\": \"\",\n      \"age\": \"\",\n      \"gender\": \"\",\n      \"appearance\": \"\",\n      \"hair\": \"\",\n      \"eyes\": \"\",\n      \"clothing\": \"\",\n      \"personality\": \"\",\n      \"voice\": \"\"\n    },\n    \"supporting_characters\": [],\n    \"villain\": {},\n    \"world\": \"\",\n    \"story_flow\": {\n      \"opening\": \"\",\n      \"beginning\": \"\",\n      \"rising_action\": \"\",\n      \"midpoint\": \"\",\n      \"twist\": \"\",\n      \"climax\": \"\",\n      \"ending\": \"\",\n      \"moral\": \"\"\n    },\n    \"scenes\": [\n      {\n        \"scene_number\": 1,\n        \"scene_title\": \"\",\n        \"location\": \"\",\n        \"time_of_day\": \"\",\n        \"weather\": \"\",\n        \"scene_summary\": \"\",\n        \"voice_script\": \"\",\n        \"image_prompt\": \"\",\n        \"estimated_duration\": \"\"\n      }\n    ]\n  },\n  \"metadata\": {\n    \"youtube\": {\n      \"title\": \"\",\n      \"description\": \"\",\n      \"hashtags\": [],\n      \"keywords\": [],\n      \"category\": \"Entertainment\"\n    },\n    \"background_music\": {\n      \"title\": \"\",\n      \"style\": \"\",\n      \"mood\": \"\",\n      \"bpm\": \"\",\n      \"usage\": \"Full Video\"\n    },\n    \"thumbnail\": {\n      \"title\": \"\",\n      \"text\": \"\",\n      \"image_prompt\": \"\"\n    },\n    \"seo\": {\n      \"slug\": \"\",\n      \"meta_title\": \"\",\n      \"meta_description\": \"\"\n    }\n  },\n  \"error\": null\n}\n\n==================================================\nERROR FORMAT\n==================================================\n\nIf generation fails for ANY reason, NEVER change the JSON structure.\n\nReturn\n\n{\n  \"success\": false,\n  \"version\": \"1.0\",\n  \"story\": null,\n  \"metadata\": null,\n  \"error\": {\n    \"code\": \"\",\n    \"message\": \"\"\n  }\n}\n\n==================================================\nIMPORTANT RULES\n==================================================\n\n1. Never change the schema.\n\n2. Never rename fields.\n\n3. Never remove fields.\n\n4. Never output Markdown outside the single code block.\n\n5. Never output explanations.\n\n6. Never output notes.\n\n7. Never output comments.\n\n8. Never leave empty strings where content can be generated.\n\n9. Keep all scenes connected.\n\n10. Maintain perfect continuity.\n\n11. Every image_prompt must match its voice_script.\n\n12. Story must be completely original.\n\n13. Never copy movies, books, games, or YouTube stories.\n\n14. Language must always be English (US).\n\n15. The response must always be valid JSON.\n\n16. If the story reaches the model's maximum output length, stop ONLY at the end of a complete scene and set:\n\n\"error\": {\n  \"code\": \"OUTPUT_LIMIT_REACHED\",\n  \"message\": \"Continue generation from the next scene using the same JSON schema.\"\n}\n\n17. Always preserve the exact same JSON structure in every generation so another AI can continue seamlessly."
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "textarea[name=\"search\"]",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_dXUl4K7L",
+        "type": "action",
+        "position": {
+          "x": 335.5106649959515,
+          "y": 429.3635902140348
+        },
+        "data": {
+          "actionId": "element.wait_clickable",
+          "label": "Wait Until Clickable",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#059669",
+          "params": {
+            "selector": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_J0ED60L0",
+        "type": "action",
+        "position": {
+          "x": 338.05711770050107,
+          "y": 554.6557429949545
+        },
+        "data": {
+          "actionId": "mouse.click",
+          "label": "Click · Start chatting with InstantI",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#2563eb",
+          "params": {
+            "selector": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_YWtnMJ2u",
+        "type": "action",
+        "position": {
+          "x": 343.5860372139744,
+          "y": 678.0931644808132
+        },
+        "data": {
+          "actionId": "element.wait_hidden",
+          "label": "Wait Until Hidden",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#059669",
+          "params": {
+            "selector": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_c6dLchMm",
+        "type": "action",
+        "position": {
+          "x": 350.2815981268278,
+          "y": 820.4494276060568
+        },
+        "data": {
+          "actionId": "element.wait_button",
+          "label": "Wait For Button",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#059669",
+          "params": {
+            "exact": false,
+            "selector": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div > div:nth-of-type(1)"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div > div:nth-of-type(1)",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_jLCO12Ui",
+        "type": "action",
+        "position": {
+          "x": 635.2357549172249,
+          "y": -74.25405382692495
+        },
+        "data": {
+          "actionId": "mouse.click",
+          "label": "Click",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#2563eb",
+          "params": {
+            "selector": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div > div:nth-of-type(1)"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(3) > div > div:nth-of-type(1)",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_lM0UP_7y",
+        "type": "action",
+        "position": {
+          "x": 648.7812721065031,
+          "y": 62.02784442540053
+        },
+        "data": {
+          "actionId": "element.wait_hidden",
+          "label": "Wait Until Hidden",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#059669",
+          "params": {
+            "selector": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)"
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "div:nth-of-type(2) > div:nth-of-type(2) > div:nth-of-type(2) > div > div:nth-of-type(1)",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_if_btn",
+        "type": "action",
+        "position": {
+          "x": 650,
+          "y": 200
+        },
+        "data": {
+          "actionId": "element.if_visible",
+          "label": "If Preferred Button Visible",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#db2777",
+          "params": {
+            "pollMs": 2500,
+            "selector": ""
+          },
+          "timeoutMs": 5000,
+          "selector": {
+            "primary": "",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_click_preferred",
+        "type": "action",
+        "position": {
+          "x": 920,
+          "y": 140
+        },
+        "data": {
+          "actionId": "mouse.click",
+          "label": "Click · Preferred Button",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#2563eb",
+          "params": {
+            "selector": ""
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      },
+      {
+        "id": "n_click_fallback",
+        "type": "action",
+        "position": {
+          "x": 920,
+          "y": 280
+        },
+        "data": {
+          "actionId": "mouse.click",
+          "label": "Click · Fallback Button",
+          "enabled": true,
+          "collapsed": false,
+          "favorite": false,
+          "color": "#2563eb",
+          "params": {
+            "selector": ""
+          },
+          "timeoutMs": 30000,
+          "selector": {
+            "primary": "",
+            "fallbacks": [],
+            "strategy": "css",
+            "autoHeal": true
+          }
+        }
+      }
+    ],
+    "planId": "plan_drFUgWN4",
+    "tags": [
+      "chatgpt"
+    ],
+    "updatedAt": "2026-08-06T22:11:00.964Z",
+    "variables": {},
+    "versions": [],
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 0.85
+    }
+  }
+}
