@@ -269,7 +269,7 @@ const keyboardActions: ActionDefinition[] = [
           { label: 'Manual text', value: 'manual' },
           { label: 'Text library', value: 'library' },
         ],
-        help: 'Libraries are managed in Planner → Text libraries',
+        help: 'Libraries are managed in Workflow Planner → Text libraries',
       },
       {
         key: 'text',
@@ -345,7 +345,7 @@ const keyboardActions: ActionDefinition[] = [
           { label: 'Manual text', value: 'manual' },
           { label: 'Text library', value: 'library' },
         ],
-        help: 'Libraries are managed in Planner → Text libraries',
+        help: 'Libraries are managed in Workflow Planner → Text libraries',
       },
       {
         key: 'text',

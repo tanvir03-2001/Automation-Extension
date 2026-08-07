@@ -80,13 +80,13 @@ export function ImportExportMenu({
       if (scope === 'workspace') {
         downloadJson('workspace.json', exportWorkspacePayload())
       } else if (scope === 'plan') {
-        if (!selectedPlanId) throw new Error('Select a plan first')
-        downloadJson(`plan-${selectedPlanId}.json`, exportPlanPayload(selectedPlanId))
+        if (!selectedPlanId) throw new Error('Select a workflow first')
+        downloadJson(`workflow-${selectedPlanId}.json`, exportPlanPayload(selectedPlanId))
       } else if (scope === 'workflow') {
-        if (!selectedWorkflowId) throw new Error('Select a workflow first')
-        downloadJson(`workflow-${selectedWorkflowId}.json`, exportWorkflowPayload(selectedWorkflowId))
+        if (!selectedWorkflowId) throw new Error('Select a plan first')
+        downloadJson(`plan-${selectedWorkflowId}.json`, exportWorkflowPayload(selectedWorkflowId))
       } else {
-        if (!selectedWorkflowId) throw new Error('Select a workflow first')
+        if (!selectedWorkflowId) throw new Error('Select a plan first')
         const nodeIds = selectedNodeId ? [selectedNodeId] : undefined
         downloadJson(
           `snippet-${selectedWorkflowId}.json`,
@@ -130,15 +130,15 @@ export function ImportExportMenu({
             </MenuItem>
             <MenuItem onClick={() => void onExport('plan')}>
               <Download className="h-3.5 w-3.5" />
-              Current plan (+ text libraries)
+              Current workflow (+ text libraries)
             </MenuItem>
             <MenuItem onClick={() => void onExport('workflow')}>
               <Download className="h-3.5 w-3.5" />
-              Current workflow only
+              Current plan only
             </MenuItem>
             <MenuItem onClick={() => void onExport('snippet')}>
               <Download className="h-3.5 w-3.5" />
-              {selectedNodeId ? 'Selected step snippet' : 'Workflow as snippet'}
+              {selectedNodeId ? 'Selected step snippet' : 'Plan as snippet'}
             </MenuItem>
 
             <div className="my-2 h-px bg-[hsl(var(--border))]" />
@@ -154,8 +154,8 @@ export function ImportExportMenu({
               Replace whole workspace
             </MenuItem>
             <p className="px-2 pb-1 pt-2 text-[10px] leading-relaxed text-muted-foreground">
-              Tip: import <span className="font-medium text-foreground">plan</span> JSON to get Story
-              Title library + ChatGPT batch flow.
+              Tip: import <span className="font-medium text-foreground">workflow</span> JSON to get
+              Story Title library + ChatGPT batch flow.
             </p>
           </div>,
           document.body,

@@ -68,7 +68,7 @@ export function TextLibrariesPanel({ planId, compact }: TextLibrariesPanelProps)
     return (
       <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
         <p className="font-display text-lg font-semibold">Text libraries</p>
-        <p className="mt-2 text-sm text-muted-foreground">Select a plan first.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Select a workflow first.</p>
       </div>
     )
   }

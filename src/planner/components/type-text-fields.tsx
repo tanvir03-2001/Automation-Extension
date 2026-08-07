@@ -183,7 +183,7 @@ export function TypeTextFields({
         ) : (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-foreground">
             Old JSON mode detected. Switch Source to <strong>Text library</strong> and pick a list
-            from Planner.
+            from Workflow Planner.
             <Button
               size="sm"
               variant="outline"
@@ -234,7 +234,8 @@ export function TypeTextFields({
 
           {!libraries.length ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
-              এখনো কোনো list নেই। Planner hub-এ গিয়ে Text libraries-এ নাম দিয়ে titles যোগ করুন।
+              এখনো কোনো list নেই। Workflow Planner hub-এ গিয়ে Text libraries-এ নাম দিয়ে titles যোগ
+              করুন।
               <Button
                 size="sm"
                 variant="outline"
@@ -242,7 +243,7 @@ export function TypeTextFields({
                 onClick={() => setBuilderOpen(false)}
               >
                 <BookOpen className="h-3.5 w-3.5" />
-                Open Planner libraries
+                Open Workflow Planner libraries
               </Button>
             </div>
           ) : null}

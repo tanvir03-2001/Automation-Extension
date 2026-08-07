@@ -161,14 +161,16 @@ export async function resolveTypeText(args: {
     if (!library) {
       throw new Error(
         libraryId
-          ? `Text library "${libraryId}" not found. Create it in Planner → Text libraries.`
+          ? `Text library "${libraryId}" not found. Create it in Workflow Planner → Text libraries.`
           : 'Select a text library (e.g. story title) for this TypeText step.',
       )
     }
 
     const items = selectedItems(library, args.params.textItemIds)
     if (!items.length) {
-      throw new Error(`Library "${library.name}" has no titles. Add numbered lines in Planner.`)
+      throw new Error(
+        `Library "${library.name}" has no titles. Add numbered lines in Workflow Planner.`,
+      )
     }
 
     const template = String(args.params.textTemplate ?? '')
@@ -244,7 +246,9 @@ async function resolveLegacyJsonText(args: {
   try {
     data = JSON.parse(rawJson)
   } catch {
-    throw new Error('Legacy Text JSON is invalid. Switch to a Planner text library instead.')
+    throw new Error(
+      'Legacy Text JSON is invalid. Switch to a Workflow Planner text library instead.',
+    )
   }
 
   if (mode === 'json_label') {
@@ -253,7 +257,7 @@ async function resolveLegacyJsonText(args: {
       const value = (data as Record<string, unknown>)[label]
       if (typeof value === 'string') return { text: value, meta: `label:${label}` }
     }
-    throw new Error('Select a JSON label or migrate to a Planner text library.')
+    throw new Error('Select a JSON label or migrate to a Workflow Planner text library.')
   }
 
   let items: string[] = []
@@ -272,7 +276,7 @@ async function resolveLegacyJsonText(args: {
   }
 
   if (!items.length) {
-    throw new Error('Legacy JSON queue empty. Create a Planner text library instead.')
+    throw new Error('Legacy JSON queue empty. Create a Workflow Planner text library instead.')
   }
 
   const queueKey = String(args.params.textQueueKey ?? 'legacy')
@@ -284,7 +288,7 @@ async function resolveLegacyJsonText(args: {
   const current = await getQueueCursor(args.workflowId, args.nodeId, queueKey)
   const index = wrap ? current % items.length : current
   if (!wrap && index >= items.length) {
-    throw new Error('Legacy text queue finished. Reset or use a Planner library.')
+    throw new Error('Legacy text queue finished. Reset or use a Workflow Planner library.')
   }
   await setQueueCursor(args.workflowId, args.nodeId, queueKey, current + 1)
   return { text: items[index] ?? '', meta: `queue:${queueKey}:${index + 1}/${items.length}` }

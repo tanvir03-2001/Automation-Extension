@@ -140,7 +140,7 @@ export function CopyStorePanel({ workflowId, compact }: CopyStorePanelProps) {
 
   async function clearAll() {
     if (!workflowId || entries.length === 0) return
-    if (!window.confirm(`Clear all ${entries.length} Copy Store item(s) for this workflow?`)) return
+    if (!window.confirm(`Clear all ${entries.length} Copy Store item(s) for this plan?`)) return
     setBusy(true)
     try {
       const response = await sendRuntimeMessage<{
@@ -180,7 +180,7 @@ export function CopyStorePanel({ workflowId, compact }: CopyStorePanelProps) {
     return (
       <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
         <p className="font-display text-lg font-semibold">Copy Store</p>
-        <p className="mt-2 text-sm text-muted-foreground">Select a workflow first.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Select a plan first.</p>
       </div>
     )
   }

@@ -182,7 +182,7 @@ export const usePlannerStore = create<PlannerState>()(
         const workflow: VisualWorkflow = {
           id: workflowId,
           planId,
-          name: `${name} · Main`,
+          name: 'Plan 1',
           enabled: true,
           tags: [],
           variables: {},
@@ -228,7 +228,8 @@ export const usePlannerStore = create<PlannerState>()(
           selectedPlanId: planId,
           selectedWorkflowId: workflowId,
           dirty: true,
-          builderOpen: true,
+          // Stay on the hub so the Workflow → Plans hierarchy is visible after create.
+          builderOpen: false,
         }))
         await get().persist()
         return planId
@@ -259,12 +260,18 @@ export const usePlannerStore = create<PlannerState>()(
           checkpoint.planId === planId &&
           (checkpoint.status === 'running' || checkpoint.status === 'paused' || checkpoint.status === 'waiting')
         ) {
-          window.alert('Cannot delete this plan while a workflow is running or paused. Pause/Cancel first.')
+          window.alert(
+            'Cannot delete this workflow while a plan is running or paused. Pause/Cancel first.',
+          )
           return false
         }
         const plan = get().plans.find((item) => item.id === planId)
         if (!plan) return false
-        if (!window.confirm(`Delete plan “${plan.name}” and its ${plan.workflowIds.length} workflow(s)?`)) {
+        if (
+          !window.confirm(
+            `Delete workflow “${plan.name}” and its ${plan.workflowIds.length} plan(s)?`,
+          )
+        ) {
           return false
         }
         const removeIds = new Set(plan.workflowIds)
@@ -302,7 +309,7 @@ export const usePlannerStore = create<PlannerState>()(
         const workflow: VisualWorkflow = {
           id: workflowId,
           planId,
-          name: (name?.trim() || `${plan.name} · Workflow ${plan.workflowIds.length + 1}`),
+          name: name?.trim() || `Plan ${plan.workflowIds.length + 1}`,
           enabled: true,
           tags: [],
           variables: {},
@@ -387,15 +394,17 @@ export const usePlannerStore = create<PlannerState>()(
           checkpoint.workflowId === workflowId &&
           (checkpoint.status === 'running' || checkpoint.status === 'paused' || checkpoint.status === 'waiting')
         ) {
-          window.alert('Cannot delete a running or paused workflow. Cancel or finish it first.')
+          window.alert('Cannot delete a running or paused plan. Cancel or finish it first.')
           return false
         }
         const siblings = get().workflows.filter((wf) => wf.planId === workflow.planId)
         if (siblings.length <= 1) {
-          window.alert('A plan needs at least one workflow. Delete the plan instead, or add another workflow first.')
+          window.alert(
+            'A workflow needs at least one plan. Delete the workflow instead, or create another plan first.',
+          )
           return false
         }
-        if (!window.confirm(`Delete workflow “${workflow.name}”?`)) return false
+        if (!window.confirm(`Delete plan “${workflow.name}”?`)) return false
         set((state) => {
           const workflows = state.workflows.filter((wf) => wf.id !== workflowId)
           const plans = state.plans.map((plan) =>
@@ -750,7 +759,7 @@ export const usePlannerStore = create<PlannerState>()(
             graphRevision: state.graphRevision + 1,
           }))
           await get().persist()
-          return `Plan imported: ${plan.name}`
+          return `Workflow imported: ${plan.name}`
         }
 
         if (payload.kind === 'workflow') {
@@ -773,7 +782,7 @@ export const usePlannerStore = create<PlannerState>()(
             graphRevision: state.graphRevision + 1,
           }))
           await get().persist()
-          return `Workflow imported: ${workflow.name}`
+          return `Plan imported: ${workflow.name}`
         }
 
         if (payload.kind === 'snippet') {

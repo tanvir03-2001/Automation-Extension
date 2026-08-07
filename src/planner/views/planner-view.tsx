@@ -38,7 +38,7 @@ export function PlannerView() {
   const checkpoint = usePlannerStore((s) => s.checkpoint)
   const theme = usePlannerStore((s) => s.theme)
   const setTheme = usePlannerStore((s) => s.setTheme)
-  const [name, setName] = useState('New Automation Plan')
+  const [name, setName] = useState('New Workflow')
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [editingPlanName, setEditingPlanName] = useState('')
   const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null)
@@ -115,8 +115,8 @@ export function PlannerView() {
             Workflow Planner
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Visual drag-and-drop automation builder. No code — configure actions, conditions, loops,
-            and nested workflows from the dashboard.
+            Create a Workflow, then add Plans inside it. Visual drag-and-drop automation — configure
+            actions, conditions, loops, and more from the dashboard.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -141,16 +141,22 @@ export function PlannerView() {
         >
           <div className="flex flex-wrap items-end gap-2">
             <label className="min-w-[220px] flex-1 space-y-1">
-              <span className="text-xs font-medium">Create plan</span>
-              <Input value={name} onChange={(event) => setName(event.target.value)} />
+              <span className="text-xs font-medium">Create Workflow</span>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="e.g. Facebook Automation"
+              />
             </label>
             <Button
-              onClick={() =>
-                void createPlan(name.trim() || 'Untitled Plan').then(() => setBuilderOpen(true))
-              }
+              onClick={() => {
+                void createPlan(name.trim() || 'Untitled Workflow').then(() => {
+                  setName('New Workflow')
+                })
+              }}
             >
               <Plus className="h-4 w-4" />
-              Create Plan
+              Create Workflow
             </Button>
           </div>
 
@@ -197,9 +203,12 @@ export function PlannerView() {
                         className="h-8"
                       />
                     ) : (
-                      <p className="font-medium text-foreground">{plan.name}</p>
+                      <p className="font-medium text-foreground">Workflow: {plan.name}</p>
                     )}
-                    <Badge variant="outline">{plan.workflowIds.length} workflows</Badge>
+                    <Badge variant="outline">
+                      {plan.workflowIds.length}{' '}
+                      {plan.workflowIds.length === 1 ? 'plan' : 'plans'}
+                    </Badge>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {plan.description || 'No description'}
@@ -217,7 +226,7 @@ export function PlannerView() {
                     }}
                   >
                     <Pencil className="h-3 w-3" />
-                    Edit
+                    Rename
                   </Button>
                   <Button
                     size="sm"
@@ -235,7 +244,9 @@ export function PlannerView() {
               </div>
             ))}
             {plans.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No plans yet. Create your first plan.</p>
+              <p className="text-sm text-muted-foreground">
+                No workflows yet. Create your first workflow to get started.
+              </p>
             ) : null}
           </div>
         </motion.div>
@@ -248,7 +259,14 @@ export function PlannerView() {
         >
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="font-display text-lg font-semibold">Workflows in plan</p>
+              <div>
+                <p className="font-display text-lg font-semibold">Plans</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedPlanId
+                    ? `Inside workflow: ${plans.find((p) => p.id === selectedPlanId)?.name ?? '—'}`
+                    : 'Select a workflow to manage its plans'}
+                </p>
+              </div>
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   size="sm"
@@ -260,7 +278,7 @@ export function PlannerView() {
                   }}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Add
+                  Create Plan
                 </Button>
                 <Button
                   size="sm"
@@ -345,6 +363,16 @@ export function PlannerView() {
                 </div>
               ))}
             </div>
+            {planWorkflows.length === 0 && selectedPlanId ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                No plans yet. Create a plan inside this workflow.
+              </p>
+            ) : null}
+            {!selectedPlanId ? (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Select a workflow on the left to see its plans.
+              </p>
+            ) : null}
             <Button className="mt-4 w-full" onClick={() => setBuilderOpen(true)} disabled={!selectedWorkflowId}>
               Edit in Visual Builder
             </Button>
@@ -402,7 +430,7 @@ export function PlannerView() {
                 </p>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-muted-foreground">No active planner run.</p>
+              <p className="mt-2 text-sm text-muted-foreground">No active Workflow Planner run.</p>
             )}
           </div>
 

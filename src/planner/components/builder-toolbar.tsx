@@ -61,7 +61,7 @@ export function BuilderToolbar() {
         onClick={() => setBuilderOpen(false)}
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Plans
+        Workflows
       </Button>
 
       <Separator orientation="vertical" className="h-6" />
@@ -69,7 +69,7 @@ export function BuilderToolbar() {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate font-display text-sm font-semibold tracking-tight">
-            {workflow?.name ?? 'No workflow selected'}
+            {workflow?.name ?? 'No plan selected'}
           </p>
           {checkpoint ? (
             <Badge

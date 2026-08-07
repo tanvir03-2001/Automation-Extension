@@ -1,15 +1,12 @@
 import { motion } from 'framer-motion'
 import {
   Activity,
-  Crosshair,
   LayoutDashboard,
-  ListOrdered,
   Moon,
   Network,
   RotateCcw,
   Settings2,
   Sun,
-  Workflow,
 } from 'lucide-react'
 import { cn } from '@/shared/utils/cn'
 import { useDashboardStore, type DashboardView } from '@/stores/dashboard-store'
@@ -19,10 +16,7 @@ import { Button } from '@/components/ui/button'
 
 const items: Array<{ id: DashboardView; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'planner', label: 'Planner', icon: Network },
-  { id: 'workflows', label: 'Workflows', icon: Workflow },
-  { id: 'selector-lab', label: 'Selector Lab', icon: Crosshair },
-  { id: 'queue', label: 'Queue', icon: ListOrdered },
+  { id: 'planner', label: 'Workflow Planner', icon: Network },
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'settings', label: 'Settings', icon: Settings2 },
 ]

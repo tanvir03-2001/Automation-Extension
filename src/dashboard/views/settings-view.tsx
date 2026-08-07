@@ -40,7 +40,7 @@ export function SettingsView() {
         <div>
           <p className="text-sm font-medium">Appearance</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Applies across Dashboard, Planner, Workflows, and overlays. No layout shift.
+            Applies across Dashboard, Workflow Planner, and overlays. No layout shift.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
