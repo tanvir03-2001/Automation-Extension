@@ -4,9 +4,11 @@ import {
   Crosshair,
   LayoutDashboard,
   ListOrdered,
+  Moon,
   Network,
   RotateCcw,
   Settings2,
+  Sun,
   Workflow,
 } from 'lucide-react'
 import { cn } from '@/shared/utils/cn'
@@ -30,6 +32,8 @@ export function Sidebar() {
   const setView = useDashboardStore((s) => s.setView)
   const builderOpen = usePlannerStore((s) => s.builderOpen)
   const setBuilderOpen = usePlannerStore((s) => s.setBuilderOpen)
+  const theme = usePlannerStore((s) => s.theme)
+  const setTheme = usePlannerStore((s) => s.setTheme)
 
   if (builderOpen && view === 'planner') {
     return null
@@ -85,6 +89,15 @@ export function Sidebar() {
       </nav>
 
       <div className="space-y-2 border-t border-border px-4 py-4">
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full justify-center rounded-xl"
+          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+        >
+          {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+          {theme === 'light' ? 'Dark mode' : 'Light mode'}
+        </Button>
         <Button
           size="sm"
           variant="outline"

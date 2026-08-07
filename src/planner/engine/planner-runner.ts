@@ -5,6 +5,8 @@ import { sleep } from '@/engine/retry/retry-policy'
 import { runGuardController } from '@/background/run-guard-controller'
 import { executePlannerAction } from '@/planner/engine/action-executor'
 import { resetWorkflowQueueCursors } from '@/planner/engine/text-library'
+import { copyStore } from '@/engine/copy-store'
+import { loadDurableWorkflowStore } from '@/engine/copy-store/durable'
 import type {
   ExecutionCheckpoint,
   PlannerEdge,
@@ -98,7 +100,23 @@ export class PlannerRunner {
     // Each Run starts library queues from the first selected title
     await resetWorkflowQueueCursors(workflow.id)
 
+    // Hydrate Copy Store library (durable) so previous Copy Events stay available
+    // and numbering continues (story-4 after story-1..3) — like Text libraries.
+    const durableStore = await loadDurableWorkflowStore(workflow.id)
+    copyStore.resetRuntime(workflow.id)
+    copyStore.hydrateRuntime({
+      copyStore: durableStore,
+      copyStores: { [workflow.id]: durableStore },
+    })
+
     const start = findStart(workflow.nodes)
+    const initialVariables: Record<string, unknown> = {
+      ...workflow.variables,
+      ...variables,
+      copyStore: { ...durableStore },
+      copyStores: { [workflow.id]: { ...durableStore } },
+      __workflowId: workflow.id,
+    }
     this.checkpoint = {
       id: createId('ckpt'),
       planId: workflow.planId,
@@ -107,7 +125,7 @@ export class PlannerRunner {
       currentNodeId: start?.id ?? null,
       previousNodeId: null,
       status: 'running',
-      variables: { ...workflow.variables, ...variables },
+      variables: initialVariables,
       temporaryVariables: {},
       retryCount: 0,
       loopCounts: {},
@@ -128,6 +146,9 @@ export class PlannerRunner {
     if (this.executing) return
     this.pauseRequested = false
     this.cancelRequested = false
+    // Restore Copy Store so numbering continues (story-4 after story-1..3)
+    copyStore.hydrateRuntime(this.checkpoint.variables)
+    copyStore.syncActiveCopyStoreMirror(this.checkpoint.variables, this.checkpoint.workflowId)
     this.checkpoint.status = 'running'
     runGuardController.start()
     await this.persist()
@@ -156,6 +177,55 @@ export class PlannerRunner {
     this.checkpoint = null
     await storageSet(CHECKPOINT_KEY, null)
     await runGuardController.stop()
+    this.emit()
+  }
+
+  /** True while the main planner loop is stepping nodes. */
+  isBusy(): boolean {
+    return this.executing
+  }
+
+  /**
+   * Merge variables from a Quick Test into the current checkpoint (same workflow).
+   * Skipped while the main loop is actively executing a step.
+   */
+  async mergeVariablesFromTest(
+    workflowId: string,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.checkpoint || this.checkpoint.workflowId !== workflowId) return
+    if (this.executing) return
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) delete this.checkpoint.variables[key]
+      else this.checkpoint.variables[key] = value
+    }
+    this.checkpoint.updatedAt = new Date().toISOString()
+    await this.persist()
+    this.emit()
+  }
+
+  /**
+   * Sync a workflow Copy Store snapshot into checkpoint (UI delete/clear).
+   * Updates copyStores[workflowId] even when that workflow is not the active one.
+   */
+  async syncCopyStoreSnapshot(
+    workflowId: string,
+    store: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.checkpoint) return
+    // Allowed while running — Copy Store library edits must not bounce back from checkpoint
+    const prevStores =
+      this.checkpoint.variables.copyStores &&
+      typeof this.checkpoint.variables.copyStores === 'object'
+        ? { ...(this.checkpoint.variables.copyStores as Record<string, unknown>) }
+        : {}
+    prevStores[workflowId] = store
+    this.checkpoint.variables.copyStores = prevStores
+    if (this.checkpoint.workflowId === workflowId) {
+      this.checkpoint.variables.copyStore = store
+    }
+    this.checkpoint.updatedAt = new Date().toISOString()
+    await this.persist()
     this.emit()
   }
 
@@ -229,6 +299,7 @@ export class PlannerRunner {
             variables: {
               ...this.checkpoint.variables,
               ...this.checkpoint.temporaryVariables,
+              __workflowId: this.checkpoint.workflowId,
             },
             activeTabId: this.checkpoint.browserState.activeTabId,
             timeoutMs: node.data.timeoutMs,
@@ -294,6 +365,7 @@ export class PlannerRunner {
               this.checkpoint.temporaryVariables.__returnWorkflowId = workflow.id
               this.checkpoint.temporaryVariables.__returnNodeId = outgoing(workflow.edges, node.id)[0]?.target
               this.checkpoint.workflowId = nested.id
+              copyStore.syncActiveCopyStoreMirror(this.checkpoint.variables, nested.id)
               this.checkpoint.previousNodeId = node.id
               this.checkpoint.currentNodeId = findStart(nested.nodes)?.id ?? null
             } else {
@@ -371,6 +443,7 @@ export class PlannerRunner {
     ) {
       this.checkpoint.workflowId = String(this.checkpoint.temporaryVariables.__returnWorkflowId)
       this.checkpoint.currentNodeId = String(this.checkpoint.temporaryVariables.__returnNodeId)
+      copyStore.syncActiveCopyStoreMirror(this.checkpoint.variables, this.checkpoint.workflowId)
       delete this.checkpoint.temporaryVariables.__returnWorkflowId
       delete this.checkpoint.temporaryVariables.__returnNodeId
     }

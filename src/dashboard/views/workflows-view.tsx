@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Download, ListPlus, Play, Upload } from 'lucide-react'
+import { Download, ListPlus, Pencil, Play, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import { useDashboardStore } from '@/stores/dashboard-store'
 import { enqueueWorkflow, startWorkflow } from '@/dashboard/api/extension-api'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
@@ -16,12 +18,42 @@ import {
 import type { WorkflowDefinition } from '@/shared/types/workflow'
 import { nanoid } from 'nanoid'
 
+function createBlankWorkflow(name: string): WorkflowDefinition {
+  const now = new Date().toISOString()
+  return {
+    id: `wf_${nanoid(8)}`,
+    name,
+    description: '',
+    version: '1.0.0',
+    tags: [],
+    variables: {},
+    createdAt: now,
+    updatedAt: now,
+    steps: [
+      {
+        id: `step_${nanoid(6)}`,
+        type: 'wait_ms',
+        name: 'Wait',
+        enabled: true,
+        timeoutMs: 5000,
+        continueOnError: false,
+        params: { ms: 500 },
+      },
+    ],
+  }
+}
+
 export function WorkflowsView() {
   const workflows = useDashboardStore((s) => s.workflows)
   const selectedWorkflowId = useDashboardStore((s) => s.selectedWorkflowId)
   const selectWorkflow = useDashboardStore((s) => s.selectWorkflow)
   const setWorkflows = useDashboardStore((s) => s.setWorkflows)
+  const run = useDashboardStore((s) => s.run)
   const queryClient = useQueryClient()
+  const [newName, setNewName] = useState('New Workflow')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [editingDescription, setEditingDescription] = useState('')
 
   const startMutation = useMutation({
     mutationFn: startWorkflow,
@@ -37,6 +69,47 @@ export function WorkflowsView() {
       payload: { key: 'workflows', value: next },
     })
     void queryClient.invalidateQueries({ queryKey: ['workflows'] })
+  }
+
+  async function addWorkflow() {
+    const workflow = createBlankWorkflow(newName.trim() || 'Untitled Workflow')
+    await persistWorkflows([workflow, ...workflows])
+    selectWorkflow(workflow.id)
+    setNewName('New Workflow')
+  }
+
+  async function saveEdit(workflowId: string) {
+    const next = workflows.map((workflow) =>
+      workflow.id !== workflowId
+        ? workflow
+        : {
+            ...workflow,
+            name: editingName.trim() || workflow.name,
+            description: editingDescription,
+            updatedAt: new Date().toISOString(),
+          },
+    )
+    await persistWorkflows(next)
+    setEditingId(null)
+  }
+
+  async function removeWorkflow(workflowId: string) {
+    const workflow = workflows.find((item) => item.id === workflowId)
+    if (!workflow) return
+    if (
+      run &&
+      run.workflowId === workflowId &&
+      (run.status === 'running' || run.status === 'paused' || run.status === 'queued')
+    ) {
+      window.alert('Cannot delete a running, paused, or queued workflow. Cancel it first.')
+      return
+    }
+    if (!window.confirm(`Delete workflow “${workflow.name}”?`)) return
+    const next = workflows.filter((item) => item.id !== workflowId)
+    await persistWorkflows(next)
+    if (selectedWorkflowId === workflowId) {
+      selectWorkflow(next[0]?.id ?? null)
+    }
   }
 
   function exportSelected() {
@@ -114,9 +187,21 @@ export function WorkflowsView() {
         </div>
       </header>
 
+      <div className="flex flex-wrap items-end gap-2 rounded-2xl border border-border/80 bg-card p-4 shadow-panel">
+        <label className="min-w-[220px] flex-1 space-y-1">
+          <span className="text-xs font-medium">Add workflow</span>
+          <Input value={newName} onChange={(event) => setNewName(event.target.value)} />
+        </label>
+        <Button size="sm" onClick={() => void addWorkflow()}>
+          <Plus className="h-3.5 w-3.5" />
+          Create
+        </Button>
+      </div>
+
       <div className="grid gap-3">
         {workflows.map((workflow, index) => {
           const active = workflow.id === selectedWorkflowId
+          const editing = editingId === workflow.id
           return (
             <motion.article
               key={workflow.id}
@@ -131,13 +216,38 @@ export function WorkflowsView() {
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-display text-lg font-semibold">{workflow.name}</h2>
-                  <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                    {workflow.description}
-                  </p>
+                <div className="min-w-0 flex-1">
+                  {editing ? (
+                    <div className="space-y-2" onClick={(event) => event.stopPropagation()}>
+                      <Input
+                        value={editingName}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        placeholder="Workflow name"
+                      />
+                      <Input
+                        value={editingDescription}
+                        onChange={(event) => setEditingDescription(event.target.value)}
+                        placeholder="Description"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => void saveEdit(workflow.id)}>
+                          Save
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="font-display text-lg font-semibold">{workflow.name}</h2>
+                      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                        {workflow.description}
+                      </p>
+                    </>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
                     onClick={(event) => {
@@ -160,6 +270,30 @@ export function WorkflowsView() {
                   >
                     <ListPlus className="h-3.5 w-3.5" />
                     Queue
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setEditingId(workflow.id)
+                      setEditingName(workflow.name)
+                      setEditingDescription(workflow.description ?? '')
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void removeWorkflow(workflow.id)
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
                   </Button>
                   <Button
                     size="sm"

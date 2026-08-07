@@ -46,6 +46,19 @@ function resolveUrlHint(workflow?: VisualWorkflow | null): string {
   return 'https://chatgpt.com/'
 }
 
+function labelAfterPick(currentLabel: string, actionId: string, pickedText?: string): string {
+  if (!pickedText) return currentLabel
+  const snippet = pickedText.slice(0, 28)
+  if (actionId === 'clipboard.copy_event') {
+    if (currentLabel === 'Copy Event' || currentLabel.startsWith('Copy Event ·')) {
+      return `Copy Event · ${snippet}`
+    }
+    return currentLabel
+  }
+  if (currentLabel === 'Click') return `Click · ${snippet}`
+  return currentLabel
+}
+
 export function PropertyInspector() {
   const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
   const nodeId = usePlannerStore((s) => s.selectedNodeId)
@@ -94,6 +107,93 @@ export function PropertyInspector() {
       const fallbacks = selectedNode.data.selector?.fallbacks ?? []
       const checkType = String(params.checkType ?? '')
       const actionId = selectedNode.data.actionId
+
+      // Copy Event / Write Clipboard: run the FULL action (click → capture → store)
+      // so users can verify save without replaying the whole workflow.
+      if (actionId === 'clipboard.copy_event' || actionId === 'clipboard.write') {
+        if (actionId === 'clipboard.copy_event') {
+          const mode = String(params.sourceMode ?? 'click_copy_button')
+          if (
+            (mode === 'click_copy_button' || mode === 'extract_from_element') &&
+            !selector &&
+            fallbacks.length === 0
+          ) {
+            setTestResult({
+              ok: false,
+              message: 'Fail — আগে Pick Copy button দিয়ে বাটন select করুন',
+            })
+            return
+          }
+          if (mode === 'manual_or_variable' && !String(params.text ?? '').trim()) {
+            setTestResult({
+              ok: false,
+              message: 'Fail — Manual mode-এ Text দিন (বা {{variable}})',
+            })
+            return
+          }
+        }
+
+        const response = await sendRuntimeMessage<{
+          ok: boolean
+          error?: string
+          result?: {
+            storedAs?: string
+            textPreview?: string
+            textLength?: number
+            format?: string
+            sourceMode?: string
+            clipboardOk?: boolean
+            clipboardError?: string
+          }
+          checkpoint?: unknown
+        }>({
+          type: 'PLANNER_TEST_ACTION',
+          payload: {
+            workflowId,
+            planId: workflow?.planId,
+            actionId,
+            params,
+            selector,
+            fallbacks,
+            timeoutMs: selectedNode.data.timeoutMs ?? 30_000,
+          },
+        })
+
+        if (response.checkpoint !== undefined) {
+          usePlannerStore.getState().setCheckpoint(
+            response.checkpoint as ReturnType<typeof usePlannerStore.getState>['checkpoint'],
+          )
+        }
+
+        if (!response.ok) {
+          setTestResult({
+            ok: false,
+            message: response.error ?? 'Copy Event test failed',
+          })
+          return
+        }
+
+        const data = response.result
+        setTestResult({
+          ok: true,
+          message: data?.storedAs
+            ? `OK — saved as ${data.storedAs}`
+            : 'OK — Copy action executed',
+          detail: [
+            data?.format ? `format=${data.format}` : '',
+            data?.textLength != null ? `${data.textLength} chars` : '',
+            data?.clipboardOk === false
+              ? `clipboard warn: ${data.clipboardError ?? 'failed'}`
+              : data?.clipboardOk
+                ? 'clipboard ok'
+                : '',
+            data?.textPreview ? `preview: ${data.textPreview}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ') || undefined,
+        })
+        return
+      }
 
       const noTarget =
         actionId.startsWith('flow.') ||
@@ -225,10 +325,7 @@ export function PropertyInspector() {
           selector: picked.selector,
           selectorFallbacks: fallbacks,
         },
-        label:
-          latest.data.label === 'Click' && picked.text
-            ? `Click · ${picked.text.slice(0, 28)}`
-            : latest.data.label,
+        label: labelAfterPick(latest.data.label, latest.data.actionId, picked.text),
       })
       return
     }
@@ -248,10 +345,7 @@ export function PropertyInspector() {
               autoHeal: latest.data.selector?.autoHeal ?? true,
             }
           : latest.data.selector,
-      label:
-        latest.data.label === 'Click' && picked.text
-          ? `Click · ${picked.text.slice(0, 28)}`
-          : latest.data.label,
+      label: labelAfterPick(latest.data.label, latest.data.actionId, picked.text),
     })
   }
 
@@ -287,7 +381,10 @@ export function PropertyInspector() {
         <div className="mt-3 space-y-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3">
           <p className="text-xs font-semibold text-foreground">Quick test</p>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Target element-এ green border দেখাবে এবং এই step-এর event (click / hover / type…) একই সাথে fire করবে।
+            {selectedNode.data.actionId === 'clipboard.copy_event' ||
+            selectedNode.data.actionId === 'clipboard.write'
+              ? 'পুরো Copy Event চালাবে: Copy বাটন click → text capture → Copy Store-এ save। পুরো workflow চালানোর দরকার নেই।'
+              : 'Target element-এ green border দেখাবে এবং এই step-এর event (click / hover / type…) একই সাথে fire করবে।'}
           </p>
           <Button
             size="sm"
@@ -300,7 +397,11 @@ export function PropertyInspector() {
             ) : (
               <FlaskConical className="h-3.5 w-3.5" />
             )}
-            {testing ? 'Testing…' : 'Quick test'}
+            {testing
+              ? 'Testing…'
+              : selectedNode.data.actionId === 'clipboard.copy_event'
+                ? 'Test Copy Event'
+                : 'Quick test'}
           </Button>
           {testResult ? (
             <div
@@ -336,13 +437,18 @@ export function PropertyInspector() {
             (action?.supportsSelector ||
               action?.fields.some((field) => field.type === 'selector') ||
               selectedNode.data.actionId.startsWith('mouse.') ||
-              selectedNode.data.actionId.startsWith('ai.click')) && (
+              selectedNode.data.actionId.startsWith('ai.click') ||
+              selectedNode.data.actionId === 'clipboard.copy_event') && (
             <div className="rounded-2xl border border-primary/30 bg-primary/10 p-3">
               <p className="text-xs font-semibold text-foreground">
-                Pick element with mouse
+                {selectedNode.data.actionId === 'clipboard.copy_event'
+                  ? 'Pick Copy button with mouse'
+                  : 'Pick element with mouse'}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।
+                {selectedNode.data.actionId === 'clipboard.copy_event'
+                  ? 'বাটনে ক্লিক করুন → পেজ খুলবে → page-এর Copy বাটনে ক্লিক করুন। Runtime-এ সেই বাটন click হবে, text capture হবে, Copy Store-এ save হবে।'
+                  : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
               </p>
               <Button
                 size="sm"
@@ -355,7 +461,11 @@ export function PropertyInspector() {
                 ) : (
                   <Crosshair className="h-3.5 w-3.5" />
                 )}
-                {picking ? 'Click an element on the page…' : 'Pick click target'}
+                {picking
+                  ? 'Click an element on the page…'
+                  : selectedNode.data.actionId === 'clipboard.copy_event'
+                    ? 'Pick Copy button'
+                    : 'Pick click target'}
               </Button>
               {lastPicked ? (
                 <p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">

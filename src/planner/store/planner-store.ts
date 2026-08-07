@@ -12,6 +12,7 @@ import type {
 import { getActionById } from '@/planner/actions/catalog'
 import { parseNumberedTextList } from '@/planner/engine/text-library'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
+import { clearDurableWorkflowStore } from '@/engine/copy-store/durable'
 import {
   buildPlanExport,
   buildSnippetExport,
@@ -52,6 +53,17 @@ interface PlannerState {
   setDocsActionId: (actionId: string | null) => void
 
   createPlan: (name: string) => Promise<string>
+  updatePlan: (
+    planId: string,
+    patch: Partial<Pick<AutomationPlan, 'name' | 'description' | 'color' | 'tags'>>,
+  ) => Promise<void>
+  deletePlan: (planId: string) => Promise<boolean>
+  createWorkflow: (planId: string, name?: string) => Promise<string>
+  updateWorkflowMeta: (
+    workflowId: string,
+    patch: Partial<Pick<VisualWorkflow, 'name' | 'description' | 'enabled' | 'color' | 'tags'>>,
+  ) => Promise<void>
+  deleteWorkflow: (workflowId: string) => Promise<boolean>
   duplicateWorkflow: (workflowId: string) => void
   updateWorkflowGraph: (workflowId: string, nodes: PlannerNode[], edges: PlannerEdge[]) => void
   updateNodeData: (workflowId: string, nodeId: string, patch: Partial<PlannerNode['data']>) => void
@@ -222,6 +234,196 @@ export const usePlannerStore = create<PlannerState>()(
         return planId
       },
 
+      updatePlan: async (planId, patch) => {
+        const now = new Date().toISOString()
+        set((state) => ({
+          dirty: true,
+          plans: state.plans.map((plan) =>
+            plan.id !== planId
+              ? plan
+              : {
+                  ...plan,
+                  ...patch,
+                  name: patch.name !== undefined ? patch.name.trim() || plan.name : plan.name,
+                  updatedAt: now,
+                },
+          ),
+        }))
+        await get().persist()
+      },
+
+      deletePlan: async (planId) => {
+        const checkpoint = get().checkpoint
+        if (
+          checkpoint &&
+          checkpoint.planId === planId &&
+          (checkpoint.status === 'running' || checkpoint.status === 'paused' || checkpoint.status === 'waiting')
+        ) {
+          window.alert('Cannot delete this plan while a workflow is running or paused. Pause/Cancel first.')
+          return false
+        }
+        const plan = get().plans.find((item) => item.id === planId)
+        if (!plan) return false
+        if (!window.confirm(`Delete plan “${plan.name}” and its ${plan.workflowIds.length} workflow(s)?`)) {
+          return false
+        }
+        const removeIds = new Set(plan.workflowIds)
+        set((state) => {
+          const plans = state.plans.filter((item) => item.id !== planId)
+          const workflows = state.workflows.filter((wf) => !removeIds.has(wf.id) && wf.planId !== planId)
+          const selectedPlanId =
+            state.selectedPlanId === planId ? (plans[0]?.id ?? null) : state.selectedPlanId
+          const selectedWorkflowId =
+            state.selectedWorkflowId && removeIds.has(state.selectedWorkflowId)
+              ? (workflows.find((wf) => wf.planId === selectedPlanId)?.id ?? workflows[0]?.id ?? null)
+              : state.selectedWorkflowId
+          return {
+            plans,
+            workflows,
+            selectedPlanId,
+            selectedWorkflowId,
+            selectedNodeId: null,
+            dirty: true,
+            builderOpen: state.builderOpen && selectedWorkflowId ? state.builderOpen : false,
+          }
+        })
+        await get().persist()
+        for (const id of removeIds) {
+          void clearDurableWorkflowStore(id)
+        }
+        return true
+      },
+
+      createWorkflow: async (planId, name) => {
+        const plan = get().plans.find((item) => item.id === planId)
+        if (!plan) throw new Error('Plan not found')
+        const workflowId = `vwf_${nanoid(8)}`
+        const now = new Date().toISOString()
+        const workflow: VisualWorkflow = {
+          id: workflowId,
+          planId,
+          name: (name?.trim() || `${plan.name} · Workflow ${plan.workflowIds.length + 1}`),
+          enabled: true,
+          tags: [],
+          variables: {},
+          nodes: [
+            {
+              id: 'n_start',
+              type: 'start',
+              position: { x: 80, y: 160 },
+              data: {
+                actionId: 'flow.start',
+                label: 'Start',
+                enabled: true,
+                collapsed: false,
+                favorite: false,
+                params: {},
+                timeoutMs: 5000,
+              },
+            },
+            {
+              id: 'n_end',
+              type: 'end',
+              position: { x: 420, y: 160 },
+              data: {
+                actionId: 'flow.end',
+                label: 'End',
+                enabled: true,
+                collapsed: false,
+                favorite: false,
+                params: {},
+                timeoutMs: 5000,
+              },
+            },
+          ],
+          edges: [{ id: 'e_start_end', source: 'n_start', target: 'n_end', sourceHandle: 'out' }],
+          viewport: { x: 0, y: 0, zoom: 1 },
+          versions: [],
+          createdAt: now,
+          updatedAt: now,
+        }
+        set((state) => ({
+          dirty: true,
+          workflows: [workflow, ...state.workflows],
+          plans: state.plans.map((item) =>
+            item.id === planId
+              ? {
+                  ...item,
+                  workflowIds: [...item.workflowIds, workflowId],
+                  updatedAt: now,
+                }
+              : item,
+          ),
+          selectedWorkflowId: workflowId,
+        }))
+        await get().persist()
+        return workflowId
+      },
+
+      updateWorkflowMeta: async (workflowId, patch) => {
+        const now = new Date().toISOString()
+        set((state) => ({
+          dirty: true,
+          workflows: state.workflows.map((wf) =>
+            wf.id !== workflowId
+              ? wf
+              : {
+                  ...wf,
+                  ...patch,
+                  name: patch.name !== undefined ? patch.name.trim() || wf.name : wf.name,
+                  updatedAt: now,
+                },
+          ),
+        }))
+        await get().persist()
+      },
+
+      deleteWorkflow: async (workflowId) => {
+        const workflow = get().workflows.find((wf) => wf.id === workflowId)
+        if (!workflow) return false
+        const checkpoint = get().checkpoint
+        if (
+          checkpoint &&
+          checkpoint.workflowId === workflowId &&
+          (checkpoint.status === 'running' || checkpoint.status === 'paused' || checkpoint.status === 'waiting')
+        ) {
+          window.alert('Cannot delete a running or paused workflow. Cancel or finish it first.')
+          return false
+        }
+        const siblings = get().workflows.filter((wf) => wf.planId === workflow.planId)
+        if (siblings.length <= 1) {
+          window.alert('A plan needs at least one workflow. Delete the plan instead, or add another workflow first.')
+          return false
+        }
+        if (!window.confirm(`Delete workflow “${workflow.name}”?`)) return false
+        set((state) => {
+          const workflows = state.workflows.filter((wf) => wf.id !== workflowId)
+          const plans = state.plans.map((plan) =>
+            plan.id !== workflow.planId
+              ? plan
+              : {
+                  ...plan,
+                  workflowIds: plan.workflowIds.filter((id) => id !== workflowId),
+                  updatedAt: new Date().toISOString(),
+                },
+          )
+          const selectedWorkflowId =
+            state.selectedWorkflowId === workflowId
+              ? (workflows.find((wf) => wf.planId === workflow.planId)?.id ?? null)
+              : state.selectedWorkflowId
+          return {
+            workflows,
+            plans,
+            selectedWorkflowId,
+            selectedNodeId: null,
+            dirty: true,
+          }
+        })
+        await get().persist()
+        void clearDurableWorkflowStore(workflowId)
+        return true
+      },
+
       upsertTextLibrary: (planId, args) => {
         const now = new Date().toISOString()
         const parsed = parseNumberedTextList(args.rawText)
@@ -301,6 +503,7 @@ export const usePlannerStore = create<PlannerState>()(
           selectedWorkflowId: copy.id,
           dirty: true,
         }))
+        void get().persist()
       },
 
       updateWorkflowGraph: (workflowId, nodes, edges) => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Copy, Plus, Workflow } from 'lucide-react'
+import { Copy, Pencil, Plus, Trash2, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ import { ActionDocsDrawer } from '@/planner/components/action-docs-drawer'
 import { BuilderToolbar } from '@/planner/components/builder-toolbar'
 import { ImportExportMenu } from '@/planner/components/import-export-menu'
 import { TextLibrariesPanel } from '@/planner/components/text-libraries-panel'
+import { CopyStorePanel } from '@/planner/components/copy-store-panel'
 import { RunLogPanel } from '@/planner/components/run-log-panel'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { ACTION_LIBRARY } from '@/planner/actions/catalog'
@@ -25,6 +26,11 @@ export function PlannerView() {
   const selectPlan = usePlannerStore((s) => s.selectPlan)
   const selectWorkflow = usePlannerStore((s) => s.selectWorkflow)
   const createPlan = usePlannerStore((s) => s.createPlan)
+  const updatePlan = usePlannerStore((s) => s.updatePlan)
+  const deletePlan = usePlannerStore((s) => s.deletePlan)
+  const createWorkflow = usePlannerStore((s) => s.createWorkflow)
+  const updateWorkflowMeta = usePlannerStore((s) => s.updateWorkflowMeta)
+  const deleteWorkflow = usePlannerStore((s) => s.deleteWorkflow)
   const duplicateWorkflow = usePlannerStore((s) => s.duplicateWorkflow)
   const builderOpen = usePlannerStore((s) => s.builderOpen)
   const setBuilderOpen = usePlannerStore((s) => s.setBuilderOpen)
@@ -33,6 +39,10 @@ export function PlannerView() {
   const theme = usePlannerStore((s) => s.theme)
   const setTheme = usePlannerStore((s) => s.setTheme)
   const [name, setName] = useState('New Automation Plan')
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
+  const [editingPlanName, setEditingPlanName] = useState('')
+  const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null)
+  const [editingWorkflowName, setEditingWorkflowName] = useState('')
 
   useEffect(() => {
     void hydrate()
@@ -146,26 +156,83 @@ export function PlannerView() {
 
           <div className="mt-5 space-y-2">
             {plans.map((plan) => (
-              <button
+              <div
                 key={plan.id}
-                type="button"
-                onClick={() => {
-                  selectPlan(plan.id)
-                  const first = workflows.find((wf) => wf.planId === plan.id)
-                  selectWorkflow(first?.id ?? null)
-                }}
                 className={`w-full rounded-xl border px-4 py-3 text-left transition ${
                   selectedPlanId === plan.id
                     ? 'border-primary/50 bg-primary/15 text-foreground'
                     : 'border-border bg-secondary/40 text-foreground hover:bg-accent'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium text-foreground">{plan.name}</p>
-                  <Badge variant="outline">{plan.workflowIds.length} workflows</Badge>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectPlan(plan.id)
+                    const first = workflows.find((wf) => wf.planId === plan.id)
+                    selectWorkflow(first?.id ?? null)
+                  }}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    {editingPlanId === plan.id ? (
+                      <Input
+                        value={editingPlanName}
+                        autoFocus
+                        onClick={(event) => event.stopPropagation()}
+                        onChange={(event) => setEditingPlanName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault()
+                            void updatePlan(plan.id, { name: editingPlanName }).then(() =>
+                              setEditingPlanId(null),
+                            )
+                          }
+                          if (event.key === 'Escape') setEditingPlanId(null)
+                        }}
+                        onBlur={() => {
+                          void updatePlan(plan.id, { name: editingPlanName }).then(() =>
+                            setEditingPlanId(null),
+                          )
+                        }}
+                        className="h-8"
+                      />
+                    ) : (
+                      <p className="font-medium text-foreground">{plan.name}</p>
+                    )}
+                    <Badge variant="outline">{plan.workflowIds.length} workflows</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {plan.description || 'No description'}
+                  </p>
+                </button>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setEditingPlanId(plan.id)
+                      setEditingPlanName(plan.name)
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void deletePlan(plan.id)
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </Button>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{plan.description || 'No description'}</p>
-              </button>
+              </div>
             ))}
             {plans.length === 0 ? (
               <p className="text-sm text-muted-foreground">No plans yet. Create your first plan.</p>
@@ -180,36 +247,102 @@ export function PlannerView() {
           className="space-y-4"
         >
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-display text-lg font-semibold">Workflows in plan</p>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!selectedWorkflowId}
-                onClick={() => selectedWorkflowId && duplicateWorkflow(selectedWorkflowId)}
-              >
-                <Copy className="h-3.5 w-3.5" />
-                Duplicate
-              </Button>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!selectedPlanId}
+                  onClick={() => {
+                    if (!selectedPlanId) return
+                    void createWorkflow(selectedPlanId).then(() => setBuilderOpen(true))
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!selectedWorkflowId}
+                  onClick={() => selectedWorkflowId && duplicateWorkflow(selectedWorkflowId)}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Duplicate
+                </Button>
+              </div>
             </div>
             <div className="mt-3 space-y-2">
               {planWorkflows.map((wf) => (
-                <button
+                <div
                   key={wf.id}
-                  type="button"
-                  onClick={() => selectWorkflow(wf.id)}
-                  className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left ${
+                  className={`rounded-xl border px-3 py-2 ${
                     selectedWorkflowId === wf.id
                       ? 'border-primary/40 bg-primary/5'
                       : 'border-border/70'
                   }`}
                 >
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <Workflow className="h-4 w-4 text-primary" />
-                    {wf.name}
-                  </span>
-                  <Badge variant="secondary">{wf.nodes.length} steps</Badge>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => selectWorkflow(wf.id)}
+                    className="flex w-full items-center justify-between text-left"
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+                      <Workflow className="h-4 w-4 shrink-0 text-primary" />
+                      {editingWorkflowId === wf.id ? (
+                        <Input
+                          value={editingWorkflowName}
+                          autoFocus
+                          onClick={(event) => event.stopPropagation()}
+                          onChange={(event) => setEditingWorkflowName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              void updateWorkflowMeta(wf.id, { name: editingWorkflowName }).then(
+                                () => setEditingWorkflowId(null),
+                              )
+                            }
+                            if (event.key === 'Escape') setEditingWorkflowId(null)
+                          }}
+                          onBlur={() => {
+                            void updateWorkflowMeta(wf.id, { name: editingWorkflowName }).then(() =>
+                              setEditingWorkflowId(null),
+                            )
+                          }}
+                          className="h-7"
+                        />
+                      ) : (
+                        <span className="truncate">{wf.name}</span>
+                      )}
+                    </span>
+                    <Badge variant="secondary">{wf.nodes.length} steps</Badge>
+                  </button>
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => {
+                        selectWorkflow(wf.id)
+                        setEditingWorkflowId(wf.id)
+                        setEditingWorkflowName(wf.name)
+                      }}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Rename
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                      onClick={() => void deleteWorkflow(wf.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
             <Button className="mt-4 w-full" onClick={() => setBuilderOpen(true)} disabled={!selectedWorkflowId}>
@@ -274,6 +407,8 @@ export function PlannerView() {
           </div>
 
           <TextLibrariesPanel planId={selectedPlanId} />
+
+          <CopyStorePanel workflowId={selectedWorkflowId} />
 
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
             <p className="font-display text-lg font-semibold">Action library</p>

@@ -43,6 +43,13 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Waits until the AI finishes generating (Stop button disappears).',
     'Place it after Send, before Collect JSON Parts or Repeat If More Titles.',
   ],
+  'clipboard.copy_event': [
+    'One event for the full copy pipeline — pick, click, capture, name, format, store.',
+    'Use “Pick Copy button” and click the real Copy control on the page.',
+    'Default source: click that button → read clipboard → save as story-{_NumberAuto}.',
+    'Later steps can use {{COPY:story-1}} (and COPY_NAME / COPY_NUMBER).',
+    'Other modes: extract text from an element, or paste {{aiResponse}} manually.',
+  ],
   'ai.collect_json_parts': [
     'Place after Wait Response.',
     'If ChatGPT returned a complete JSON story, it downloads that file.',
@@ -112,6 +119,8 @@ const EXTRA_TOOLTIP: Record<string, string> = {
     'Pastes full text instantly — same library & {_template} features as Type Text.',
   'ai.click_send': 'Clicks the chat Send button.',
   'ai.wait_response': 'Waits until ChatGPT finishes answering.',
+  'clipboard.copy_event':
+    'Pick Copy button → click → save to Copy Store (story-1, story-2…) in one step.',
   'ai.collect_json_parts':
     'If OUTPUT_LIMIT_REACHED, collects Part 1…N into one complete JSON and downloads it.',
   'flow.repeat_if_more': 'If more library titles remain, jump back and run again.',

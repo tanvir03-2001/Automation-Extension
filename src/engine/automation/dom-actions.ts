@@ -1131,6 +1131,41 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         const data = (el.innerText ?? el.textContent ?? '').trim()
         return { ok: true, data }
       }
+      case 'writeClipboard': {
+        const value = String(command.value ?? command.text ?? '')
+        try {
+          if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(value)
+            return { ok: true, data: { method: 'clipboard-api', length: value.length } }
+          }
+        } catch {
+          // fall through to execCommand
+        }
+        const ta = document.createElement('textarea')
+        ta.value = value
+        ta.setAttribute('readonly', '')
+        ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;'
+        document.body.appendChild(ta)
+        ta.select()
+        const ok = document.execCommand('copy')
+        ta.remove()
+        if (!ok) throw new Error('Clipboard write failed')
+        return { ok: true, data: { method: 'execCommand', length: value.length } }
+      }
+      case 'readClipboard': {
+        try {
+          if (navigator.clipboard?.readText) {
+            const data = await navigator.clipboard.readText()
+            return { ok: true, data }
+          }
+        } catch (error) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : 'Clipboard read failed',
+          }
+        }
+        return { ok: false, error: 'Clipboard read API unavailable' }
+      }
       case 'extractAttribute': {
         if (!command.selector || !command.attribute) {
           throw new Error('selector and attribute are required')

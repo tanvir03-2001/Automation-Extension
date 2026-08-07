@@ -9,6 +9,7 @@ import { activityLog } from '@/engine/activity/activity-log'
 import { sleep } from '@/engine/retry/retry-policy'
 import { resolveTypeText, typingDelayRange } from '@/planner/engine/text-library'
 import { collectJsonParts } from '@/planner/engine/multipart-collect'
+import { copyStore } from '@/engine/copy-store'
 import type { ActionHandlerResult } from '@/planner/actions/types'
 import type { AutomationCommand } from '@/shared/types/messages'
 
@@ -64,6 +65,104 @@ function evaluateCondition(
       return new RegExp(r).test(l)
     default:
       return false
+  }
+}
+
+async function persistCopyResult(args: {
+  text: string
+  variables: Record<string, unknown>
+  workflowId?: string
+  nameTemplate: string
+  format: 'text' | 'json'
+  shouldStore: boolean
+  shouldCopy: boolean
+  activeTabId?: number
+  runDom: (
+    tabId: number,
+    command: AutomationCommand,
+  ) => Promise<{ ok: boolean; data?: unknown; error?: string }>
+}): Promise<{
+  activeTabId?: number
+  clipboardPayload: string
+  storePatch: Record<string, unknown>
+  entryName?: string
+  clipboardOk: boolean
+  clipboardError?: string
+}> {
+  let clipboardPayload = args.text
+  let storePatch: Record<string, unknown> = {}
+  let entryName: string | undefined
+
+  if (args.shouldStore && args.workflowId) {
+    const created = await copyStore.create(args.variables, {
+      workflowId: args.workflowId,
+      name: args.nameTemplate || 'copy-{_NumberAuto}',
+      text: args.text,
+      format: args.format,
+    })
+    clipboardPayload = created.clipboardPayload
+    entryName = created.entry.name
+    storePatch = copyStore.toVariablesPatch(created)
+    await activityLog.append(
+      'info',
+      'CopyStore',
+      `Saved ${created.entry.name} (prefix=${created.entry.prefix}, #${created.entry.number})`,
+    )
+  } else if (args.format === 'json') {
+    clipboardPayload = copyStore.formatClipboardPayload(
+      args.nameTemplate || 'copy',
+      args.text,
+      'json',
+    )
+  }
+
+  let clipboardOk = true
+  let clipboardError: string | undefined
+  let activeTabId = args.activeTabId
+
+  if (args.shouldCopy) {
+    try {
+      let tabId = activeTabId
+      if (!tabId) {
+        const active = await tabController.getActiveTab()
+        tabId = active?.id
+      }
+      if (!tabId) {
+        clipboardOk = false
+        clipboardError = 'No active tab for Clipboard API (variable mirror kept)'
+      } else {
+        activeTabId = tabId
+        const result = await args.runDom(tabId, {
+          action: 'writeClipboard',
+          value: clipboardPayload,
+          text: clipboardPayload,
+        })
+        if (!result.ok) {
+          clipboardOk = false
+          clipboardError = result.error ?? 'Clipboard write failed'
+        }
+      }
+    } catch (error) {
+      clipboardOk = false
+      clipboardError = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  if (!clipboardOk) {
+    await activityLog.append(
+      'warn',
+      'Clipboard',
+      `OS clipboard write failed (variable mirror kept): ${clipboardError}`,
+    )
+  }
+
+  return {
+    activeTabId,
+    clipboardPayload,
+    storePatch,
+    entryName,
+    clipboardOk,
+    clipboardError,
   }
 }
 
@@ -890,17 +989,164 @@ export async function executePlannerAction(args: {
         return { status: 'success', variables: { [key]: source }, output: source }
       }
 
+      case 'clipboard.copy_event': {
+        // Unified Copy Event: pick Copy button → click → capture → store (+ format/name).
+        const sourceMode = String(params.sourceMode ?? 'click_copy_button')
+        const nameTemplate = String(params.name ?? '').trim() || 'story-{_NumberAuto}'
+        const format = params.format === 'json' ? 'json' : 'text'
+        const shouldStore = params.store !== false && params.store !== 'false'
+        const shouldCopy = params.copy !== false
+        const outputKey = String(params.outputKey ?? 'copiedText').trim() || 'copiedText'
+        const clickDelayMs = Math.max(0, Number(params.clickDelayMs ?? 250))
+
+        let text = ''
+
+        if (sourceMode === 'manual_or_variable') {
+          text = String(params.text ?? '')
+        } else if (sourceMode === 'extract_from_element') {
+          if (!selector) throw new Error('Pick the text element (selector required)')
+          activeTabId = await ensureTab(activeTabId)
+          const extracted = await runDom(activeTabId, {
+            action: 'extractText',
+            selector,
+            timeoutMs: args.timeoutMs,
+          })
+          if (!extracted.ok) throw new Error(extracted.error ?? 'Failed to extract text')
+          text = String(extracted.data ?? '')
+        } else {
+          // click_copy_button (default): click picked Copy button → read OS clipboard
+          if (!selector) throw new Error('Pick the Copy button with mouse (selector required)')
+          activeTabId = await ensureTab(activeTabId)
+          const clicked = await runDom(activeTabId, {
+            action: 'click',
+            selector,
+            timeoutMs: args.timeoutMs,
+          })
+          if (!clicked.ok) {
+            throw Object.assign(new Error(clicked.error ?? 'Copy button click failed'), {
+              name: 'ElementNotFoundError',
+            })
+          }
+          if (clickDelayMs > 0) await sleep(clickDelayMs)
+
+          const read = await runDom(activeTabId, { action: 'readClipboard' })
+          if (read.ok && typeof read.data === 'string' && read.data.length > 0) {
+            text = read.data
+          } else {
+            // Fallback: some UIs copy via selection; try reading nearby message text if click target fails
+            const fallback = await runDom(activeTabId, {
+              action: 'extractText',
+              selector:
+                '[data-message-author-role="assistant"]:last-of-type, [data-testid="conversation-turn-"]:last-of-type',
+              timeoutMs: Math.min(args.timeoutMs, 8000),
+            })
+            if (fallback.ok && typeof fallback.data === 'string' && fallback.data.trim()) {
+              text = String(fallback.data).trim()
+              await activityLog.append(
+                'warn',
+                'CopyEvent',
+                'Clipboard empty after Copy click — used last assistant message text as fallback',
+              )
+            } else {
+              throw new Error(
+                read.error ||
+                  'Clipboard empty after clicking Copy button. Allow clipboard permission or use Extract/Manual mode.',
+              )
+            }
+          }
+        }
+
+        const persisted = await persistCopyResult({
+          text,
+          variables: args.variables,
+          workflowId: args.workflowId,
+          nameTemplate,
+          format,
+          shouldStore,
+          shouldCopy,
+          activeTabId,
+          runDom,
+        })
+        activeTabId = persisted.activeTabId
+
+        return {
+          status: 'success',
+          activeTabId,
+          variables: {
+            __clipboard: persisted.clipboardPayload,
+            [outputKey]: text,
+            ...persisted.storePatch,
+          },
+          output: {
+            text,
+            clipboardPayload: persisted.clipboardPayload,
+            clipboardOk: persisted.clipboardOk,
+            clipboardError: persisted.clipboardError,
+            storedAs: persisted.entryName,
+            format,
+            sourceMode,
+          },
+        }
+      }
+
       case 'clipboard.write': {
-        // Best-effort via offscreen-less approach: store into variable mirror
-        const text = interpolate(String(params.text ?? ''), args.variables)
-        return { status: 'success', variables: { __clipboard: text }, output: text }
+        // Existing behavior: always mirror into __clipboard.
+        // Additive: optional OS clipboard + workflow-scoped Copy Store.
+        const text = String(params.text ?? '')
+        const shouldCopy = params.copy !== false
+        const nameTemplate = String(params.name ?? '').trim()
+        const format = params.format === 'json' ? 'json' : 'text'
+        // Default store=false keeps legacy nodes unchanged.
+        const shouldStore = params.store === true || params.store === 'true'
+
+        const persisted = await persistCopyResult({
+          text,
+          variables: args.variables,
+          workflowId: args.workflowId,
+          nameTemplate,
+          format,
+          shouldStore,
+          shouldCopy,
+          activeTabId,
+          runDom,
+        })
+        activeTabId = persisted.activeTabId
+
+        return {
+          status: 'success',
+          activeTabId,
+          variables: {
+            __clipboard: persisted.clipboardPayload,
+            ...persisted.storePatch,
+          },
+          output: {
+            text,
+            clipboardPayload: persisted.clipboardPayload,
+            clipboardOk: persisted.clipboardOk,
+            clipboardError: persisted.clipboardError,
+            storedAs: persisted.entryName,
+            format,
+          },
+        }
       }
 
       case 'clipboard.read': {
         const key = String(params.outputKey ?? 'clipboard')
+        let value = args.variables.__clipboard ?? ''
+        try {
+          activeTabId = await ensureTab(activeTabId)
+          const result = await runDom(activeTabId, { action: 'readClipboard' })
+          if (result.ok && typeof result.data === 'string') {
+            value = result.data
+          }
+        } catch {
+          // Keep in-memory __clipboard mirror (existing behavior)
+        }
         return {
           status: 'success',
-          variables: { [key]: args.variables.__clipboard ?? '' },
+          activeTabId,
+          variables: { [key]: value, __clipboard: value },
+          output: value,
         }
       }
 

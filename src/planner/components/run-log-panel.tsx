@@ -153,22 +153,22 @@ export function RunLogPanel() {
             type="button"
             onClick={() => setOpen((value) => !value)}
             className={cn(
-              'flex w-full items-center justify-between rounded-2xl border px-4 py-2.5 text-left text-sm shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur-xl transition',
+              'flex w-full items-center justify-between rounded-xl border px-3 py-1.5 text-left text-xs shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition',
               checkpoint?.status === 'failed'
                 ? 'border-rose-500/45 bg-card/95 text-foreground'
                 : 'border-border/80 bg-card/95 text-foreground hover:border-primary/40',
             )}
           >
-            <span className="flex items-center gap-2.5 font-medium">
+            <span className="flex items-center gap-2 font-medium">
               <span
                 className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-xl',
+                  'flex h-6 w-6 items-center justify-center rounded-lg',
                   checkpoint?.status === 'failed'
                     ? 'bg-rose-500/20 text-rose-400'
                     : 'bg-primary/15 text-primary',
                 )}
               >
-                <ScrollText className="h-4 w-4" />
+                <ScrollText className="h-3.5 w-3.5" />
               </span>
               <span>
                 Run log

@@ -31,6 +31,9 @@ export type MessageType =
   | 'PLANNER_RESUME'
   | 'PLANNER_CANCEL'
   | 'PLANNER_STATE'
+  | 'PLANNER_TEST_ACTION'
+  | 'PLANNER_COPY_STORE_DELETE'
+  | 'PLANNER_COPY_STORE_CLEAR'
   | 'PING'
 
 export interface ExtensionMessage<T = unknown> {
@@ -65,6 +68,8 @@ export interface AutomationCommand {
     | 'checkElementVisible'
     | 'checkCondition'
     | 'testSelector'
+    | 'writeClipboard'
+    | 'readClipboard'
   selector?: string
   /** Alternative selectors tried if primary fails (text / aria / svg / css path). */
   fallbacks?: string[]

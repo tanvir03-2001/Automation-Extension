@@ -7,6 +7,13 @@ import { storageGet, storageSet } from '@/shared/storage/chrome-storage'
 import { sampleWorkflows } from '@/data/sample-workflows'
 import { samplePlans, sampleVisualWorkflows } from '@/planner/data/sample-plans'
 import { plannerRunner } from '@/planner/engine/planner-runner'
+import { executePlannerAction } from '@/planner/engine/action-executor'
+import { copyStore, isWorkflowCopyStore } from '@/engine/copy-store'
+import {
+  clearDurableWorkflowStore,
+  deleteDurableEntry,
+  loadDurableWorkflowStore,
+} from '@/engine/copy-store/durable'
 import { tabController } from '@/engine/automation/tab-controller'
 import { ensureContentScript } from '@/background/ensure-content-script'
 import { KEEPALIVE_ALARM, runGuardController } from '@/background/run-guard-controller'
@@ -432,6 +439,152 @@ onRuntimeMessage(async (message, sender) => {
 
     case 'PLANNER_STATE':
       return { ok: true, checkpoint: plannerRunner.getCheckpoint() }
+
+    case 'PLANNER_COPY_STORE_DELETE': {
+      const payload = (message.payload ?? {}) as { workflowId?: string; name?: string }
+      if (!payload.workflowId || !payload.name) {
+        return { ok: false, error: 'workflowId and name are required' }
+      }
+      try {
+        const next = await deleteDurableEntry(payload.workflowId, payload.name)
+        copyStore.setRuntimeStore(payload.workflowId, next)
+        await plannerRunner.syncCopyStoreSnapshot(payload.workflowId, next)
+        return {
+          ok: true,
+          store: next,
+          checkpoint: plannerRunner.getCheckpoint(),
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+
+    case 'PLANNER_COPY_STORE_CLEAR': {
+      const payload = (message.payload ?? {}) as { workflowId?: string }
+      if (!payload.workflowId) {
+        return { ok: false, error: 'workflowId is required' }
+      }
+      try {
+        await clearDurableWorkflowStore(payload.workflowId)
+        copyStore.resetRuntime(payload.workflowId)
+        await plannerRunner.syncCopyStoreSnapshot(payload.workflowId, {})
+        return {
+          ok: true,
+          store: {},
+          checkpoint: plannerRunner.getCheckpoint(),
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+
+    case 'PLANNER_TEST_ACTION': {
+      const payload = (message.payload ?? {}) as {
+        workflowId: string
+        planId?: string
+        actionId: string
+        params?: Record<string, unknown>
+        selector?: string
+        fallbacks?: string[]
+        timeoutMs?: number
+      }
+
+      if (!payload.workflowId || !payload.actionId) {
+        return { ok: false, error: 'workflowId and actionId are required' }
+      }
+
+      if (plannerRunner.isBusy()) {
+        return {
+          ok: false,
+          error: 'Planner is running — Pause/Cancel first, then Quick test this step',
+        }
+      }
+
+      try {
+        const durable = await loadDurableWorkflowStore(payload.workflowId)
+        const checkpoint = plannerRunner.getCheckpoint()
+        const baseVars =
+          checkpoint?.workflowId === payload.workflowId ? { ...checkpoint.variables } : {}
+        const liveStore = isWorkflowCopyStore(baseVars.copyStore) ? baseVars.copyStore : {}
+        const mergedStore = { ...durable, ...liveStore }
+
+        const prevStores =
+          baseVars.copyStores && typeof baseVars.copyStores === 'object'
+            ? (baseVars.copyStores as Record<string, unknown>)
+            : {}
+
+        const variables: Record<string, unknown> = {
+          ...baseVars,
+          copyStore: mergedStore,
+          copyStores: {
+            ...prevStores,
+            [payload.workflowId]: mergedStore,
+          },
+          __workflowId: payload.workflowId,
+        }
+
+        copyStore.hydrateRuntime({
+          copyStore: mergedStore,
+          copyStores: { [payload.workflowId]: mergedStore },
+        })
+
+        const params: Record<string, unknown> = {
+          ...(payload.params ?? {}),
+        }
+        if (payload.selector) params.selector = payload.selector
+        if (payload.fallbacks?.length) params.selectorFallbacks = payload.fallbacks
+
+        const result = await executePlannerAction({
+          actionId: payload.actionId,
+          params,
+          variables,
+          activeTabId: checkpoint?.browserState.activeTabId,
+          timeoutMs: payload.timeoutMs ?? 30_000,
+          workflowId: payload.workflowId,
+          planId: payload.planId,
+        })
+
+        if (result.variables) {
+          await plannerRunner.mergeVariablesFromTest(payload.workflowId, result.variables)
+        }
+
+        const output =
+          result.output && typeof result.output === 'object'
+            ? (result.output as Record<string, unknown>)
+            : { value: result.output }
+
+        return {
+          ok: result.status === 'success',
+          error: result.error,
+          result: {
+            status: result.status,
+            storedAs: output.storedAs,
+            textPreview:
+              typeof output.text === 'string'
+                ? String(output.text).slice(0, 160)
+                : undefined,
+            textLength: typeof output.text === 'string' ? output.text.length : undefined,
+            format: output.format,
+            sourceMode: output.sourceMode,
+            clipboardOk: output.clipboardOk,
+            clipboardError: output.clipboardError,
+            output,
+          },
+          checkpoint: plannerRunner.getCheckpoint(),
+        }
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
 
     default:
       return { ok: false, error: `Unhandled message: ${message.type}` }

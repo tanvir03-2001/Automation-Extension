@@ -1,8 +1,10 @@
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { usePlannerStore } from '@/planner/store/planner-store'
 
 const schema = z.object({
   defaultRootFolder: z.string().min(1, 'Required'),
@@ -13,6 +15,9 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export function SettingsView() {
+  const theme = usePlannerStore((s) => s.theme)
+  const setTheme = usePlannerStore((s) => s.setTheme)
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -30,6 +35,35 @@ export function SettingsView() {
           Global defaults for downloads, projects, and retry behavior. Validated with Zod.
         </p>
       </header>
+
+      <section className="max-w-lg space-y-3 rounded-2xl border border-border/80 bg-card p-5 shadow-panel">
+        <div>
+          <p className="text-sm font-medium">Appearance</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Applies across Dashboard, Planner, Workflows, and overlays. No layout shift.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={theme === 'light' ? 'default' : 'outline'}
+            onClick={() => setTheme('light')}
+          >
+            <Sun className="h-3.5 w-3.5" />
+            Light
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={theme === 'dark' ? 'default' : 'outline'}
+            onClick={() => setTheme('dark')}
+          >
+            <Moon className="h-3.5 w-3.5" />
+            Dark
+          </Button>
+        </div>
+      </section>
 
       <form
         className="max-w-lg space-y-4 rounded-2xl border border-border/80 bg-card p-5 shadow-panel"

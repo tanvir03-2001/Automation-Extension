@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from '@/dashboard/components/sidebar'
 import { useDashboardData } from '@/dashboard/hooks/use-dashboard-data'
@@ -38,7 +39,18 @@ export default function App() {
   const { isLoading } = useDashboardData()
   const view = useDashboardStore((s) => s.view)
   const builderOpen = usePlannerStore((s) => s.builderOpen)
+  const hydrateTheme = usePlannerStore((s) => s.hydrate)
+  const theme = usePlannerStore((s) => s.theme)
   const fullBleed = view === 'planner' && builderOpen
+
+  // Ensure dark/light tokens apply on every dashboard surface (not only Planner).
+  useEffect(() => {
+    void hydrateTheme()
+  }, [hydrateTheme])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+  }, [theme])
 
   return (
     <div className="flex h-full overflow-hidden bg-[hsl(var(--background))]">

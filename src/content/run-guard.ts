@@ -52,30 +52,32 @@ function ensureStyle(): void {
     }
     #${ROOT_ID} .ae-run-guard-badge {
       position: absolute;
-      top: 12px;
-      right: 12px;
+      top: 8px;
+      right: 8px;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      padding: 6px 10px 6px 8px;
+      gap: 5px;
+      padding: 3px 7px 3px 5px;
       border-radius: 999px;
       border: 1px solid rgba(248, 113, 113, 0.45);
       background: rgba(15, 23, 42, 0.72);
       color: #fecaca;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
       pointer-events: auto;
       cursor: pointer;
       user-select: none;
+      line-height: 1;
+      max-height: 22px;
     }
     #${ROOT_ID} .ae-run-guard-badge:hover {
       background: rgba(15, 23, 42, 0.88);
       border-color: rgba(248, 113, 113, 0.7);
     }
     #${ROOT_ID} .ae-run-guard-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 999px;
       background: #ef4444;
       box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
@@ -83,9 +85,9 @@ function ensureStyle(): void {
       flex-shrink: 0;
     }
     #${ROOT_ID} .ae-run-guard-live {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
       color: #fee2e2;
       line-height: 1;
@@ -93,12 +95,12 @@ function ensureStyle(): void {
     @keyframes ae-run-guard-blink {
       0% {
         opacity: 1;
-        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
         transform: scale(1);
       }
       55% {
         opacity: 0.35;
-        box-shadow: 0 0 0 7px rgba(239, 68, 68, 0);
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
         transform: scale(0.92);
       }
       100% {
