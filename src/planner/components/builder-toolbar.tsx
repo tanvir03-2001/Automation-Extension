@@ -18,8 +18,10 @@ import { usePlannerStore } from '@/planner/store/planner-store'
 import { ImportExportMenu } from '@/planner/components/import-export-menu'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { cn } from '@/shared/utils/cn'
+import { useT } from '@/shared/i18n/use-t'
 
 export function BuilderToolbar() {
+  const t = useT()
   const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
   const workflows = usePlannerStore((s) => s.workflows)
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
@@ -69,7 +71,7 @@ export function BuilderToolbar() {
         onClick={() => setBuilderOpen(false)}
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Workflows
+        {t('builder.workflows')}
       </Button>
 
       <Separator orientation="vertical" className="h-6" />
@@ -77,7 +79,7 @@ export function BuilderToolbar() {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate font-display text-sm font-semibold tracking-tight">
-            {runningPlan?.name ?? workflow?.name ?? 'No plan selected'}
+            {runningPlan?.name ?? workflow?.name ?? t('builder.noPlan')}
           </p>
           {checkpoint ? (
             <Badge
@@ -94,17 +96,17 @@ export function BuilderToolbar() {
             </Badge>
           ) : null}
           {runningPlan && runningPlan.id !== workflowId ? (
-            <Badge variant="outline">Running elsewhere</Badge>
+            <Badge variant="outline">{t('builder.runningElsewhere')}</Badge>
           ) : null}
-          {dirty ? <Badge variant="warning">Saving…</Badge> : null}
+          {dirty ? <Badge variant="warning">{t('builder.saving')}</Badge> : null}
           {saving ? (
-            <Badge variant="outline">Writing…</Badge>
+            <Badge variant="outline">{t('builder.writing')}</Badge>
           ) : (
-            <Badge variant="outline">Auto-saved</Badge>
+            <Badge variant="outline">{t('builder.autoSaved')}</Badge>
           )}
         </div>
         <p className="truncate text-[11px] text-[hsl(var(--muted-foreground))]">
-          Every move auto-saves · Import/Export JSON anytime
+          {t('builder.autoSaveHint')}
         </p>
       </div>
 
@@ -126,7 +128,7 @@ export function BuilderToolbar() {
       <ToolGroup>
         <Button size="sm" className="rounded-xl px-4" onClick={() => void runPlan()}>
           <Play className="h-3.5 w-3.5" />
-          Run
+          {t('builder.run')}
         </Button>
         <IconBtn
           onClick={() =>
@@ -135,7 +137,7 @@ export function BuilderToolbar() {
               if (data.checkpoint) setCheckpoint(data.checkpoint)
             })
           }
-          title="Pause"
+          title={t('common.pause')}
         >
           <Pause className="h-3.5 w-3.5" />
         </IconBtn>
@@ -147,7 +149,7 @@ export function BuilderToolbar() {
               if (data.checkpoint) setCheckpoint(data.checkpoint)
             })
           }
-          title="Cancel"
+          title={t('common.cancel')}
         >
           <Square className="h-3.5 w-3.5" />
         </IconBtn>
@@ -156,7 +158,7 @@ export function BuilderToolbar() {
       <ImportExportMenu compact />
 
       <IconBtn
-        title="Reload extension"
+        title={t('common.reload')}
         onClick={() => {
           void sendRuntimeMessage({ type: 'EXTENSION_RELOAD' })
         }}

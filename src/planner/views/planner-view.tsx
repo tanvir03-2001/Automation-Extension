@@ -16,8 +16,10 @@ import { CopyStorePanel } from '@/planner/components/copy-store-panel'
 import { RunLogPanel } from '@/planner/components/run-log-panel'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { ACTION_LIBRARY } from '@/planner/actions/catalog'
+import { useT } from '@/shared/i18n/use-t'
 
 export function PlannerView() {
+  const t = useT()
   const hydrate = usePlannerStore((s) => s.hydrate)
   const plans = usePlannerStore((s) => s.plans)
   const workflows = usePlannerStore((s) => s.workflows)
@@ -138,12 +140,9 @@ export function PlannerView() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
-            Workflow Planner
+            {t('planner.title')}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            Create a Workflow, then add Plans inside it. Visual drag-and-drop automation — configure
-            actions, conditions, loops, and more from the dashboard.
-          </p>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('planner.subtitle')}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ImportExportMenu />
@@ -151,10 +150,10 @@ export function PlannerView() {
             variant="outline"
             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
           >
-            {theme === 'light' ? 'Dark' : 'Light'} mode
+            {t(theme === 'light' ? 'theme.dark' : 'theme.light')}
           </Button>
           <Button onClick={() => setBuilderOpen(true)} disabled={!selectedWorkflowId}>
-            Open Builder
+            {t('common.openBuilder')}
           </Button>
         </div>
       </header>
@@ -166,21 +165,21 @@ export function PlannerView() {
           className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-panel"
         >
           <div className="space-y-3">
-            <p className="text-xs font-medium">Create Workflow</p>
+            <p className="text-xs font-medium">{t('planner.createWorkflow')}</p>
             <label className="block space-y-1">
-              <span className="text-[11px] text-muted-foreground">Name</span>
+              <span className="text-[11px] text-muted-foreground">{t('planner.name')}</span>
               <Input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. Facebook Automation"
+                placeholder={t('planner.namePlaceholder')}
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-[11px] text-muted-foreground">Description</span>
+              <span className="text-[11px] text-muted-foreground">{t('planner.description')}</span>
               <textarea
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="What this workflow does (optional)"
+                placeholder={t('planner.descPlaceholder')}
                 rows={3}
                 className="min-h-[72px] w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
               />
@@ -198,7 +197,7 @@ export function PlannerView() {
               }}
             >
               <Plus className="h-4 w-4" />
-              Create Workflow
+              {t('planner.createWorkflow')}
             </Button>
           </div>
 
@@ -242,13 +241,13 @@ export function PlannerView() {
                             if (event.key === 'Escape') setEditingPlanId(null)
                           }}
                           className="h-8"
-                          placeholder="Workflow name"
+                          placeholder={t('planner.name')}
                         />
                         <textarea
                           value={editingPlanDescription}
                           onChange={(event) => setEditingPlanDescription(event.target.value)}
                           rows={2}
-                          placeholder="Description"
+                          placeholder={t('planner.description')}
                           className="min-h-[56px] w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-xs text-foreground outline-none ring-ring focus:ring-2"
                         />
                         <div className="flex gap-1.5">
@@ -262,7 +261,7 @@ export function PlannerView() {
                               }).then(() => setEditingPlanId(null))
                             }}
                           >
-                            Save
+                            {t('common.save')}
                           </Button>
                           <Button
                             size="sm"
@@ -270,21 +269,23 @@ export function PlannerView() {
                             className="h-7 px-2 text-xs"
                             onClick={() => setEditingPlanId(null)}
                           >
-                            Cancel
+                            {t('common.cancel')}
                           </Button>
                         </div>
                       </div>
                     ) : (
-                      <p className="font-medium text-foreground">Workflow: {plan.name}</p>
+                      <p className="font-medium text-foreground">
+                        {t('planner.workflowPrefix', { name: plan.name })}
+                      </p>
                     )}
                     <Badge variant="outline">
                       {plan.workflowIds.length}{' '}
-                      {plan.workflowIds.length === 1 ? 'plan' : 'plans'}
+                      {plan.workflowIds.length === 1 ? t('common.plan') : t('common.plans')}
                     </Badge>
                   </div>
                   {editingPlanId !== plan.id ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {plan.description || 'No description'}
+                      {plan.description || t('common.noDescription')}
                     </p>
                   ) : null}
                 </button>
@@ -301,7 +302,7 @@ export function PlannerView() {
                     }}
                   >
                     <Pencil className="h-3 w-3" />
-                    Edit
+                    {t('common.edit')}
                   </Button>
                   <Button
                     size="sm"
@@ -313,15 +314,13 @@ export function PlannerView() {
                     }}
                   >
                     <Trash2 className="h-3 w-3" />
-                    Delete
+                    {t('common.delete')}
                   </Button>
                 </div>
               </div>
             ))}
             {plans.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No workflows yet. Create your first workflow to get started.
-              </p>
+              <p className="text-sm text-muted-foreground">{t('planner.noWorkflowsYet')}</p>
             ) : null}
           </div>
         </motion.div>
@@ -335,11 +334,13 @@ export function PlannerView() {
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="font-display text-lg font-semibold">Plans</p>
+                <p className="font-display text-lg font-semibold">{t('planner.plans')}</p>
                 <p className="text-xs text-muted-foreground">
                   {selectedPlanId
-                    ? `Inside workflow: ${plans.find((p) => p.id === selectedPlanId)?.name ?? '—'}`
-                    : 'Select a workflow to manage its plans'}
+                    ? t('planner.insideWorkflow', {
+                        name: plans.find((p) => p.id === selectedPlanId)?.name ?? '—',
+                      })
+                    : t('planner.selectWorkflowPlans')}
                 </p>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -353,7 +354,7 @@ export function PlannerView() {
                   }}
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Create Plan
+                  {t('planner.createPlan')}
                 </Button>
                 <Button
                   size="sm"
@@ -362,7 +363,7 @@ export function PlannerView() {
                   onClick={() => selectedWorkflowId && duplicateWorkflow(selectedWorkflowId)}
                 >
                   <Copy className="h-3.5 w-3.5" />
-                  Duplicate
+                  {t('common.duplicate')}
                 </Button>
               </div>
             </div>
@@ -409,7 +410,9 @@ export function PlannerView() {
                         <span className="truncate">{wf.name}</span>
                       )}
                     </span>
-                    <Badge variant="secondary">{wf.nodes.length} steps</Badge>
+                    <Badge variant="secondary">
+                      {wf.nodes.length} {t('common.steps')}
+                    </Badge>
                   </button>
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     <Button
@@ -423,7 +426,7 @@ export function PlannerView() {
                       }}
                     >
                       <Pencil className="h-3 w-3" />
-                      Rename
+                      {t('common.rename')}
                     </Button>
                     <Button
                       size="sm"
@@ -432,33 +435,29 @@ export function PlannerView() {
                       onClick={() => void deleteWorkflow(wf.id)}
                     >
                       <Trash2 className="h-3 w-3" />
-                      Delete
+                      {t('common.delete')}
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
             {planWorkflows.length === 0 && selectedPlanId ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No plans yet. Create a plan inside this workflow.
-              </p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('planner.noPlansYet')}</p>
             ) : null}
             {!selectedPlanId ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Select a workflow on the left to see its plans.
-              </p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('planner.selectLeft')}</p>
             ) : null}
             <Button className="mt-4 w-full" onClick={() => setBuilderOpen(true)} disabled={!selectedWorkflowId}>
-              Edit in Visual Builder
+              {t('planner.editBuilder')}
             </Button>
           </div>
 
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
-            <p className="font-display text-lg font-semibold">Execution monitor</p>
+            <p className="font-display text-lg font-semibold">{t('planner.executionMonitor')}</p>
             {checkpoint ? (
               <div className="mt-3 space-y-2 text-sm">
                 <p>
-                  Status:{' '}
+                  {t('planner.status')}{' '}
                   <Badge
                     variant={
                       checkpoint.status === 'failed'
@@ -477,13 +476,13 @@ export function PlannerView() {
                   return (
                     <>
                       <p className="text-sm">
-                        Workflow:{' '}
+                        {t('planner.workflowLabel')}{' '}
                         <span className="font-medium">
                           {activeWorkflow?.name ?? checkpoint.planId}
                         </span>
                       </p>
                       <p className="text-sm">
-                        Current plan:{' '}
+                        {t('planner.currentPlan')}{' '}
                         <span className="font-medium">
                           {activePlan?.name ?? checkpoint.workflowId}
                         </span>
@@ -492,10 +491,10 @@ export function PlannerView() {
                   )
                 })()}
                 <p className="font-mono text-xs text-muted-foreground">
-                  Node: {checkpoint.currentNodeId ?? '—'}
+                  {t('planner.node')} {checkpoint.currentNodeId ?? '—'}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  History entries: {checkpoint.history.length}
+                  {t('planner.historyEntries', { count: checkpoint.history.length })}
                 </p>
                 {(() => {
                   const lastFail = [...checkpoint.history]
@@ -504,7 +503,7 @@ export function PlannerView() {
                   if (!lastFail) return null
                   return (
                     <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-foreground">
-                      <p className="font-semibold text-destructive">Last error</p>
+                      <p className="font-semibold text-destructive">{t('planner.lastError')}</p>
                       <p className="mt-1 break-words">{lastFail.error ?? lastFail.status}</p>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
                         {lastFail.nodeId}
@@ -517,15 +516,12 @@ export function PlannerView() {
                   variant="outline"
                   onClick={() => void sendRuntimeMessage({ type: 'PLANNER_RESUME' })}
                 >
-                  Resume from checkpoint
+                  {t('planner.resumeCheckpoint')}
                 </Button>
-                <p className="text-[11px] text-muted-foreground">
-                  Full logs: open Visual Builder → bottom <strong>Run log</strong>, or sidebar →{' '}
-                  <strong>Activity</strong>.
-                </p>
+                <p className="text-[11px] text-muted-foreground">{t('planner.fullLogs')}</p>
               </div>
             ) : (
-              <p className="mt-2 text-sm text-muted-foreground">No active Workflow Planner run.</p>
+              <p className="mt-2 text-sm text-muted-foreground">{t('planner.noActiveRun')}</p>
             )}
           </div>
 
@@ -534,10 +530,9 @@ export function PlannerView() {
           <CopyStorePanel workflowId={selectedWorkflowId} />
 
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
-            <p className="font-display text-lg font-semibold">Action library</p>
+            <p className="font-display text-lg font-semibold">{t('planner.actionLibrary')}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {ACTION_LIBRARY.length}+ prebuilt actions across browser, mouse, keyboard, AI sites,
-              loops, conditions, downloads, and more.
+              {t('planner.actionLibraryHelp', { count: ACTION_LIBRARY.length })}
             </p>
           </div>
         </motion.div>

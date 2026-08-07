@@ -194,6 +194,45 @@ const mouseActions: ActionDefinition[] = [
     fields: [selectorField],
   }),
   def({
+    id: 'mouse.click_exact',
+    name: 'Click Exact Match',
+    category: 'mouse',
+    description: 'Click the element whose visible text/label matches exactly',
+    tooltip:
+      'Finds a button/link/element by exact text (e.g. Continue) and clicks it. Pick with mouse to fill the text.',
+    howto: [
+      'Drag Click Exact Match onto the canvas.',
+      'Type the exact button/label text, or use Pick with mouse on the real element.',
+      'Only an exact text match is clicked — partial matches are ignored.',
+      'Connect it after Wait For Page / Wait For Button when the label may load late.',
+    ],
+    icon: 'MousePointerClick',
+    supportsSelector: true,
+    favoriteDefault: true,
+    fields: [
+      {
+        key: 'text',
+        label: 'Exact text / label',
+        type: 'string',
+        required: true,
+        placeholder: 'Continue',
+        help: 'Must match the full visible label (case-insensitive). Use Pick with mouse to fill this.',
+      },
+      {
+        ...selectorField,
+        required: false,
+        help: 'Optional — Pick with mouse to target a specific element and fill Exact text',
+      },
+      {
+        key: 'exact',
+        label: 'Exact match (always on)',
+        type: 'boolean',
+        defaultValue: true,
+        help: 'This action always uses exact text matching',
+      },
+    ],
+  }),
+  def({
     id: 'mouse.double_click',
     name: 'Double Click',
     category: 'mouse',
@@ -735,7 +774,7 @@ const conditionActions: ActionDefinition[] = [
     name: 'If',
     category: 'conditions',
     description:
-      'If/else branch: element visible, button name, page text, or variable — with wait + mouse pick',
+      'If/else branch: element visible, button name, page text, number from element, or variable — with wait + mouse pick',
     icon: 'GitBranch',
     controlFlow: true,
     supportsSelector: true,
@@ -750,6 +789,7 @@ const conditionActions: ActionDefinition[] = [
           { label: 'Element exists', value: 'element_exists' },
           { label: 'Element clickable', value: 'element_clickable' },
           { label: 'Button by name', value: 'button_name' },
+          { label: 'Number from element (pick)', value: 'element_number' },
           { label: 'Text on page', value: 'text_present' },
           { label: 'Text gone', value: 'text_gone' },
           { label: 'Variable', value: 'variable' },
@@ -761,8 +801,26 @@ const conditionActions: ActionDefinition[] = [
       { key: 'buttonName', label: 'Button name', type: 'string', placeholder: 'Continue' },
       { key: 'text', label: 'Text', type: 'string' },
       { key: 'left', label: 'Left value', type: 'string', placeholder: '{{variable}}' },
-      { key: 'operator', label: 'Operator', type: 'string', defaultValue: 'equals' },
-      { key: 'right', label: 'Right value', type: 'string' },
+      {
+        key: 'operator',
+        label: 'Operator',
+        type: 'select',
+        defaultValue: 'equals',
+        options: [
+          { label: 'Equals', value: 'equals' },
+          { label: 'Greater than', value: 'gt' },
+          { label: 'Greater or equal', value: 'gte' },
+          { label: 'Less than', value: 'lt' },
+          { label: 'Less or equal', value: 'lte' },
+        ],
+      },
+      {
+        key: 'right',
+        label: 'Compare to number',
+        type: 'string',
+        placeholder: '100',
+        help: 'For Number from element: compare extracted value to this number',
+      },
       { key: 'negate', label: 'Invert', type: 'boolean', defaultValue: false },
     ],
   }),
@@ -1555,14 +1613,24 @@ export function getActionById(id: string): ActionDefinition | undefined {
   return ACTION_LIBRARY.find((action) => action.id === id)
 }
 
-export function searchActions(query: string): ActionDefinition[] {
+export function searchActions(
+  query: string,
+  localized?: Array<{ id: string; name: string; description: string }>,
+): ActionDefinition[] {
   const q = query.trim().toLowerCase()
   if (!q) return ACTION_LIBRARY
-  return ACTION_LIBRARY.filter(
-    (action) =>
+  const locById = localized
+    ? new Map(localized.map((item) => [item.id, item]))
+    : null
+  return ACTION_LIBRARY.filter((action) => {
+    const loc = locById?.get(action.id)
+    return (
       action.name.toLowerCase().includes(q) ||
       action.id.toLowerCase().includes(q) ||
       action.description.toLowerCase().includes(q) ||
-      action.category.includes(q),
-  )
+      action.category.includes(q) ||
+      (loc?.name.toLowerCase().includes(q) ?? false) ||
+      (loc?.description.toLowerCase().includes(q) ?? false)
+    )
+  })
 }

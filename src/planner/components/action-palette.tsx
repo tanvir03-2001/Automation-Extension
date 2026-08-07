@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { BookOpen, Search, Star } from 'lucide-react'
 import { ACTION_CATEGORIES, searchActions } from '@/planner/actions/catalog'
-import { getActionTooltip } from '@/planner/actions/action-docs'
 import { ActionIcon } from '@/planner/components/action-icons'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -12,9 +11,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/shared/utils/cn'
+import { localizeAction } from '@/shared/i18n/action-locale'
+import { useLocale, useT } from '@/shared/i18n/use-t'
 import type { ActionDefinition } from '@/planner/actions/types'
 
 export function ActionPalette() {
+  const t = useT()
+  const locale = useLocale()
   const query = usePlannerStore((s) => s.actionQuery)
   const setActionQuery = usePlannerStore((s) => s.setActionQuery)
   const favorites = usePlannerStore((s) => s.favoriteActionIds)
@@ -22,7 +25,14 @@ export function ActionPalette() {
   const setDocsActionId = usePlannerStore((s) => s.setDocsActionId)
   const docsActionId = usePlannerStore((s) => s.docsActionId)
 
-  const actions = useMemo(() => searchActions(query), [query])
+  const actions = useMemo(() => {
+    if (locale !== 'bn') return searchActions(query)
+    const localized = searchActions('').map((action) => {
+      const loc = localizeAction(action, 'bn') ?? action
+      return { id: action.id, name: loc.name, description: loc.description }
+    })
+    return searchActions(query, localized)
+  }, [query, locale])
   const favoriteActions = useMemo(
     () => actions.filter((action) => favorites.includes(action.id)),
     [actions, favorites],
@@ -45,7 +55,7 @@ export function ActionPalette() {
             <input
               value={query}
               onChange={(event) => setActionQuery(event.target.value)}
-              placeholder="Search actions…"
+              placeholder={t('palette.search')}
               className="h-9 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-sm text-foreground outline-none ring-ring transition focus:ring-2"
             />
           </div>
@@ -56,7 +66,7 @@ export function ActionPalette() {
             {favoriteActions.length > 0 ? (
               <section>
                 <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-600">
-                  Favorites
+                  {t('palette.favorites')}
                 </p>
                 <div className="space-y-1">
                   {favoriteActions.map((action) => (
@@ -79,7 +89,7 @@ export function ActionPalette() {
               return (
                 <section key={category}>
                   <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    {category}
+                    {t('cat.' + category)}
                   </p>
                   <div className="space-y-1">
                     {items.map((action) => (
@@ -116,7 +126,11 @@ function PaletteItem({
   onToggleFavorite: () => void
   onOpenDocs: () => void
 }) {
-  const tip = getActionTooltip(action)
+  const t = useT()
+  const locale = useLocale()
+  const localized = localizeAction(action, locale) ?? action
+  const tip = localized.tooltip ?? localized.description
+  const actionName = localized.name
 
   return (
     <Tooltip>
@@ -142,12 +156,12 @@ function PaletteItem({
             <ActionIcon name={action.icon} className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold text-foreground">{action.name}</p>
-            <p className="truncate text-[10px] text-muted-foreground">{action.description}</p>
+            <p className="truncate text-xs font-semibold text-foreground">{actionName}</p>
+            <p className="truncate text-[10px] text-muted-foreground">{localized.description}</p>
           </div>
           <button
             type="button"
-            aria-label="Open guide"
+            aria-label={t('docs.openGuide')}
             className="rounded-md p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
             onClick={(event) => {
               event.stopPropagation()
@@ -188,16 +202,16 @@ function PaletteItem({
               </span>
               <div className="min-w-0">
                 <p className="truncate font-display text-sm font-semibold leading-tight text-foreground">
-                  {action.name}
+                  {actionName}
                 </p>
                 <p className="truncate text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                  {action.category}
+                  {t('cat.' + action.category)}
                 </p>
               </div>
             </div>
             <p className="text-[12px] leading-relaxed text-muted-foreground">{tip}</p>
             <p className="border-t border-border/60 pt-2 text-[10px] font-medium text-primary">
-              Click for full guide · Drag to add
+              {t('docs.clickGuide')}
             </p>
           </div>
         </div>

@@ -14,6 +14,7 @@ import { clearLogs, fetchLogs, reloadExtension } from '@/dashboard/api/extension
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/shared/utils/cn'
+import { useT } from '@/shared/i18n/use-t'
 
 const levelVariant = {
   info: 'secondary',
@@ -40,6 +41,7 @@ const levelRing = {
 } as const
 
 export function ActivityView() {
+  const t = useT()
   const logs = useDashboardStore((s) => s.logs)
   const setLogs = useDashboardStore((s) => s.setLogs)
   const [filter, setFilter] = useState<'all' | 'error' | 'success' | 'info'>('all')
@@ -84,10 +86,10 @@ export function ActivityView() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Activity</h1>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Durable audit trail for runs, retries, downloads, and module actions.
-          </p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            {t('activity.title')}
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-muted-foreground">{t('activity.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -98,7 +100,7 @@ export function ActivityView() {
             onClick={() => void onRefresh()}
           >
             <RefreshCw className={cn('h-3.5 w-3.5', busy === 'refresh' && 'animate-spin')} />
-            Refresh
+            {t('activity.refresh')}
           </Button>
           <Button
             size="sm"
@@ -108,7 +110,7 @@ export function ActivityView() {
             onClick={() => void onClear()}
           >
             <Eraser className="h-3.5 w-3.5" />
-            Clear log
+            {t('activity.clear')}
           </Button>
           <Button
             size="sm"
@@ -117,7 +119,7 @@ export function ActivityView() {
             onClick={() => void onReload()}
           >
             <RotateCcw className={cn('h-3.5 w-3.5', busy === 'reload' && 'animate-spin')} />
-            Reload extension
+            {t('activity.reload')}
           </Button>
         </div>
       </header>
@@ -125,10 +127,10 @@ export function ActivityView() {
       <div className="flex flex-wrap gap-1.5">
         {(
           [
-            ['all', 'All'],
-            ['error', 'Errors'],
-            ['success', 'Success'],
-            ['info', 'Info'],
+            ['all', t('activity.all')],
+            ['error', t('activity.errors')],
+            ['success', t('activity.success')],
+            ['info', t('activity.info')],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -193,7 +195,7 @@ export function ActivityView() {
         })}
         {filtered.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-            No log entries for this filter.
+            {t('activity.empty')}
           </div>
         ) : null}
       </div>

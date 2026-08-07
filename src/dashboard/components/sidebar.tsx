@@ -13,15 +13,26 @@ import { useDashboardStore, type DashboardView } from '@/stores/dashboard-store'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { reloadExtension } from '@/dashboard/api/extension-api'
 import { Button } from '@/components/ui/button'
+import { useT } from '@/shared/i18n/use-t'
 
-const items: Array<{ id: DashboardView; label: string; icon: typeof LayoutDashboard }> = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'planner', label: 'Workflow Planner', icon: Network },
-  { id: 'activity', label: 'Activity', icon: Activity },
-  { id: 'settings', label: 'Settings', icon: Settings2 },
-]
+const itemIds = ['overview', 'planner', 'activity', 'settings'] as const satisfies readonly DashboardView[]
+
+const itemIcons: Record<(typeof itemIds)[number], typeof LayoutDashboard> = {
+  overview: LayoutDashboard,
+  planner: Network,
+  activity: Activity,
+  settings: Settings2,
+}
+
+const itemKeys: Record<(typeof itemIds)[number], string> = {
+  overview: 'nav.overview',
+  planner: 'nav.planner',
+  activity: 'nav.activity',
+  settings: 'nav.settings',
+}
 
 export function Sidebar() {
+  const t = useT()
   const view = useDashboardStore((s) => s.view)
   const setView = useDashboardStore((s) => s.setView)
   const builderOpen = usePlannerStore((s) => s.builderOpen)
@@ -42,24 +53,24 @@ export function Sidebar() {
           </div>
           <div>
             <p className="font-display text-lg font-semibold tracking-tight text-foreground">
-              Automation
+              {t('app.name')}
             </p>
-            <p className="text-[11px] text-muted-foreground">Workflow engine</p>
+            <p className="text-[11px] text-muted-foreground">{t('app.tagline')}</p>
           </div>
         </div>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 px-3">
-        {items.map((item) => {
-          const Icon = item.icon
-          const active = view === item.id
+        {itemIds.map((id) => {
+          const Icon = itemIcons[id]
+          const active = view === id
           return (
             <button
-              key={item.id}
+              key={id}
               type="button"
               onClick={() => {
                 setBuilderOpen(false)
-                setView(item.id)
+                setView(id)
               }}
               className={cn(
                 'relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors',
@@ -76,7 +87,7 @@ export function Sidebar() {
                 />
               )}
               <Icon className="relative z-10 h-4 w-4" />
-              <span className="relative z-10 font-medium">{item.label}</span>
+              <span className="relative z-10 font-medium">{t(itemKeys[id])}</span>
             </button>
           )
         })}
@@ -90,7 +101,7 @@ export function Sidebar() {
           onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
         >
           {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-          {theme === 'light' ? 'Dark mode' : 'Light mode'}
+          {theme === 'light' ? t('theme.dark') : t('theme.light')}
         </Button>
         <Button
           size="sm"
@@ -99,11 +110,9 @@ export function Sidebar() {
           onClick={() => void reloadExtension()}
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          Reload extension
+          {t('common.reload')}
         </Button>
-        <p className="text-center text-[11px] text-muted-foreground">
-          Manifest V3 · Browser automation only
-        </p>
+        <p className="text-center text-[11px] text-muted-foreground">{t('app.manifestNote')}</p>
       </div>
     </aside>
   )

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { downloadJson, pickJsonFile, readJsonFile } from '@/planner/io/export-import'
 import { cn } from '@/shared/utils/cn'
+import { useT } from '@/shared/i18n/use-t'
 
 type Scope = 'workspace' | 'plan' | 'workflow' | 'snippet'
 
@@ -15,6 +16,7 @@ export function ImportExportMenu({
   compact?: boolean
   className?: string
 }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
@@ -122,36 +124,36 @@ export function ImportExportMenu({
             style={{ top: menuPos.top, right: menuPos.right }}
           >
             <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Export (download JSON)
+              {t('importExport.export')}
             </p>
             <MenuItem onClick={() => void onExport('workspace')}>
               <Download className="h-3.5 w-3.5" />
-              Full workspace
+              {t('importExport.workspace')}
             </MenuItem>
             <MenuItem onClick={() => void onExport('plan')}>
               <Download className="h-3.5 w-3.5" />
-              Current workflow (+ text libraries)
+              {t('importExport.currentWorkflow')}
             </MenuItem>
             <MenuItem onClick={() => void onExport('workflow')}>
               <Download className="h-3.5 w-3.5" />
-              Current plan only
+              {t('importExport.currentPlan')}
             </MenuItem>
             <MenuItem onClick={() => void onExport('snippet')}>
               <Download className="h-3.5 w-3.5" />
-              {selectedNodeId ? 'Selected step snippet' : 'Plan as snippet'}
+              {selectedNodeId ? t('importExport.selectedStep') : t('importExport.snippet')}
             </MenuItem>
 
             <div className="my-2 h-px bg-[hsl(var(--border))]" />
             <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Import (load JSON file)
+              {t('importExport.import')}
             </p>
             <MenuItem onClick={() => void onImport('merge')}>
               <Upload className="h-3.5 w-3.5" />
-              Merge into workspace
+              {t('importExport.merge')}
             </MenuItem>
             <MenuItem onClick={() => void onImport('replace')}>
               <Upload className="h-3.5 w-3.5" />
-              Replace whole workspace
+              {t('importExport.replace')}
             </MenuItem>
             <p className="px-2 pb-1 pt-2 text-[10px] leading-relaxed text-muted-foreground">
               Tip: import <span className="font-medium text-foreground">workflow</span> JSON to get
@@ -182,7 +184,7 @@ export function ImportExportMenu({
         onClick={() => setOpen((value) => !value)}
       >
         <FileJson className="h-3.5 w-3.5" />
-        {compact ? 'Import / Export' : 'Import / Export JSON'}
+        {compact ? t('importExport.compact') : t('importExport.title')}
       </Button>
       {panel}
       {toast}

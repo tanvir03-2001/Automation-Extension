@@ -24,6 +24,7 @@ import {
   remapWorkflowIds,
   type AnyExportPayload,
 } from '@/planner/io/export-import'
+import { applyDocumentLocale } from '@/shared/i18n/fonts'
 
 interface PlannerState {
   plans: AutomationPlan[]
@@ -37,12 +38,14 @@ interface PlannerState {
   dirty: boolean
   saving: boolean
   theme: 'light' | 'dark'
+  locale: 'en' | 'bn'
   builderOpen: boolean
   graphRevision: number
   docsActionId: string | null
 
   hydrate: () => Promise<void>
   setTheme: (theme: 'light' | 'dark') => void
+  setLocale: (locale: 'en' | 'bn') => void
   setActionQuery: (query: string) => void
   toggleFavoriteAction: (actionId: string) => void
   selectPlan: (id: string | null) => void
@@ -96,12 +99,13 @@ async function loadWorkspace() {
       workflows: VisualWorkflow[]
       favorites: string[]
       theme: 'light' | 'dark'
+      locale?: 'en' | 'bn'
     }
   }>({
     type: 'STORAGE_GET',
     payload: {
       key: 'planner-workspace',
-      fallback: { plans: [], workflows: [], favorites: [], theme: 'light' },
+      fallback: { plans: [], workflows: [], favorites: [], theme: 'light', locale: 'en' },
     },
   })
   return response.value
@@ -121,6 +125,7 @@ export const usePlannerStore = create<PlannerState>()(
       dirty: false,
       saving: false,
       theme: 'light',
+      locale: 'en',
       builderOpen: false,
       graphRevision: 0,
       docsActionId: null,
@@ -131,22 +136,31 @@ export const usePlannerStore = create<PlannerState>()(
           ...plan,
           textLibraries: plan.textLibraries ?? [],
         }))
+        const locale = data.locale === 'bn' ? 'bn' : 'en'
         set({
           plans,
           workflows: data.workflows ?? [],
           favoriteActionIds: data.favorites ?? [],
           theme: data.theme ?? 'light',
+          locale,
           selectedPlanId: plans[0]?.id ?? null,
           selectedWorkflowId: data.workflows?.[0]?.id ?? null,
           dirty: false,
           graphRevision: 0,
         })
         document.documentElement.classList.toggle('dark', (data.theme ?? 'light') === 'dark')
+        applyDocumentLocale(locale)
       },
 
       setTheme: (theme) => {
         document.documentElement.classList.toggle('dark', theme === 'dark')
         set({ theme, dirty: true })
+        void get().persist()
+      },
+
+      setLocale: (locale) => {
+        applyDocumentLocale(locale)
+        set({ locale, dirty: true })
         void get().persist()
       },
 
@@ -661,7 +675,7 @@ export const usePlannerStore = create<PlannerState>()(
 
       persist: async () => {
         set({ saving: true })
-        const { plans, workflows, favoriteActionIds, theme } = get()
+        const { plans, workflows, favoriteActionIds, theme, locale } = get()
         await sendRuntimeMessage({
           type: 'STORAGE_SET',
           payload: {
@@ -671,6 +685,7 @@ export const usePlannerStore = create<PlannerState>()(
               workflows,
               favorites: favoriteActionIds,
               theme,
+              locale,
               updatedAt: new Date().toISOString(),
             },
           },
@@ -679,12 +694,13 @@ export const usePlannerStore = create<PlannerState>()(
       },
 
       exportWorkspacePayload: () => {
-        const { plans, workflows, favoriteActionIds, theme } = get()
+        const { plans, workflows, favoriteActionIds, theme, locale } = get()
         return buildWorkspaceExport({
           plans,
           workflows,
           favorites: favoriteActionIds,
           theme,
+          locale,
         })
       },
 
@@ -725,6 +741,7 @@ export const usePlannerStore = create<PlannerState>()(
               workflows: payload.workflows,
               favoriteActionIds: payload.favorites ?? get().favoriteActionIds,
               theme: payload.theme ?? get().theme,
+              locale: payload.locale === 'bn' ? 'bn' : payload.locale === 'en' ? 'en' : get().locale,
               selectedPlanId: payload.plans[0]?.id ?? null,
               selectedWorkflowId: payload.workflows[0]?.id ?? null,
               dirty: true,

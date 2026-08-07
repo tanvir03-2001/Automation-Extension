@@ -45,6 +45,7 @@ export interface ExtensionMessage<T = unknown> {
 export interface AutomationCommand {
   action:
     | 'click'
+    | 'clickExact'
     | 'clickSend'
     | 'type'
     | 'fill'

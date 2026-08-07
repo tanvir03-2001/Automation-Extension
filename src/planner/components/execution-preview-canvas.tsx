@@ -24,6 +24,7 @@ import { RunVisualWorkflowProvider } from '@/planner/hooks/run-visual-workflow-c
 import { useActiveRunLabel } from '@/planner/hooks/use-node-run-visual'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { cn } from '@/shared/utils/cn'
+import { useT } from '@/shared/i18n/use-t'
 import type { ExecutionCheckpoint, VisualWorkflow } from '@/planner/types/plan'
 
 function resolveFocusNodeId(checkpoint: ExecutionCheckpoint): string | null {
@@ -51,6 +52,7 @@ function PreviewMiniMapDot({ x, y, width, height, color, strokeColor }: MiniMapN
 }
 
 function PreviewInner({ workflowId }: { workflowId: string | null }) {
+  const t = useT()
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
   const checkpoint = usePlannerStore((s) => s.checkpoint)
   const runHud = useActiveRunLabel()
@@ -224,7 +226,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
   if (!workflowId || !workflow) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 px-4 text-center text-sm text-muted-foreground">
-        Select a plan or start a workflow to preview live execution.
+        {t('preview.empty')}
       </div>
     )
   }
@@ -256,16 +258,16 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
               <>
                 <span className="opacity-60">·</span>
                 <span className="truncate">
-                  Now: <span className="font-semibold">{runHud.label}</span>
+                  {t('preview.now')} <span className="font-semibold">{runHud.label}</span>
                 </span>
               </>
             ) : (
-              <span className="opacity-70">Watch the glowing step</span>
+              <span className="opacity-70">{t('preview.watch')}</span>
             )}
           </div>
         ) : (
           <div className="rounded-full border border-border bg-card/95 px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-            Read-only · pan & zoom · auto-centers on running step
+            {t('preview.readOnly')}
           </div>
         )}
       </div>

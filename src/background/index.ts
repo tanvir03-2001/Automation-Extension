@@ -560,15 +560,21 @@ onRuntimeMessage(async (message, sender) => {
             : { value: result.output }
 
         return {
-          ok: result.status === 'success',
+          // waiting (e.g. Pause) still means the step ran as designed in Quick Test
+          ok: result.status === 'success' || result.status === 'waiting',
           error: result.error,
           result: {
             status: result.status,
+            branch: result.branch,
+            nextNodeId: result.nextNodeId,
+            activeTabId: result.activeTabId,
             storedAs: output.storedAs,
             textPreview:
               typeof output.text === 'string'
                 ? String(output.text).slice(0, 160)
-                : undefined,
+                : typeof output.matchedText === 'string'
+                  ? String(output.matchedText).slice(0, 160)
+                  : undefined,
             textLength: typeof output.text === 'string' ? output.text.length : undefined,
             format: output.format,
             sourceMode: output.sourceMode,

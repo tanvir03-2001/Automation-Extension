@@ -12,6 +12,7 @@ export interface WorkspacePayload {
   workflows: VisualWorkflow[]
   favorites?: string[]
   theme?: 'light' | 'dark'
+  locale?: 'en' | 'bn'
 }
 
 export interface PlanPayload {
@@ -83,6 +84,7 @@ export function buildWorkspaceExport(args: {
   workflows: VisualWorkflow[]
   favorites?: string[]
   theme?: 'light' | 'dark'
+  locale?: 'en' | 'bn'
 }): WorkspacePayload {
   return {
     kind: 'workspace',
@@ -92,6 +94,7 @@ export function buildWorkspaceExport(args: {
     workflows: args.workflows,
     favorites: args.favorites,
     theme: args.theme,
+    locale: args.locale,
   }
 }
 
@@ -168,6 +171,7 @@ export function detectPayload(raw: unknown): AnyExportPayload {
       workflows: data.workflows as VisualWorkflow[],
       favorites: data.favorites as string[] | undefined,
       theme: data.theme as 'light' | 'dark' | undefined,
+      locale: data.locale as 'en' | 'bn' | undefined,
     }
   }
 

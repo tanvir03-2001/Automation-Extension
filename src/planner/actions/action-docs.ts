@@ -22,6 +22,11 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Select the step → use “Pick with mouse” to choose the real button (example: New chat).',
     'Connect it before Type Text when you need a fresh chat.',
   ],
+  'mouse.click_exact': [
+    'Clicks the element whose visible text matches exactly (e.g. Continue).',
+    'Type the exact label, or Pick with mouse to fill Exact text from the page.',
+    'Partial matches are ignored — only a full label match is clicked.',
+  ],
   'keyboard.type_text': [
     'Types text into the focused box (or a picked selector).',
     'Choose Manual text, or a Text library like Story Title.',
@@ -84,7 +89,8 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Pick the preferred button with mouse; leave the false-path Click for the fallback button.',
   ],
   'conditions.if': [
-    'Open Properties and choose “Check what?” — element visible, button name, page text, or variable.',
+    'Open Properties and choose “Check what?” — element visible, button name, number from element, page text, or variable.',
+    'Number from element: Pick the balance/credits box (e.g. 118), then compare Greater / Less / Equals to your number.',
     'Use Pick with mouse for elements, or type a button label like Continue / Send.',
     'Wait before = pause first; Check window = how long to keep looking.',
     'Connect green true and red false to different next steps.',
@@ -120,6 +126,8 @@ const EXTRA_TOOLTIP: Record<string, string> = {
   'ai.open_chatgpt': 'Opens ChatGPT, or focuses the existing ChatGPT tab.',
   'browser.wait_for_page': 'Waits until the page is fully loaded.',
   'mouse.click': 'Clicks a page element. Pick the target with your mouse.',
+  'mouse.click_exact':
+    'Clicks by exact text/label match. Pick with mouse or type the full label.',
   'keyboard.type_text': 'Types text (manual or from a Story Title library).',
   'keyboard.paste_text':
     'Pastes full text instantly — same library & {_template} features as Type Text.',

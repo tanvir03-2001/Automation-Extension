@@ -11,6 +11,8 @@ import { SettingsView } from '@/dashboard/views/settings-view'
 import { SelectorLabView } from '@/dashboard/views/selector-lab-view'
 import { PlannerView } from '@/planner/views/planner-view'
 import { usePlannerStore } from '@/planner/store/planner-store'
+import { useT } from '@/shared/i18n/use-t'
+import { cn } from '@/shared/utils/cn'
 
 function ViewRouter() {
   const view = useDashboardStore((s) => s.view)
@@ -36,12 +38,15 @@ function ViewRouter() {
 }
 
 export default function App() {
+  const t = useT()
   const { isLoading } = useDashboardData()
   const view = useDashboardStore((s) => s.view)
   const builderOpen = usePlannerStore((s) => s.builderOpen)
   const hydrateTheme = usePlannerStore((s) => s.hydrate)
   const theme = usePlannerStore((s) => s.theme)
   const fullBleed = view === 'planner' && builderOpen
+  // Overview sections stretch to the viewport; planner builder is edge-to-edge.
+  const fillHeight = fullBleed || view === 'overview'
 
   // Ensure dark/light tokens apply on every dashboard surface (not only Planner).
   useEffect(() => {
@@ -55,19 +60,24 @@ export default function App() {
   return (
     <div className="flex h-full overflow-hidden bg-[hsl(var(--background))]">
       <Sidebar />
-      <main className={fullBleed ? 'relative flex-1 overflow-hidden' : 'relative flex-1 overflow-auto'}>
+      <main
+        className={cn(
+          'relative flex-1 min-h-0',
+          fillHeight ? 'overflow-hidden' : 'overflow-auto',
+        )}
+      >
         {!fullBleed && (
           <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-card/40 to-transparent" />
         )}
         <div
-          className={
-            fullBleed
-              ? 'relative h-full'
-              : 'relative w-full max-w-none px-4 py-5 md:px-6 md:py-6 lg:px-8'
-          }
+          className={cn(
+            'relative w-full max-w-none',
+            fillHeight && 'flex h-full min-h-0 flex-col',
+            !fullBleed && 'px-4 py-5 md:px-6 md:py-6 lg:px-8',
+          )}
         >
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading engine state…</p>
+            <p className="text-sm text-muted-foreground">{t('app.loading')}</p>
           ) : (
             <AnimatePresence mode="wait">
               <motion.div
@@ -76,7 +86,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.22 }}
-                className={fullBleed ? 'h-full' : undefined}
+                className={cn(fillHeight && 'flex min-h-0 flex-1 flex-col')}
               >
                 <ViewRouter />
               </motion.div>

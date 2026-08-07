@@ -6,6 +6,11 @@ import { ActionIcon } from '@/planner/components/action-icons'
 import { useNodeRunVisual, type NodeRunVisual } from '@/planner/hooks/use-node-run-visual'
 import type { PlannerNodeData } from '@/planner/types/plan'
 import { cn } from '@/shared/utils/cn'
+import {
+  displayNodeActionLabel,
+  localizeAction,
+} from '@/shared/i18n/action-locale'
+import { useLocale, useT } from '@/shared/i18n/use-t'
 
 type FlowActionNode = Node<PlannerNodeData, 'action' | 'start' | 'end'>
 
@@ -44,7 +49,10 @@ export const ActionFlowNode = memo(function ActionFlowNode({
   data,
   selected,
 }: NodeProps<FlowActionNode>) {
-  const action = getActionById(data.actionId)
+  const t = useT()
+  const locale = useLocale()
+  const action = localizeAction(data.actionId, locale) ?? getActionById(data.actionId)
+  const displayLabel = displayNodeActionLabel(data.label, data.actionId, locale)
   const runVisual = useNodeRunVisual(id)
   const isIfBranch =
     data.actionId === 'conditions.if' || data.actionId === 'element.if_visible'
@@ -117,9 +125,9 @@ export const ActionFlowNode = memo(function ActionFlowNode({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {action?.category ?? 'action'}
+            {action?.category ? t('cat.' + action.category) : 'action'}
           </p>
-          <p className="truncate text-sm font-semibold text-foreground">{data.label}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{displayLabel}</p>
           {!data.collapsed && action?.description ? (
             <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
               {action.description}

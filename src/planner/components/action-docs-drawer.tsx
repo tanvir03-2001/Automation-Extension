@@ -1,17 +1,20 @@
 import { BookOpen, GripHorizontal, MousePointerClick, X } from 'lucide-react'
-import { getActionDocs } from '@/planner/actions/action-docs'
+import { getLocalizedActionDocs } from '@/shared/i18n/action-locale'
 import { ActionIcon } from '@/planner/components/action-icons'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useLocale, useT } from '@/shared/i18n/use-t'
 
 export function ActionDocsDrawer() {
+  const t = useT()
+  const locale = useLocale()
   const docsActionId = usePlannerStore((s) => s.docsActionId)
   const setDocsActionId = usePlannerStore((s) => s.setDocsActionId)
   if (!docsActionId) return null
 
-  const docs = getActionDocs(docsActionId)
+  const docs = getLocalizedActionDocs(docsActionId, locale)
   if (!docs) return null
 
   const { action, tooltip, howto, fields } = docs
@@ -27,7 +30,7 @@ export function ActionDocsDrawer() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            How this works
+            {t('docs.howThisWorks')}
           </p>
           <h2 className="font-display text-lg font-semibold leading-tight text-foreground">
             {action.name}
@@ -47,21 +50,25 @@ export function ActionDocsDrawer() {
       <ScrollArea className="flex-1">
         <div className="space-y-5 p-4">
           <div className="flex flex-wrap gap-1.5">
-            <Badge variant="secondary">{action.category}</Badge>
-            {action.supportsSelector ? <Badge variant="outline">Supports pick</Badge> : null}
-            {action.controlFlow ? <Badge variant="outline">Flow control</Badge> : null}
+            <Badge variant="secondary">{t('cat.' + action.category)}</Badge>
+            {action.supportsSelector ? (
+              <Badge variant="outline">{t('docs.supportsPick')}</Badge>
+            ) : null}
+            {action.controlFlow ? (
+              <Badge variant="outline">{t('docs.flowControl')}</Badge>
+            ) : null}
           </div>
 
           <section className="rounded-2xl border border-border bg-muted/30 p-3">
             <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
               <BookOpen className="h-3.5 w-3.5 text-primary" />
-              In plain English
+              {t('docs.plainEnglish')}
             </p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{tooltip}</p>
           </section>
 
           <section>
-            <p className="mb-2 text-xs font-semibold text-foreground">How to use</p>
+            <p className="mb-2 text-xs font-semibold text-foreground">{t('docs.howToUse')}</p>
             <ol className="space-y-2">
               {howto.map((step, index) => (
                 <li
@@ -80,24 +87,18 @@ export function ActionDocsDrawer() {
           <section className="rounded-2xl border border-primary/25 bg-primary/5 p-3">
             <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
               <GripHorizontal className="h-3.5 w-3.5 text-primary" />
-              Connect steps (no coding)
+              {t('docs.connectSteps')}
             </p>
             <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-muted-foreground">
-              <li>Drag an action from the left menu onto the board.</li>
-              <li>
-                Drag from a green dot on the right of one step to the green dot on the left of the
-                next step.
-              </li>
-              <li>
-                For “Repeat If More Titles”, open Properties and pick the step from the dropdown
-                (example: Click · New chat).
-              </li>
+              <li>{t('docs.connect1')}</li>
+              <li>{t('docs.connect2')}</li>
+              <li>{t('docs.connect3')}</li>
             </ul>
           </section>
 
           {fields.length ? (
             <section>
-              <p className="mb-2 text-xs font-semibold text-foreground">Settings you can edit</p>
+              <p className="mb-2 text-xs font-semibold text-foreground">{t('docs.settings')}</p>
               <div className="space-y-2">
                 {fields.map((field) => (
                   <div
@@ -106,7 +107,7 @@ export function ActionDocsDrawer() {
                   >
                     <p className="font-semibold text-foreground">{field.label}</p>
                     <p className="mt-0.5 text-muted-foreground">
-                      {field.help ?? `Field type: ${field.type}`}
+                      {field.help ?? t('docs.fieldType', { type: field.type })}
                     </p>
                   </div>
                 ))}
@@ -116,8 +117,7 @@ export function ActionDocsDrawer() {
 
           <p className="flex items-start gap-2 text-[11px] leading-relaxed text-muted-foreground">
             <MousePointerClick className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Tip: hover any action in the left menu for a short tip. Click it to open this guide.
-            Drag it to add it to the board.
+            {t('docs.tip')}
           </p>
         </div>
       </ScrollArea>

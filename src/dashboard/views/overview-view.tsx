@@ -11,6 +11,7 @@ import { usePlannerStore } from '@/planner/store/planner-store'
 import { RunStatusPill } from '@/dashboard/components/status-pill'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { cn } from '@/shared/utils/cn'
+import { useT } from '@/shared/i18n/use-t'
 import type { ExecutionCheckpoint, VisualWorkflow } from '@/planner/types/plan'
 
 function mapCheckpointStatus(
@@ -45,6 +46,7 @@ function planProgress(checkpoint: ExecutionCheckpoint | null, plan: VisualWorkfl
 }
 
 export function OverviewView() {
+  const t = useT()
   const logs = useDashboardStore((s) => s.logs)
   const hydratePlanner = usePlannerStore((s) => s.hydrate)
   const persist = usePlannerStore((s) => s.persist)
@@ -209,23 +211,23 @@ export function OverviewView() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
       <motion.header
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         className="shrink-0 space-y-1"
       >
-        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Overview</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Pick a Workflow, review its Plans, then Start / Pause / Resume / Cancel from here.
-        </p>
+        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">
+          {t('overview.title')}
+        </h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">{t('overview.subtitle')}</p>
       </motion.header>
 
       <motion.div
         layout
         className={cn(
           'grid min-h-0 flex-1 gap-4 transition-[grid-template-columns] duration-700 ease-out',
-          'lg:grid-rows-1 lg:items-stretch',
+          'lg:h-full lg:grid-rows-[minmax(0,1fr)] lg:items-stretch',
           liveExpanded
             ? 'lg:grid-cols-[minmax(180px,0.65fr)_minmax(168px,0.55fr)_minmax(0,2.7fr)]'
             : 'lg:grid-cols-[minmax(220px,0.85fr)_minmax(0,1.35fr)_minmax(260px,1fr)]',
@@ -236,13 +238,13 @@ export function OverviewView() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.03 }}
-          className="flex min-h-0 flex-col rounded-2xl border border-border/80 bg-card p-4 shadow-panel backdrop-blur md:p-5"
+          className="flex h-full min-h-[220px] flex-col rounded-2xl border border-border/80 bg-card p-4 shadow-panel backdrop-blur md:p-5 lg:min-h-0"
         >
           <p className="shrink-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
-            Workflows
+            {t('overview.workflows')}
           </p>
           <h2 className="mt-1 shrink-0 font-display text-lg font-semibold md:text-xl">
-            Your workflows
+            {t('overview.yourWorkflows')}
           </h2>
           <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-auto pr-1">
             {workflows.map((workflow) => {
@@ -279,16 +281,14 @@ export function OverviewView() {
                       ) : null}
                     </div>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {planCount} {planCount === 1 ? 'plan' : 'plans'}
+                      {planCount} {planCount === 1 ? t('common.plan') : t('common.plans')}
                     </p>
                   </div>
                 </button>
               )
             })}
             {workflows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No workflows yet. Create one in Workflow Planner.
-              </p>
+              <p className="text-sm text-muted-foreground">{t('overview.noWorkflows')}</p>
             ) : null}
           </div>
         </motion.section>
@@ -299,14 +299,14 @@ export function OverviewView() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05, layout: { duration: 0.7, ease: 'easeOut' } }}
           className={cn(
-            'flex min-h-0 flex-col rounded-2xl border border-border/80 bg-card shadow-panel backdrop-blur',
+            'flex h-full min-h-[220px] flex-col rounded-2xl border border-border/80 bg-card shadow-panel backdrop-blur lg:min-h-0',
             liveExpanded ? 'p-3' : 'p-4 md:p-5',
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Active run
+                {t('overview.activeRun')}
               </p>
               <h2
                 className={cn(
@@ -315,7 +315,7 @@ export function OverviewView() {
                 )}
                 title={displayWorkflow?.name}
               >
-                {displayWorkflow?.name ?? 'No workflow selected'}
+                {displayWorkflow?.name ?? t('overview.noWorkflowSelected')}
               </h2>
               {displayPlan ? (
                 <p
@@ -325,11 +325,13 @@ export function OverviewView() {
                   )}
                   title={displayPlan.name}
                 >
-                  {liveExpanded ? displayPlan.name : `Current plan: ${displayPlan.name}`}
+                  {liveExpanded
+                    ? displayPlan.name
+                    : t('overview.currentPlan', { name: displayPlan.name })}
                 </p>
               ) : (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Select a workflow with a plan.
+                  {t('overview.selectWorkflowWithPlan')}
                 </p>
               )}
             </div>
@@ -340,7 +342,7 @@ export function OverviewView() {
 
           <div className={cn('shrink-0 space-y-1.5', liveExpanded ? 'mt-2.5' : 'mt-4')}>
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Progress</span>
+              <span>{t('common.progress')}</span>
               <span className="font-mono">{progress}%</span>
             </div>
             <Progress value={progress} className={liveExpanded ? 'h-1.5' : undefined} />
@@ -357,10 +359,10 @@ export function OverviewView() {
               className={cn(liveExpanded && 'h-8 px-2 text-xs')}
               onClick={() => void startSelected()}
               disabled={!selectedPlan || plannerBusy || starting}
-              title="Start"
+              title={t('common.start')}
             >
               <Play className="h-3.5 w-3.5" />
-              {liveExpanded ? 'Start' : 'Start'}
+              {t('common.start')}
             </Button>
             <Button
               size="sm"
@@ -368,10 +370,10 @@ export function OverviewView() {
               className={cn(liveExpanded && 'h-8 px-2 text-xs')}
               onClick={() => void pauseRun()}
               disabled={plannerCheckpoint?.status !== 'running'}
-              title="Pause"
+              title={t('common.pause')}
             >
               <Pause className="h-3.5 w-3.5" />
-              Pause
+              {t('common.pause')}
             </Button>
             <Button
               size="sm"
@@ -382,9 +384,9 @@ export function OverviewView() {
                 plannerCheckpoint?.status !== 'paused' &&
                 plannerCheckpoint?.status !== 'waiting'
               }
-              title="Resume"
+              title={t('common.resume')}
             >
-              Resume
+              {t('common.resume')}
             </Button>
             <Button
               size="sm"
@@ -392,23 +394,23 @@ export function OverviewView() {
               className={cn(liveExpanded && 'h-8 px-2 text-xs')}
               onClick={() => void cancelRun()}
               disabled={!plannerBusy}
-              title="Cancel"
+              title={t('common.cancel')}
             >
               <Square className="h-3.5 w-3.5" />
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
 
           {plannerCheckpoint?.status === 'failed' ? (
             <p className="mt-2 shrink-0 rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
               {[...plannerCheckpoint.history].reverse().find((item) => item.error)?.error ??
-                'Run failed'}
+                t('overview.runFailed')}
             </p>
           ) : null}
 
           {!selectedIsRunning && plannerBusy ? (
             <p className="mt-2 shrink-0 rounded-lg border border-border/70 bg-muted/40 px-2 py-1.5 text-[11px] text-muted-foreground">
-              Another run is active. Pause/Cancel it first.
+              {t('overview.anotherRun')}
             </p>
           ) : null}
 
@@ -416,7 +418,7 @@ export function OverviewView() {
 
           <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
             <p className={cn('shrink-0 font-medium', liveExpanded ? 'text-xs' : 'text-sm')}>
-              Plans
+              {t('overview.plans')}
             </p>
             <div className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-0.5">
               {plansInWorkflow.map((plan) => {
@@ -443,7 +445,7 @@ export function OverviewView() {
                     <div className="min-w-0">
                       <p className="truncate text-xs font-medium md:text-sm">{plan.name}</p>
                       <p className="font-mono text-[10px] text-muted-foreground">
-                        {nodeCount} steps
+                        {nodeCount} {t('common.steps')}
                       </p>
                     </div>
                     {isCurrent ? (
@@ -452,14 +454,14 @@ export function OverviewView() {
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="shrink-0">
-                        {isSelected ? 'on' : 'ready'}
+                        {isSelected ? t('common.on') : t('common.ready')}
                       </Badge>
                     )}
                   </button>
                 )
               })}
               {plansInWorkflow.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No plans in this workflow.</p>
+                <p className="text-xs text-muted-foreground">{t('overview.noPlans')}</p>
               ) : null}
             </div>
           </div>
@@ -470,15 +472,15 @@ export function OverviewView() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.12, layout: { duration: 0.7, ease: 'easeOut' } }}
-          className="flex min-h-0 flex-col rounded-2xl border border-border/80 bg-card p-4 shadow-panel backdrop-blur md:p-5"
+          className="flex h-full min-h-[280px] flex-col rounded-2xl border border-border/80 bg-card p-4 shadow-panel backdrop-blur md:p-5 lg:min-h-0"
         >
           <div className="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2">
             <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
-                Live activity
+                {t('overview.liveActivity')}
               </p>
               <h2 className="mt-0.5 font-display text-lg font-semibold md:text-xl">
-                {liveExpanded ? 'Live execution' : 'Plan preview'}
+                {liveExpanded ? t('overview.liveExecution') : t('overview.planPreview')}
               </h2>
             </div>
             {displayPlan ? (
@@ -502,9 +504,7 @@ export function OverviewView() {
                 </div>
               ))}
               {logs.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Start a workflow to expand live execution here.
-                </p>
+                <p className="text-xs text-muted-foreground">{t('overview.startToExpand')}</p>
               ) : null}
             </div>
           ) : null}

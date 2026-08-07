@@ -27,6 +27,20 @@
   --radius: 0.75rem;
   --panel: 0 0% 100%;
   --panel-foreground: 222 35% 12%;
+
+  /* Latin UI stack (English) */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+/* Bangla UI — Anek Bangla (Google Fonts, loaded on demand) */
+html[lang='bn'],
+html[data-locale='bn'] {
+  --font-sans: 'Anek Bangla', 'IBM Plex Sans', 'Noto Sans Bengali', ui-sans-serif, system-ui,
+    sans-serif;
+  --font-display: 'Anek Bangla', 'Space Grotesk', 'IBM Plex Sans', ui-sans-serif, system-ui,
+    sans-serif;
 }
 
 .dark {
@@ -67,11 +81,29 @@ body,
 
 body {
   @apply bg-background text-foreground font-sans antialiased;
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   background-image:
     radial-gradient(ellipse 80% 50% at 10% -10%, rgba(34, 160, 120, 0.14), transparent 55%),
     radial-gradient(ellipse 60% 40% at 100% 0%, rgba(40, 120, 180, 0.1), transparent 50%),
     linear-gradient(180deg, #f5f7fa 0%, #eef2f6 100%);
   background-attachment: fixed;
+}
+
+/* Bangla: slightly taller line box + kerning for conjuncts */
+html[lang='bn'] body,
+html[data-locale='bn'] body {
+  line-height: 1.55;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+html[lang='bn'] .font-display,
+html[data-locale='bn'] .font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+  font-weight: 600;
 }
 
 ::-webkit-scrollbar {

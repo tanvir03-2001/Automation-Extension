@@ -193,6 +193,51 @@ async function waitForTextGone(
   )
 }
 
+function elementLabelText(el: HTMLElement): string {
+  return (
+    el.innerText ||
+    el.textContent ||
+    el.getAttribute('aria-label') ||
+    el.getAttribute('title') ||
+    el.getAttribute('value') ||
+    ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+/** Pull the first number from UI text (e.g. "118", "$1,118.5", "Credits 118"). */
+function extractNumberFromText(raw: string): number | null {
+  const cleaned = raw.replace(/,/g, ' ')
+  const match = cleaned.match(/-?\d+(?:\.\d+)?/)
+  if (!match) return null
+  const n = Number(match[0])
+  return Number.isFinite(n) ? n : null
+}
+
+function compareNumbers(
+  left: number,
+  operator: string,
+  right: number,
+): boolean {
+  switch (operator) {
+    case 'gt':
+      return left > right
+    case 'gte':
+      return left >= right
+    case 'lt':
+      return left < right
+    case 'lte':
+      return left <= right
+    case 'not_equals':
+      return left !== right
+    case 'equals':
+    default:
+      return left === right
+  }
+}
+
 function findButtonByLabel(label: string, exact: boolean): HTMLElement | null {
   const needle = label.trim().toLowerCase()
   if (!needle) return null
@@ -204,20 +249,57 @@ function findButtonByLabel(label: string, exact: boolean): HTMLElement | null {
   return (
     candidates.find((el) => {
       if (!isElementVisible(el)) return false
-      const text = (
-        el.innerText ||
-        el.textContent ||
-        el.getAttribute('aria-label') ||
-        el.getAttribute('title') ||
-        el.getAttribute('value') ||
-        ''
-      )
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase()
+      const text = elementLabelText(el)
       return exact ? text === needle : text.includes(needle)
     }) ?? null
   )
+}
+
+/** Prefer the smallest visible element whose label/text equals the needle (exact). */
+function findElementByExactText(label: string): HTMLElement | null {
+  const needle = label.trim().toLowerCase()
+  if (!needle) return null
+  const byButton = findButtonByLabel(label, true)
+  if (byButton) return byButton
+
+  const candidates = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      'button, a, [role="button"], [role="link"], [role="menuitem"], [role="tab"], label, span, div, li, p, h1, h2, h3, h4, td, th, summary',
+    ),
+  )
+  let best: HTMLElement | null = null
+  let bestScore = Infinity
+  for (const el of candidates) {
+    if (!isElementVisible(el)) continue
+    if (elementLabelText(el) !== needle) continue
+    const rect = el.getBoundingClientRect()
+    const score = Math.max(1, rect.width * rect.height)
+    if (score < bestScore) {
+      best = el
+      bestScore = score
+    }
+  }
+  return best
+}
+
+async function waitForExactTextClickTarget(
+  label: string,
+  timeoutMs = 30_000,
+  selector?: string,
+  fallbacks: string[] = [],
+): Promise<Element> {
+  const result = await pollUntil(
+    () => {
+      if (selector) {
+        const el = findEl(selector, fallbacks)
+        if (el && isElementVisible(el)) return el
+      }
+      return findElementByExactText(label)
+    },
+    timeoutMs,
+    `Timed out waiting for exact match to click: ${label || selector || ''}`,
+  )
+  return result === true ? document.body : result
 }
 
 async function waitForButton(
@@ -1051,6 +1133,20 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         )
         return { ok: true }
       }
+      case 'clickExact': {
+        const label = String(command.text ?? command.value ?? '').trim()
+        if (!label && !command.selector) {
+          throw new Error('Exact text or a picked selector is required')
+        }
+        const el = await waitForExactTextClickTarget(
+          label,
+          command.timeoutMs,
+          command.selector,
+          fb,
+        )
+        await performPointerAction(promoteToClickHost(el), 'click')
+        return { ok: true, data: { matchedText: label || undefined } }
+      }
       case 'clickSend': {
         await clickChatSend(command.selector, command.timeoutMs ?? 20_000)
         return { ok: true }
@@ -1336,7 +1432,13 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         const matchMode = String(command.options?.matchMode ?? 'contains')
         const attribute = String(command.attribute ?? 'href')
 
-        const evaluateOnce = (): { matched: boolean; value?: string } => {
+        const evaluateOnce = (): {
+          matched: boolean
+          value?: string
+          number?: number | null
+          compare?: number
+          operator?: string
+        } => {
           if (kind === 'element_visible') {
             if (!command.selector) return { matched: false }
             return { matched: isElementVisible(findEl(command.selector, fb)) }
@@ -1354,6 +1456,37 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
               return { matched: isElementClickable(findEl(command.selector, fb)) }
             }
             return { matched: Boolean(findButtonByLabel(text, exact)) }
+          }
+          if (kind === 'element_number') {
+            if (!command.selector) return { matched: false, number: null }
+            const el = findEl(command.selector, fb) as HTMLElement | null
+            if (!el || !isElementVisible(el)) return { matched: false, number: null }
+            const value = (
+              el.innerText ||
+              el.textContent ||
+              el.getAttribute('aria-label') ||
+              el.getAttribute('title') ||
+              el.getAttribute('value') ||
+              ''
+            )
+              .replace(/\s+/g, ' ')
+              .trim()
+            const number = extractNumberFromText(value)
+            const compareRaw = String(
+              command.options?.compareValue ?? command.value ?? '',
+            ).trim()
+            const compare = Number(compareRaw.replace(/,/g, ''))
+            const operator = String(command.options?.operator ?? 'gt')
+            if (number == null || !Number.isFinite(compare)) {
+              return { matched: false, value, number, compare, operator }
+            }
+            return {
+              matched: compareNumbers(number, operator, compare),
+              value,
+              number,
+              compare,
+              operator,
+            }
           }
           if (kind === 'text_present') {
             return { matched: textMatches(pageTextBlob(), text, matchMode) }

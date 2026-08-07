@@ -91,16 +91,17 @@ export function ConditionFields({
   const checkType = String(params.checkType ?? 'element_visible')
   const sourceType = String(params.sourceType ?? 'variable')
 
-  const needsSelector =
+  // Pick with mouse for every If "Check what?" option except page-text checks.
+  const needsPicker =
     variant === 'if'
-      ? ['element_visible', 'element_exists', 'element_clickable'].includes(checkType) ||
-        (checkType === 'button_name' && Boolean(params.selector))
+      ? checkType !== 'text_present' && checkType !== 'text_gone'
       : sourceType === 'element_text' || sourceType === 'element_attribute'
 
   const needsButtonName = variant === 'if' && checkType === 'button_name'
   const needsText =
     variant === 'if' && (checkType === 'text_present' || checkType === 'text_gone')
   const needsVariable = variant === 'if' && checkType === 'variable'
+  const needsElementNumber = variant === 'if' && checkType === 'element_number'
 
   async function pickSelector() {
     setPickingActive(true)
@@ -113,12 +114,33 @@ export function ConditionFields({
       picked.strategy === 'text' || picked.strategy === 'aria' || picked.strategy === 'role'
         ? picked.strategy
         : 'css'
-    const nextParams = {
+    const snippet = picked.text?.replace(/\s+/g, ' ').trim() ?? ''
+    const nextParams: Record<string, unknown> = {
       ...params,
       selector: picked.selector,
       selectorFallbacks: fallbacks,
     }
-    onChange({ selector: picked.selector, selectorFallbacks: fallbacks })
+    if (variant === 'if' && checkType === 'button_name' && snippet) {
+      nextParams.buttonName = snippet
+      nextParams.text = snippet
+    }
+    if (variant === 'if' && checkType === 'variable' && snippet) {
+      nextParams.left = snippet
+    }
+    if (variant === 'if' && checkType === 'element_number') {
+      nextParams.operator = params.operator ?? 'gt'
+    }
+    const numberMatch = snippet.replace(/,/g, ' ').match(/-?\d+(?:\.\d+)?/)
+    const numberLabel = numberMatch ? `#${numberMatch[0]}` : snippet.slice(0, 24)
+    onChange({
+      selector: picked.selector,
+      selectorFallbacks: fallbacks,
+      ...(checkType === 'button_name' && snippet
+        ? { buttonName: snippet, text: snippet }
+        : {}),
+      ...(checkType === 'variable' && snippet ? { left: snippet } : {}),
+      ...(checkType === 'element_number' ? { operator: params.operator ?? 'gt' } : {}),
+    })
     updateNodeData(workflowId, nodeId, {
       selector: {
         primary: picked.selector,
@@ -127,12 +149,14 @@ export function ConditionFields({
         autoHeal: true,
       },
       params: nextParams,
-      ...(picked.text
+      ...(snippet
         ? {
             label:
               variant === 'if'
-                ? `If · ${picked.text.slice(0, 24)}`
-                : `Switch · ${picked.text.slice(0, 24)}`,
+                ? checkType === 'element_number'
+                  ? `If · number ${numberLabel}`
+                  : `If · ${snippet.slice(0, 24)}`
+                : `Switch · ${snippet.slice(0, 24)}`,
           }
         : {}),
     })
@@ -153,10 +177,14 @@ export function ConditionFields({
             value={checkType}
             onChange={(value) => onChange({ checkType: value })}
             options={[
-              { label: 'Element is visible (pick)', value: 'element_visible' },
-              { label: 'Element exists (pick)', value: 'element_exists' },
-              { label: 'Element is clickable (pick)', value: 'element_clickable' },
+              { label: 'Element is visible', value: 'element_visible' },
+              { label: 'Element exists', value: 'element_exists' },
+              { label: 'Element is clickable', value: 'element_clickable' },
               { label: 'Button by name / label', value: 'button_name' },
+              {
+                label: 'Number from element (pick box / button)',
+                value: 'element_number',
+              },
               { label: 'Text is on page', value: 'text_present' },
               { label: 'Text is gone from page', value: 'text_gone' },
               { label: 'Variable compare', value: 'variable' },
@@ -197,10 +225,22 @@ export function ConditionFields({
         </Field>
       </div>
 
-      {needsSelector || (variant === 'if' && checkType === 'button_name') ? (
+      {needsPicker ? (
         <Field
-          label={needsButtonName ? 'Button (optional pick) / name below' : 'Element'}
-          help="Pick with mouse from the page"
+          label={
+            needsButtonName
+              ? 'Button (pick fills name below)'
+              : needsElementNumber
+                ? 'Number box / button / element'
+                : needsVariable
+                  ? 'Element (optional pick → fills Left value)'
+                  : 'Element'
+          }
+          help={
+            needsElementNumber
+              ? 'Pick the balance/credits box (example: 118). The number is read from that element.'
+              : 'Pick with mouse from the page'
+          }
         >
           <div className="space-y-2">
             <Input
@@ -273,6 +313,39 @@ export function ConditionFields({
                 { label: 'Exact line', value: 'exact' },
                 { label: 'Regex', value: 'regex' },
               ]}
+            />
+          </Field>
+        </>
+      ) : null}
+
+      {needsElementNumber ? (
+        <>
+          <Field
+            label="Compare how?"
+            help="Extracted number from the picked element vs your value"
+          >
+            <Select
+              value={String(params.operator ?? 'gt')}
+              onChange={(value) => onChange({ operator: value })}
+              options={[
+                { label: 'Greater than (বড়)', value: 'gt' },
+                { label: 'Greater or equal (≥)', value: 'gte' },
+                { label: 'Less than (ছোট)', value: 'lt' },
+                { label: 'Less or equal (≤)', value: 'lte' },
+                { label: 'Equals (সমান)', value: 'equals' },
+                { label: 'Not equals', value: 'not_equals' },
+              ]}
+            />
+          </Field>
+          <Field
+            label="My number"
+            help="Example: pick 118 box, then compare to 100 → Greater than → true path"
+          >
+            <Input
+              type="number"
+              value={String(params.right ?? '')}
+              placeholder="100"
+              onChange={(event) => onChange({ right: event.target.value })}
             />
           </Field>
         </>

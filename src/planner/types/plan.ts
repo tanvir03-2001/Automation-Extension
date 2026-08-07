@@ -170,5 +170,7 @@ export interface PlannerWorkspace {
   workflows: VisualWorkflow[]
   favorites: string[]
   theme: 'light' | 'dark'
+  /** UI language: English or simple Bangla */
+  locale?: 'en' | 'bn'
   updatedAt: string
 }

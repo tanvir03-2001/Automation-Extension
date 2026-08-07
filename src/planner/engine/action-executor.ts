@@ -340,6 +340,25 @@ export async function executePlannerAction(args: {
         return { status: 'success', activeTabId }
       }
 
+      case 'mouse.click_exact': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
+        if (!text && !selector) {
+          throw new Error('Provide exact text/label, or Pick with mouse on the target')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickExact',
+          text,
+          selector: selector || undefined,
+          timeoutMs: args.timeoutMs,
+          options: { exact: true },
+        })
+        if (!result.ok) {
+          throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
       case 'ai.click_send': {
         activeTabId = await ensureTab(activeTabId)
         // Wait briefly so ChatGPT enables Send after Paste/Type
@@ -836,10 +855,15 @@ export async function executePlannerAction(args: {
             checkType === 'element_exists' ||
             checkType === 'element_clickable' ||
             checkType === 'button_name' ||
+            checkType === 'element_number' ||
             checkType === 'text_present' ||
             checkType === 'text_gone'
               ? checkType
               : 'element_visible'
+          const compareValue = interpolate(
+            String(params.right ?? params.compareValue ?? ''),
+            args.variables,
+          )
           const result = await runDom(activeTabId, {
             action: 'checkCondition',
             selector: selector || String(params.selector ?? '') || undefined,
@@ -849,6 +873,11 @@ export async function executePlannerAction(args: {
               kind,
               exact: Boolean(params.exact),
               matchMode: String(params.matchMode ?? 'contains'),
+              operator:
+                checkType === 'element_number'
+                  ? String(params.operator ?? 'gt')
+                  : String(params.operator ?? 'equals'),
+              compareValue,
             },
           })
           if (!result.ok) throw new Error(result.error)
@@ -857,12 +886,21 @@ export async function executePlannerAction(args: {
         }
 
         if (negate) ok = !ok
+        const numberFromElement =
+          detail && typeof detail === 'object' && 'number' in detail
+            ? (detail as { number?: number | null }).number
+            : undefined
         return {
           status: 'success',
           branch: ok ? 'true' : 'false',
           activeTabId,
           output: { ok, checkType, detail },
-          variables: { __lastCondition: ok },
+          variables: {
+            __lastCondition: ok,
+            ...(typeof numberFromElement === 'number'
+              ? { __lastElementNumber: numberFromElement }
+              : {}),
+          },
         }
       }
 
