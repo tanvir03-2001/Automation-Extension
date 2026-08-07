@@ -52,7 +52,7 @@ interface PlannerState {
   setCheckpoint: (checkpoint: ExecutionCheckpoint | null) => void
   setDocsActionId: (actionId: string | null) => void
 
-  createPlan: (name: string) => Promise<string>
+  createPlan: (name: string, description?: string) => Promise<string>
   updatePlan: (
     planId: string,
     patch: Partial<Pick<AutomationPlan, 'name' | 'description' | 'color' | 'tags'>>,
@@ -165,14 +165,14 @@ export const usePlannerStore = create<PlannerState>()(
       setCheckpoint: (checkpoint) => set({ checkpoint }),
       setDocsActionId: (docsActionId) => set({ docsActionId }),
 
-      createPlan: async (name) => {
+      createPlan: async (name, description = '') => {
         const planId = `plan_${nanoid(8)}`
         const workflowId = `vwf_${nanoid(8)}`
         const now = new Date().toISOString()
         const plan: AutomationPlan = {
           id: planId,
           name,
-          description: '',
+          description: description.trim(),
           tags: [],
           workflowIds: [workflowId],
           textLibraries: [],
@@ -246,6 +246,10 @@ export const usePlannerStore = create<PlannerState>()(
                   ...plan,
                   ...patch,
                   name: patch.name !== undefined ? patch.name.trim() || plan.name : plan.name,
+                  description:
+                    patch.description !== undefined
+                      ? patch.description.trim()
+                      : plan.description,
                   updatedAt: now,
                 },
           ),

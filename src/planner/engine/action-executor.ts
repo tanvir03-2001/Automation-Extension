@@ -214,6 +214,21 @@ export async function executePlannerAction(args: {
           branch: 'nested',
         }
 
+      case 'flow.next_plan_execute': {
+        const targetId = String(params.workflowId ?? '').trim()
+        if (!targetId) {
+          throw new Error('Next Plan Execute needs a target plan. Pick one from the dropdown.')
+        }
+        if (args.workflowId && targetId === args.workflowId) {
+          throw new Error('Next Plan Execute cannot target the current plan.')
+        }
+        return {
+          status: 'success',
+          output: { nextWorkflowId: targetId, planId: args.planId },
+          branch: 'execute_plan',
+        }
+      }
+
       case 'browser.open_url':
       case 'browser.new_tab':
       case 'ai.open_chatgpt':

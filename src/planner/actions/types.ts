@@ -32,6 +32,8 @@ export type ActionFieldType =
   | 'url'
   | 'key'
   | 'nodeRef'
+  /** Sibling VisualWorkflow (UI “Plan”) in the same AutomationPlan (UI “Workflow”) */
+  | 'planRef'
 
 export interface ActionField {
   key: string

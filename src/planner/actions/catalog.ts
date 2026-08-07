@@ -1186,6 +1186,26 @@ const flowActions: ActionDefinition[] = [
     fields: [{ key: 'workflowId', label: 'Workflow ID', type: 'string', required: true }],
   }),
   def({
+    id: 'flow.next_plan_execute',
+    name: 'Next Plan Execute',
+    category: 'flow',
+    description:
+      'Hand off execution to another Plan in the same Workflow. List order does not matter — only the selected Plan runs next.',
+    tooltip:
+      'After this step, start another Plan from the same Workflow. Pick the target Plan from the dropdown.',
+    icon: 'SkipForward',
+    controlFlow: true,
+    fields: [
+      {
+        key: 'workflowId',
+        label: 'Target plan',
+        type: 'planRef',
+        required: true,
+        help: 'Only Plans from the current Workflow are listed. The selected Plan runs next — not the next item in the list.',
+      },
+    ],
+  }),
+  def({
     id: 'flow.return',
     name: 'Return',
     category: 'flow',

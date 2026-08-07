@@ -63,7 +63,7 @@ export default function App() {
           className={
             fullBleed
               ? 'relative h-full'
-              : 'relative mx-auto max-w-6xl px-6 py-6 md:px-8 md:py-8'
+              : 'relative w-full max-w-none px-4 py-5 md:px-6 md:py-6 lg:px-8'
           }
         >
           {isLoading ? (

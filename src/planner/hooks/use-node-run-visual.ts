@@ -1,3 +1,4 @@
+import { useRunVisualWorkflowIdOverride } from '@/planner/hooks/run-visual-workflow-context'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import type { ExecutionCheckpoint } from '@/planner/types/plan'
 
@@ -56,7 +57,9 @@ export function latestHistoryStatusMap(
 }
 
 export function useNodeRunVisual(nodeId: string): NodeRunVisual {
-  const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
+  const overrideId = useRunVisualWorkflowIdOverride()
+  const selectedWorkflowId = usePlannerStore((s) => s.selectedWorkflowId)
+  const workflowId = overrideId ?? selectedWorkflowId
   return usePlannerStore((s) => deriveNodeRunVisual(nodeId, s.checkpoint, workflowId))
 }
 
@@ -66,7 +69,9 @@ export function useActiveRunLabel(): {
   label: string | null
   nodeId: string | null
 } {
-  const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
+  const overrideId = useRunVisualWorkflowIdOverride()
+  const selectedWorkflowId = usePlannerStore((s) => s.selectedWorkflowId)
+  const workflowId = overrideId ?? selectedWorkflowId
   const checkpoint = usePlannerStore((s) => s.checkpoint)
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
 

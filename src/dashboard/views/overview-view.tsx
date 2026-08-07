@@ -1,173 +1,515 @@
+import { useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Pause, Play, Square } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Pause, Play, Square, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import { useDashboardStore } from '@/stores/dashboard-store'
-import { RunStatusPill, StepStatusPill } from '@/dashboard/components/status-pill'
-import {
-  cancelWorkflow,
-  pauseWorkflow,
-  resumeWorkflow,
-  startWorkflow,
-} from '@/dashboard/api/extension-api'
+import { ExecutionPreviewCanvas } from '@/planner/components/execution-preview-canvas'
+import { usePlannerStore } from '@/planner/store/planner-store'
+import { RunStatusPill } from '@/dashboard/components/status-pill'
+import { sendRuntimeMessage } from '@/shared/messaging/bus'
+import { cn } from '@/shared/utils/cn'
+import type { ExecutionCheckpoint, VisualWorkflow } from '@/planner/types/plan'
+
+function mapCheckpointStatus(
+  status: ExecutionCheckpoint['status'] | undefined,
+): 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'idle' {
+  if (!status) return 'idle'
+  if (status === 'waiting') return 'paused'
+  if (status === 'running' || status === 'paused') return status
+  if (status === 'completed' || status === 'failed' || status === 'cancelled') return status
+  return 'idle'
+}
+
+function planProgress(checkpoint: ExecutionCheckpoint | null, plan: VisualWorkflow | undefined): number {
+  if (!checkpoint || !plan || checkpoint.workflowId !== plan.id) {
+    if (checkpoint?.status === 'completed' && plan && checkpoint.workflowId === plan.id) return 100
+    return 0
+  }
+  const actionable = plan.nodes.filter(
+    (node) => node.data.actionId !== 'flow.start' && node.data.actionId !== 'flow.end',
+  )
+  if (actionable.length === 0) {
+    return checkpoint.status === 'completed' ? 100 : checkpoint.currentNodeId ? 50 : 0
+  }
+  const doneIds = new Set(
+    checkpoint.history
+      .filter((item) => item.status === 'success' || item.status === 'skipped')
+      .map((item) => item.nodeId),
+  )
+  const finished = actionable.filter((node) => doneIds.has(node.id)).length
+  if (checkpoint.status === 'completed') return 100
+  return Math.min(99, Math.round((finished / actionable.length) * 100))
+}
 
 export function OverviewView() {
-  const run = useDashboardStore((s) => s.run)
-  const workflows = useDashboardStore((s) => s.workflows)
-  const selectedWorkflowId = useDashboardStore((s) => s.selectedWorkflowId)
   const logs = useDashboardStore((s) => s.logs)
-  const queryClient = useQueryClient()
+  const hydratePlanner = usePlannerStore((s) => s.hydrate)
+  const persist = usePlannerStore((s) => s.persist)
+  const plannerCheckpoint = usePlannerStore((s) => s.checkpoint)
+  const setPlannerCheckpoint = usePlannerStore((s) => s.setCheckpoint)
+  const plannerPlans = usePlannerStore((s) => s.workflows)
+  const workflows = usePlannerStore((s) => s.plans)
+  const selectedWorkflowId = usePlannerStore((s) => s.selectedPlanId)
+  const selectedPlanId = usePlannerStore((s) => s.selectedWorkflowId)
+  const selectWorkflow = usePlannerStore((s) => s.selectPlan)
+  const selectPlan = usePlannerStore((s) => s.selectWorkflow)
+  const [starting, setStarting] = useState(false)
 
-  const selected = workflows.find((w) => w.id === selectedWorkflowId) ?? workflows[0]
+  useEffect(() => {
+    void hydratePlanner()
+  }, [hydratePlanner])
 
-  const startMutation = useMutation({
-    mutationFn: async () => {
-      if (!selected) throw new Error('No workflow selected')
-      return startWorkflow(selected)
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['run'] })
-      void queryClient.invalidateQueries({ queryKey: ['logs'] })
-    },
-  })
+  useEffect(() => {
+    const pull = () => {
+      void sendRuntimeMessage<{ ok: boolean; checkpoint: typeof plannerCheckpoint }>({
+        type: 'PLANNER_STATE',
+      }).then((response) => {
+        if (response.checkpoint !== undefined) setPlannerCheckpoint(response.checkpoint)
+      })
+    }
+    pull()
+    const status = plannerCheckpoint?.status
+    const ms =
+      status === 'running' || status === 'paused' || status === 'waiting' ? 350 : 1000
+    const timer = window.setInterval(pull, ms)
+    return () => window.clearInterval(timer)
+  }, [setPlannerCheckpoint, plannerCheckpoint?.status])
 
-  const busy = run?.status === 'running' || run?.status === 'paused'
+  // Keep store selection on the live Plan so shared run visuals stay in sync.
+  useEffect(() => {
+    if (!plannerCheckpoint?.workflowId) return
+    if (
+      plannerCheckpoint.status !== 'running' &&
+      plannerCheckpoint.status !== 'paused' &&
+      plannerCheckpoint.status !== 'waiting'
+    ) {
+      return
+    }
+    const running = plannerPlans.find((plan) => plan.id === plannerCheckpoint.workflowId)
+    if (!running) return
+    if (selectedWorkflowId !== running.planId) selectWorkflow(running.planId)
+    if (selectedPlanId !== running.id) selectPlan(running.id)
+  }, [
+    plannerCheckpoint?.workflowId,
+    plannerCheckpoint?.status,
+    plannerPlans,
+    selectedWorkflowId,
+    selectedPlanId,
+    selectWorkflow,
+    selectPlan,
+  ])
+
+  // Default-select first workflow + its first plan
+  useEffect(() => {
+    if (workflows.length === 0) return
+    if (!selectedWorkflowId || !workflows.some((wf) => wf.id === selectedWorkflowId)) {
+      const first = workflows[0]
+      selectWorkflow(first.id)
+      const firstPlan = plannerPlans.find((plan) => plan.planId === first.id)
+      selectPlan(firstPlan?.id ?? null)
+      return
+    }
+    const plansInSelected = plannerPlans.filter((plan) => plan.planId === selectedWorkflowId)
+    if (
+      plansInSelected.length > 0 &&
+      (!selectedPlanId || !plansInSelected.some((plan) => plan.id === selectedPlanId))
+    ) {
+      selectPlan(plansInSelected[0].id)
+    }
+  }, [
+    workflows,
+    plannerPlans,
+    selectedWorkflowId,
+    selectedPlanId,
+    selectWorkflow,
+    selectPlan,
+  ])
+
+  const selectedWorkflow = workflows.find((wf) => wf.id === selectedWorkflowId) ?? null
+  const plansInWorkflow = useMemo(
+    () => plannerPlans.filter((plan) => plan.planId === selectedWorkflow?.id),
+    [plannerPlans, selectedWorkflow?.id],
+  )
+  const selectedPlan =
+    plansInWorkflow.find((plan) => plan.id === selectedPlanId) ?? plansInWorkflow[0] ?? null
+
+  const plannerBusy =
+    plannerCheckpoint != null &&
+    (plannerCheckpoint.status === 'running' ||
+      plannerCheckpoint.status === 'paused' ||
+      plannerCheckpoint.status === 'waiting')
+
+  const activePlan = plannerBusy
+    ? plannerPlans.find((plan) => plan.id === plannerCheckpoint.workflowId)
+    : undefined
+  const activeWorkflow = plannerBusy
+    ? workflows.find((wf) => wf.id === plannerCheckpoint.planId)
+    : undefined
+
+  const displayWorkflow = activeWorkflow ?? selectedWorkflow
+  const displayPlan = activePlan ?? selectedPlan
+  const progress = planProgress(plannerCheckpoint, displayPlan ?? undefined)
+  const runStatus = mapCheckpointStatus(plannerCheckpoint?.status)
+  const selectedIsRunning =
+    plannerBusy &&
+    (plannerCheckpoint.planId === selectedWorkflow?.id ||
+      plannerCheckpoint.workflowId === selectedPlan?.id)
+
+  const previewWorkflowId = plannerBusy
+    ? plannerCheckpoint.workflowId
+    : (selectedPlan?.id ?? null)
+  // Only while a run is active — on stop/complete/cancel, sections restore to default sizes.
+  const liveExpanded = plannerBusy
+
+  async function startSelected() {
+    if (!selectedPlan || plannerBusy) return
+    setStarting(true)
+    try {
+      await persist()
+      const fresh =
+        usePlannerStore.getState().workflows.find((plan) => plan.id === selectedPlan.id) ??
+        selectedPlan
+      const response = await sendRuntimeMessage<{
+        ok: boolean
+        checkpoint?: typeof plannerCheckpoint
+        error?: string
+      }>({
+        type: 'PLANNER_START',
+        payload: { workflow: fresh },
+      })
+      if (response.checkpoint) setPlannerCheckpoint(response.checkpoint)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  async function pauseRun() {
+    const response = await sendRuntimeMessage<{ ok: boolean; checkpoint?: typeof plannerCheckpoint }>(
+      { type: 'PLANNER_PAUSE' },
+    )
+    if (response.checkpoint) setPlannerCheckpoint(response.checkpoint)
+  }
+
+  async function resumeRun() {
+    const response = await sendRuntimeMessage<{ ok: boolean; checkpoint?: typeof plannerCheckpoint }>(
+      { type: 'PLANNER_RESUME' },
+    )
+    if (response.checkpoint) setPlannerCheckpoint(response.checkpoint)
+  }
+
+  async function cancelRun() {
+    const response = await sendRuntimeMessage<{ ok: boolean; checkpoint?: typeof plannerCheckpoint }>(
+      { type: 'PLANNER_CANCEL' },
+    )
+    if (response.checkpoint !== undefined) setPlannerCheckpoint(response.checkpoint)
+    else setPlannerCheckpoint(null)
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       <motion.header
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="space-y-2"
+        className="shrink-0 space-y-1"
       >
-        <h1 className="font-display text-3xl font-semibold tracking-tight">Overview</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">Overview</h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Run configurable browser workflows. The extension only automates pages — it never
-          generates content or makes AI decisions.
+          Pick a Workflow, review its Plans, then Start / Pause / Resume / Cancel from here.
         </p>
       </motion.header>
 
-      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+      <motion.div
+        layout
+        className={cn(
+          'grid min-h-0 flex-1 gap-4 transition-[grid-template-columns] duration-700 ease-out',
+          'lg:grid-rows-1 lg:items-stretch',
+          liveExpanded
+            ? 'lg:grid-cols-[minmax(180px,0.65fr)_minmax(168px,0.55fr)_minmax(0,2.7fr)]'
+            : 'lg:grid-cols-[minmax(220px,0.85fr)_minmax(0,1.35fr)_minmax(260px,1fr)]',
+        )}
+      >
         <motion.section
+          layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="rounded-2xl border border-border/80 bg-card p-5 shadow-panel backdrop-blur"
+          transition={{ delay: 0.03 }}
+          className="flex min-h-0 flex-col rounded-2xl border border-border/80 bg-card p-4 shadow-panel backdrop-blur md:p-5"
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+          <p className="shrink-0 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+            Workflows
+          </p>
+          <h2 className="mt-1 shrink-0 font-display text-lg font-semibold md:text-xl">
+            Your workflows
+          </h2>
+          <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-auto pr-1">
+            {workflows.map((workflow) => {
+              const planCount = plannerPlans.filter((plan) => plan.planId === workflow.id).length
+              const active = selectedWorkflowId === workflow.id
+              const runningHere =
+                plannerBusy && plannerCheckpoint?.planId === workflow.id
+              return (
+                <button
+                  key={workflow.id}
+                  type="button"
+                  onClick={() => {
+                    selectWorkflow(workflow.id)
+                    const first = plannerPlans.find((plan) => plan.planId === workflow.id)
+                    selectPlan(first?.id ?? null)
+                  }}
+                  className={cn(
+                    'flex w-full items-start gap-2.5 rounded-xl border px-2.5 py-2.5 text-left transition',
+                    active
+                      ? 'border-primary/50 bg-primary/15'
+                      : 'border-border/70 bg-background/60 hover:bg-accent/70',
+                  )}
+                >
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                    <Workflow className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-medium">{workflow.name}</p>
+                      {runningHere ? (
+                        <Badge variant="default" className="shrink-0 capitalize">
+                          {plannerCheckpoint?.status}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {planCount} {planCount === 1 ? 'plan' : 'plans'}
+                    </p>
+                  </div>
+                </button>
+              )
+            })}
+            {workflows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No workflows yet. Create one in Workflow Planner.
+              </p>
+            ) : null}
+          </div>
+        </motion.section>
+
+        <motion.section
+          layout
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05, layout: { duration: 0.7, ease: 'easeOut' } }}
+          className={cn(
+            'flex min-h-0 flex-col rounded-2xl border border-border/80 bg-card shadow-panel backdrop-blur',
+            liveExpanded ? 'p-3' : 'p-4 md:p-5',
+          )}
+        >
+          <div className="flex shrink-0 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 Active run
               </p>
-              <h2 className="mt-1 font-display text-xl font-semibold">
-                {run?.workflowName ?? selected?.name ?? 'No workflow'}
+              <h2
+                className={cn(
+                  'mt-0.5 truncate font-display font-semibold leading-snug',
+                  liveExpanded ? 'text-sm' : 'text-lg md:text-xl',
+                )}
+                title={displayWorkflow?.name}
+              >
+                {displayWorkflow?.name ?? 'No workflow selected'}
               </h2>
+              {displayPlan ? (
+                <p
+                  className={cn(
+                    'mt-0.5 truncate text-muted-foreground',
+                    liveExpanded ? 'text-[10px]' : 'text-xs',
+                  )}
+                  title={displayPlan.name}
+                >
+                  {liveExpanded ? displayPlan.name : `Current plan: ${displayPlan.name}`}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Select a workflow with a plan.
+                </p>
+              )}
             </div>
-            {run ? <RunStatusPill status={run.status} /> : null}
+            {plannerCheckpoint && runStatus !== 'idle' ? (
+              <RunStatusPill status={runStatus} />
+            ) : null}
           </div>
 
-          <div className="mt-5 space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className={cn('shrink-0 space-y-1.5', liveExpanded ? 'mt-2.5' : 'mt-4')}>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>Progress</span>
-              <span className="font-mono">{run?.progress ?? 0}%</span>
+              <span className="font-mono">{progress}%</span>
             </div>
-            <Progress value={run?.progress ?? 0} />
+            <Progress value={progress} className={liveExpanded ? 'h-1.5' : undefined} />
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div
+            className={cn(
+              'shrink-0',
+              liveExpanded ? 'mt-2.5 grid grid-cols-2 gap-1.5' : 'mt-4 flex flex-wrap gap-2',
+            )}
+          >
             <Button
-              onClick={() => startMutation.mutate()}
-              disabled={!selected || busy || startMutation.isPending}
+              size="sm"
+              className={cn(liveExpanded && 'h-8 px-2 text-xs')}
+              onClick={() => void startSelected()}
+              disabled={!selectedPlan || plannerBusy || starting}
+              title="Start"
             >
-              <Play className="h-4 w-4" />
-              Start
+              <Play className="h-3.5 w-3.5" />
+              {liveExpanded ? 'Start' : 'Start'}
             </Button>
             <Button
+              size="sm"
               variant="outline"
-              onClick={() => void pauseWorkflow().then(() => queryClient.invalidateQueries({ queryKey: ['run'] }))}
-              disabled={run?.status !== 'running'}
+              className={cn(liveExpanded && 'h-8 px-2 text-xs')}
+              onClick={() => void pauseRun()}
+              disabled={plannerCheckpoint?.status !== 'running'}
+              title="Pause"
             >
-              <Pause className="h-4 w-4" />
+              <Pause className="h-3.5 w-3.5" />
               Pause
             </Button>
             <Button
+              size="sm"
               variant="outline"
-              onClick={() => void resumeWorkflow().then(() => queryClient.invalidateQueries({ queryKey: ['run'] }))}
-              disabled={run?.status !== 'paused'}
+              className={cn(liveExpanded && 'h-8 px-2 text-xs')}
+              onClick={() => void resumeRun()}
+              disabled={
+                plannerCheckpoint?.status !== 'paused' &&
+                plannerCheckpoint?.status !== 'waiting'
+              }
+              title="Resume"
             >
               Resume
             </Button>
             <Button
+              size="sm"
               variant="destructive"
-              onClick={() => void cancelWorkflow().then(() => queryClient.invalidateQueries({ queryKey: ['run'] }))}
-              disabled={!busy}
+              className={cn(liveExpanded && 'h-8 px-2 text-xs')}
+              onClick={() => void cancelRun()}
+              disabled={!plannerBusy}
+              title="Cancel"
             >
-              <Square className="h-4 w-4" />
+              <Square className="h-3.5 w-3.5" />
               Cancel
             </Button>
           </div>
 
-          {run?.error ? (
-            <p className="mt-4 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {run.error}
+          {plannerCheckpoint?.status === 'failed' ? (
+            <p className="mt-2 shrink-0 rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+              {[...plannerCheckpoint.history].reverse().find((item) => item.error)?.error ??
+                'Run failed'}
             </p>
           ) : null}
 
-          <Separator className="my-5" />
+          {!selectedIsRunning && plannerBusy ? (
+            <p className="mt-2 shrink-0 rounded-lg border border-border/70 bg-muted/40 px-2 py-1.5 text-[11px] text-muted-foreground">
+              Another run is active. Pause/Cancel it first.
+            </p>
+          ) : null}
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Steps</p>
-            <div className="max-h-72 space-y-2 overflow-auto pr-1">
-              {(run?.steps ?? selected?.steps.map((step) => ({
-                stepId: step.id,
-                name: step.name,
-                type: step.type,
-                status: 'pending' as const,
-                attempt: 0,
-              })) ?? []).map((step) => (
-                <div
-                  key={step.stepId}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{step.name}</p>
-                    <p className="font-mono text-[11px] text-muted-foreground">{step.type}</p>
-                  </div>
-                  <StepStatusPill status={step.status} />
-                </div>
-              ))}
+          <Separator className={cn('shrink-0', liveExpanded ? 'my-2.5' : 'my-4')} />
+
+          <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
+            <p className={cn('shrink-0 font-medium', liveExpanded ? 'text-xs' : 'text-sm')}>
+              Plans
+            </p>
+            <div className="min-h-0 flex-1 space-y-1.5 overflow-auto pr-0.5">
+              {plansInWorkflow.map((plan) => {
+                const isSelected = selectedPlan?.id === plan.id
+                const isCurrent =
+                  plannerBusy && plannerCheckpoint?.workflowId === plan.id
+                const nodeCount = plan.nodes.filter(
+                  (node) =>
+                    node.data.actionId !== 'flow.start' && node.data.actionId !== 'flow.end',
+                ).length
+                return (
+                  <button
+                    key={plan.id}
+                    type="button"
+                    onClick={() => selectPlan(plan.id)}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-2 rounded-lg border text-left transition',
+                      liveExpanded ? 'px-2 py-1.5' : 'px-3 py-2',
+                      isSelected
+                        ? 'border-primary/40 bg-primary/10'
+                        : 'border-border/70 bg-background/60 hover:bg-accent/60',
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium md:text-sm">{plan.name}</p>
+                      <p className="font-mono text-[10px] text-muted-foreground">
+                        {nodeCount} steps
+                      </p>
+                    </div>
+                    {isCurrent ? (
+                      <Badge variant="default" className="shrink-0 capitalize">
+                        {plannerCheckpoint?.status}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="shrink-0">
+                        {isSelected ? 'on' : 'ready'}
+                      </Badge>
+                    )}
+                  </button>
+                )
+              })}
+              {plansInWorkflow.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No plans in this workflow.</p>
+              ) : null}
             </div>
           </div>
         </motion.section>
 
         <motion.section
+          layout
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="rounded-2xl border border-border/80 bg-card p-5 shadow-panel backdrop-blur"
+          transition={{ delay: 0.12, layout: { duration: 0.7, ease: 'easeOut' } }}
+          className="flex min-h-0 flex-col rounded-2xl border border-border/80 bg-card p-4 shadow-panel backdrop-blur md:p-5"
         >
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Live activity</p>
-          <h2 className="mt-1 font-display text-xl font-semibold">Recent events</h2>
-          <div className="mt-4 max-h-[28rem] space-y-3 overflow-auto">
-            {logs.slice(0, 12).map((log) => (
-              <div key={log.id} className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium text-foreground">{log.source}</p>
-                  <p className="font-mono text-[10px] text-muted-foreground">
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </p>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">{log.message}</p>
-              </div>
-            ))}
-            {logs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No activity yet. Start a workflow.</p>
+          <div className="mb-2 flex shrink-0 flex-wrap items-end justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                Live activity
+              </p>
+              <h2 className="mt-0.5 font-display text-lg font-semibold md:text-xl">
+                {liveExpanded ? 'Live execution' : 'Plan preview'}
+              </h2>
+            </div>
+            {displayPlan ? (
+              <Badge variant="outline" className="max-w-[200px] truncate">
+                {displayPlan.name}
+              </Badge>
             ) : null}
           </div>
+
+          <div className="min-h-0 flex-1">
+            <ExecutionPreviewCanvas workflowId={previewWorkflowId} />
+          </div>
+
+          {!liveExpanded ? (
+            <div className="mt-2 max-h-24 shrink-0 space-y-1.5 overflow-auto border-t border-border/60 pt-2">
+              {logs.slice(0, 4).map((log) => (
+                <div key={log.id} className="truncate text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">{log.source}</span>
+                  {' · '}
+                  {log.message}
+                </div>
+              ))}
+              {logs.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Start a workflow to expand live execution here.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </motion.section>
-      </div>
+      </motion.div>
     </div>
   )
 }

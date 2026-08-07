@@ -67,6 +67,12 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Jumps to another step you choose from the dropdown.',
     'Useful for custom loops or skipping ahead.',
   ],
+  'flow.next_plan_execute': [
+    'Hands off the run to another Plan inside the same Workflow.',
+    'In Properties, pick the Target plan from the dropdown (same Workflow only).',
+    'Plan list order does not matter — only your selected Plan starts next.',
+    'You can chain Plans (A → C → D). Plans that are not selected never auto-run.',
+  ],
   'element.wait_visible': [
     'Waits until a picked element or icon is visible on screen.',
     'Use Pick with mouse on the target element.',
@@ -125,6 +131,8 @@ const EXTRA_TOOLTIP: Record<string, string> = {
     'If OUTPUT_LIMIT_REACHED, collects Part 1…N into one complete JSON and downloads it.',
   'flow.repeat_if_more': 'If more library titles remain, jump back and run again.',
   'flow.goto_step': 'Jump to another step you choose from a list.',
+  'flow.next_plan_execute':
+    'Start another Plan in this Workflow. Pick the target from the dropdown — list order is ignored.',
   'element.wait_visible': 'Wait until a picked element/icon appears.',
   'element.if_visible': 'If element visible → true path; otherwise → false path.',
   'conditions.if':

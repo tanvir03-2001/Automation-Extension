@@ -21,6 +21,7 @@ import { cn } from '@/shared/utils/cn'
 
 export function BuilderToolbar() {
   const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
+  const workflows = usePlannerStore((s) => s.workflows)
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
   const dirty = usePlannerStore((s) => s.dirty)
   const saving = usePlannerStore((s) => s.saving)
@@ -29,6 +30,13 @@ export function BuilderToolbar() {
   const saveVersion = usePlannerStore((s) => s.saveVersion)
   const setCheckpoint = usePlannerStore((s) => s.setCheckpoint)
   const setBuilderOpen = usePlannerStore((s) => s.setBuilderOpen)
+  const runningPlan =
+    checkpoint?.workflowId &&
+    (checkpoint.status === 'running' ||
+      checkpoint.status === 'paused' ||
+      checkpoint.status === 'waiting')
+      ? workflows.find((wf) => wf.id === checkpoint.workflowId)
+      : undefined
 
   const temporal = usePlannerStore.temporal
   const canUndo = useStore(temporal, (s) => s.pastStates.length > 0)
@@ -69,7 +77,7 @@ export function BuilderToolbar() {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate font-display text-sm font-semibold tracking-tight">
-            {workflow?.name ?? 'No plan selected'}
+            {runningPlan?.name ?? workflow?.name ?? 'No plan selected'}
           </p>
           {checkpoint ? (
             <Badge
@@ -84,6 +92,9 @@ export function BuilderToolbar() {
             >
               {checkpoint.status}
             </Badge>
+          ) : null}
+          {runningPlan && runningPlan.id !== workflowId ? (
+            <Badge variant="outline">Running elsewhere</Badge>
           ) : null}
           {dirty ? <Badge variant="warning">Saving…</Badge> : null}
           {saving ? (

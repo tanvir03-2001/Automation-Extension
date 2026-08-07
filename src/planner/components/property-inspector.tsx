@@ -62,6 +62,7 @@ function labelAfterPick(currentLabel: string, actionId: string, pickedText?: str
 export function PropertyInspector() {
   const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
   const nodeId = usePlannerStore((s) => s.selectedNodeId)
+  const workflows = usePlannerStore((s) => s.workflows)
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
   const updateNodeData = usePlannerStore((s) => s.updateNodeData)
   const toggleNodeEnabled = usePlannerStore((s) => s.toggleNodeEnabled)
@@ -191,6 +192,45 @@ export function PropertyInspector() {
           ]
             .filter(Boolean)
             .join(' · ') || undefined,
+        })
+        return
+      }
+
+      if (actionId === 'flow.next_plan_execute') {
+        const targetId = String(params.workflowId ?? '').trim()
+        if (!targetId) {
+          setTestResult({
+            ok: false,
+            message: 'Fail — Target plan select করুন',
+          })
+          return
+        }
+        const target = workflows.find((wf) => wf.id === targetId)
+        if (!target) {
+          setTestResult({
+            ok: false,
+            message: 'Fail — Target plan পাওয়া যায়নি (deleted?)',
+          })
+          return
+        }
+        if (target.planId !== workflow?.planId) {
+          setTestResult({
+            ok: false,
+            message: 'Fail — Target plan অন্য Workflow-এ আছে',
+          })
+          return
+        }
+        if (target.id === workflowId) {
+          setTestResult({
+            ok: false,
+            message: 'Fail — Current plan-কে target করা যাবে না',
+          })
+          return
+        }
+        setTestResult({
+          ok: true,
+          message: `OK — next plan: ${target.name}`,
+          detail: 'Run the plan to hand off execution (Quick test does not start it).',
         })
         return
       }
@@ -619,6 +659,18 @@ export function PropertyInspector() {
                       })
                     }
                   />
+                ) : field.type === 'planRef' ? (
+                  <PlanRefSelect
+                    plans={workflows}
+                    currentPlanId={workflow?.planId ?? null}
+                    currentWorkflowId={workflowId}
+                    value={String(selectedNode.data.params[field.key] ?? '')}
+                    onChange={(nextId) =>
+                      updateNodeData(workflowId, selectedNode.id, {
+                        params: { ...selectedNode.data.params, [field.key]: nextId },
+                      })
+                    }
+                  />
                 ) : (
                   <div className="space-y-2">
                     <Input
@@ -819,6 +871,77 @@ function NodeRefSelect({
       </select>
       {value && resolved ? (
         <p className="font-mono text-[10px] text-muted-foreground">Step id: {value}</p>
+      ) : null}
+    </div>
+  )
+}
+
+/** Sibling Plans (VisualWorkflow) in the same Workflow (AutomationPlan). */
+function PlanRefSelect({
+  plans,
+  currentPlanId,
+  currentWorkflowId,
+  value,
+  onChange,
+}: {
+  plans: VisualWorkflow[]
+  currentPlanId: string | null
+  currentWorkflowId: string
+  value: string
+  onChange: (workflowId: string) => void
+}) {
+  const options = currentPlanId
+    ? plans.filter((plan) => plan.planId === currentPlanId && plan.id !== currentWorkflowId)
+    : []
+  const resolved = options.some((plan) => plan.id === value)
+  const orphan =
+    value && !resolved ? plans.find((plan) => plan.id === value) ?? null : null
+  const orphanWrongWorkflow =
+    orphan && currentPlanId && orphan.planId !== currentPlanId
+
+  return (
+    <div className="space-y-1.5">
+      <select
+        className="h-9 w-full rounded-xl border border-input bg-background px-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
+        value={resolved ? value : value ? `__orphan__:${value}` : ''}
+        onChange={(event) => {
+          const next = event.target.value
+          if (next.startsWith('__orphan__:')) {
+            onChange(next.slice('__orphan__:'.length))
+            return
+          }
+          onChange(next)
+        }}
+      >
+        <option value="">
+          {options.length === 0 ? 'No other plans available…' : 'Choose a plan…'}
+        </option>
+        {orphan ? (
+          <option value={`__orphan__:${value}`}>
+            {orphanWrongWorkflow
+              ? `Invalid · other Workflow · ${orphan.name}`
+              : `Missing plan · ${orphan.name}`}
+          </option>
+        ) : null}
+        {options.map((plan) => (
+          <option key={plan.id} value={plan.id}>
+            {plan.name}
+            {plan.enabled === false ? ' (disabled)' : ''}
+          </option>
+        ))}
+      </select>
+      {options.length === 0 ? (
+        <p className="text-[10px] text-muted-foreground">
+          No other plans available in this workflow
+        </p>
+      ) : null}
+      {orphanWrongWorkflow ? (
+        <p className="text-[10px] text-destructive">
+          Selected plan belongs to another Workflow — pick a plan from this Workflow.
+        </p>
+      ) : null}
+      {value && resolved ? (
+        <p className="font-mono text-[10px] text-muted-foreground">Plan id: {value}</p>
       ) : null}
     </div>
   )

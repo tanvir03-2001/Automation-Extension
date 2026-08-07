@@ -333,6 +333,28 @@ export class PlannerRunner {
 
           if (result.status === 'success') {
             resultStatus = 'success'
+
+            if (result.branch === 'execute_plan' && result.output) {
+              const handoffError = await this.handoffToPlan(
+                workflow,
+                node.id,
+                String((result.output as { nextWorkflowId?: string }).nextWorkflowId ?? ''),
+              )
+              if (handoffError) {
+                this.pushHistory(node.id, 'failed', handoffError)
+                this.checkpoint.status = 'failed'
+                await activityLog.append('error', 'PlannerRunner', handoffError, {
+                  nodeId: node.id,
+                  actionId: node.data.actionId,
+                })
+                await this.persist()
+                return
+              }
+              this.pushHistory(node.id, 'success', undefined, result.output)
+              done = true
+              break
+            }
+
             this.pushHistory(node.id, 'success', undefined, result.output)
 
             if (result.nextNodeId === null) {
@@ -425,6 +447,90 @@ export class PlannerRunner {
     } finally {
       this.executing = false
     }
+  }
+
+  /**
+   * Explicit Plan→Plan handoff within the same AutomationPlan (UI Workflow).
+   * Does NOT follow list order and does NOT return to the caller Plan.
+   * Returns an error message on failure (caller marks the step failed).
+   */
+  private async handoffToPlan(
+    source: VisualWorkflow,
+    fromNodeId: string,
+    nextWorkflowId: string,
+  ): Promise<string | null> {
+    if (!this.checkpoint) return 'Next Plan Execute: no active run'
+
+    const targetId = nextWorkflowId.trim()
+    if (!targetId) {
+      return 'Next Plan Execute: no target plan selected'
+    }
+    if (targetId === source.id) {
+      return 'Next Plan Execute cannot target the current plan'
+    }
+
+    // Refresh map so newly created sibling Plans are available
+    const workspace = await storageGet<{ workflows?: VisualWorkflow[] }>('planner-workspace', {
+      workflows: [],
+    })
+    if (Array.isArray(workspace.workflows) && workspace.workflows.length > 0) {
+      this.registerWorkflows(workspace.workflows)
+    }
+
+    const next = this.workflows.get(targetId)
+    if (!next) {
+      return `Next Plan Execute: target plan not found (${targetId}). It may have been deleted.`
+    }
+    if (next.planId !== this.checkpoint.planId || next.planId !== source.planId) {
+      return 'Next Plan Execute: target plan must belong to the same Workflow. Cross-workflow execution is not allowed.'
+    }
+    if (next.enabled === false) {
+      return `Next Plan Execute: target plan “${next.name}” is disabled`
+    }
+
+    const start = findStart(next.nodes)
+    if (!start) {
+      return `Next Plan Execute: target plan “${next.name}” has no Start step`
+    }
+
+    // Clear nested-return pointers — this is a handoff, not a subflow
+    delete this.checkpoint.temporaryVariables.__returnWorkflowId
+    delete this.checkpoint.temporaryVariables.__returnNodeId
+
+    await resetWorkflowQueueCursors(next.id)
+    const durableStore = await loadDurableWorkflowStore(next.id)
+    copyStore.resetRuntime(next.id)
+    copyStore.hydrateRuntime({
+      copyStore: durableStore,
+      copyStores: {
+        ...((this.checkpoint.variables.copyStores as Record<string, unknown> | undefined) ?? {}),
+        [next.id]: durableStore,
+      },
+    })
+
+    const prevStores =
+      this.checkpoint.variables.copyStores &&
+      typeof this.checkpoint.variables.copyStores === 'object'
+        ? { ...(this.checkpoint.variables.copyStores as Record<string, unknown>) }
+        : {}
+    prevStores[next.id] = { ...durableStore }
+    this.checkpoint.variables.copyStores = prevStores
+    this.checkpoint.variables.copyStore = { ...durableStore }
+    this.checkpoint.variables.__workflowId = next.id
+
+    this.checkpoint.workflowId = next.id
+    this.checkpoint.previousNodeId = fromNodeId
+    this.checkpoint.currentNodeId = start.id
+    this.checkpoint.status = 'running'
+    this.checkpoint.updatedAt = new Date().toISOString()
+
+    await activityLog.append(
+      'info',
+      'PlannerRunner',
+      `Next Plan Execute: “${source.name}” → “${next.name}”`,
+      { fromWorkflowId: source.id, toWorkflowId: next.id, planId: next.planId },
+    )
+    return null
   }
 
   private advance(workflow: VisualWorkflow, nodeId: string, branch?: string): void {

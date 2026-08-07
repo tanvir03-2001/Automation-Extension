@@ -38,15 +38,41 @@ export function PlannerView() {
   const checkpoint = usePlannerStore((s) => s.checkpoint)
   const theme = usePlannerStore((s) => s.theme)
   const setTheme = usePlannerStore((s) => s.setTheme)
-  const [name, setName] = useState('New Workflow')
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [editingPlanName, setEditingPlanName] = useState('')
+  const [editingPlanDescription, setEditingPlanDescription] = useState('')
   const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null)
   const [editingWorkflowName, setEditingWorkflowName] = useState('')
 
   useEffect(() => {
     void hydrate()
   }, [hydrate])
+
+  // Keep hub/builder selection on the Plan that is currently executing (Next Plan Execute).
+  useEffect(() => {
+    if (!checkpoint?.workflowId) return
+    if (
+      checkpoint.status !== 'running' &&
+      checkpoint.status !== 'paused' &&
+      checkpoint.status !== 'waiting'
+    ) {
+      return
+    }
+    if (checkpoint.workflowId === selectedWorkflowId) return
+    const running = workflows.find((wf) => wf.id === checkpoint.workflowId)
+    if (!running) return
+    selectPlan(running.planId)
+    selectWorkflow(running.id)
+  }, [
+    checkpoint?.workflowId,
+    checkpoint?.status,
+    selectedWorkflowId,
+    workflows,
+    selectPlan,
+    selectWorkflow,
+  ])
 
   useEffect(() => {
     const pull = () => {
@@ -139,19 +165,35 @@ export function PlannerView() {
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-panel"
         >
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="min-w-[220px] flex-1 space-y-1">
-              <span className="text-xs font-medium">Create Workflow</span>
+          <div className="space-y-3">
+            <p className="text-xs font-medium">Create Workflow</p>
+            <label className="block space-y-1">
+              <span className="text-[11px] text-muted-foreground">Name</span>
               <Input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="e.g. Facebook Automation"
               />
             </label>
+            <label className="block space-y-1">
+              <span className="text-[11px] text-muted-foreground">Description</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="What this workflow does (optional)"
+                rows={3}
+                className="min-h-[72px] w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
+              />
+            </label>
             <Button
+              className="w-full sm:w-auto"
+              disabled={!name.trim()}
               onClick={() => {
-                void createPlan(name.trim() || 'Untitled Workflow').then(() => {
-                  setName('New Workflow')
+                const trimmedName = name.trim()
+                if (!trimmedName) return
+                void createPlan(trimmedName, description).then(() => {
+                  setName('')
+                  setDescription('')
                 })
               }}
             >
@@ -181,27 +223,57 @@ export function PlannerView() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     {editingPlanId === plan.id ? (
-                      <Input
-                        value={editingPlanName}
-                        autoFocus
+                      <div
+                        className="min-w-0 flex-1 space-y-2"
                         onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => setEditingPlanName(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault()
-                            void updatePlan(plan.id, { name: editingPlanName }).then(() =>
-                              setEditingPlanId(null),
-                            )
-                          }
-                          if (event.key === 'Escape') setEditingPlanId(null)
-                        }}
-                        onBlur={() => {
-                          void updatePlan(plan.id, { name: editingPlanName }).then(() =>
-                            setEditingPlanId(null),
-                          )
-                        }}
-                        className="h-8"
-                      />
+                      >
+                        <Input
+                          value={editingPlanName}
+                          autoFocus
+                          onChange={(event) => setEditingPlanName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              void updatePlan(plan.id, {
+                                name: editingPlanName,
+                                description: editingPlanDescription,
+                              }).then(() => setEditingPlanId(null))
+                            }
+                            if (event.key === 'Escape') setEditingPlanId(null)
+                          }}
+                          className="h-8"
+                          placeholder="Workflow name"
+                        />
+                        <textarea
+                          value={editingPlanDescription}
+                          onChange={(event) => setEditingPlanDescription(event.target.value)}
+                          rows={2}
+                          placeholder="Description"
+                          className="min-h-[56px] w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-xs text-foreground outline-none ring-ring focus:ring-2"
+                        />
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              void updatePlan(plan.id, {
+                                name: editingPlanName,
+                                description: editingPlanDescription,
+                              }).then(() => setEditingPlanId(null))
+                            }}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setEditingPlanId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
                       <p className="font-medium text-foreground">Workflow: {plan.name}</p>
                     )}
@@ -210,9 +282,11 @@ export function PlannerView() {
                       {plan.workflowIds.length === 1 ? 'plan' : 'plans'}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {plan.description || 'No description'}
-                  </p>
+                  {editingPlanId !== plan.id ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {plan.description || 'No description'}
+                    </p>
+                  ) : null}
                 </button>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <Button
@@ -223,10 +297,11 @@ export function PlannerView() {
                       event.stopPropagation()
                       setEditingPlanId(plan.id)
                       setEditingPlanName(plan.name)
+                      setEditingPlanDescription(plan.description ?? '')
                     }}
                   >
                     <Pencil className="h-3 w-3" />
-                    Rename
+                    Edit
                   </Button>
                   <Button
                     size="sm"
@@ -396,6 +471,26 @@ export function PlannerView() {
                     {checkpoint.status}
                   </Badge>
                 </p>
+                {(() => {
+                  const activePlan = workflows.find((wf) => wf.id === checkpoint.workflowId)
+                  const activeWorkflow = plans.find((plan) => plan.id === checkpoint.planId)
+                  return (
+                    <>
+                      <p className="text-sm">
+                        Workflow:{' '}
+                        <span className="font-medium">
+                          {activeWorkflow?.name ?? checkpoint.planId}
+                        </span>
+                      </p>
+                      <p className="text-sm">
+                        Current plan:{' '}
+                        <span className="font-medium">
+                          {activePlan?.name ?? checkpoint.workflowId}
+                        </span>
+                      </p>
+                    </>
+                  )
+                })()}
                 <p className="font-mono text-xs text-muted-foreground">
                   Node: {checkpoint.currentNodeId ?? '—'}
                 </p>
