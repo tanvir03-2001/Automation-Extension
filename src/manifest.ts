@@ -33,6 +33,7 @@ export default defineManifest({
     'alarms',
     'windows',
     'activeTab',
+    'debugger',
   ],
   host_permissions: ['<all_urls>'],
   content_scripts: [

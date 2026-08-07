@@ -10,6 +10,7 @@ import { plannerRunner } from '@/planner/engine/planner-runner'
 import { tabController } from '@/engine/automation/tab-controller'
 import { ensureContentScript } from '@/background/ensure-content-script'
 import { KEEPALIVE_ALARM, runGuardController } from '@/background/run-guard-controller'
+import { trustedClickAt } from '@/background/trusted-click'
 import { sendTabMessage } from '@/shared/messaging/bus'
 import type { WorkflowDefinition } from '@/shared/types/workflow'
 import type { VisualWorkflow } from '@/planner/types/plan'
@@ -161,7 +162,7 @@ chrome.action.onClicked.addListener(() => {
   void openFloatingDashboard()
 })
 
-onRuntimeMessage(async (message) => {
+onRuntimeMessage(async (message, sender) => {
   switch (message.type) {
     case 'OPEN_DASHBOARD':
       await openFloatingDashboard()
@@ -169,6 +170,18 @@ onRuntimeMessage(async (message) => {
 
     case 'PING':
       return { ok: true, pong: true }
+
+    case 'TRUSTED_CLICK': {
+      const payload = (message.payload ?? {}) as { x?: number; y?: number; tabId?: number }
+      const tabId = payload.tabId ?? sender.tab?.id
+      if (tabId == null) return { ok: false, error: 'No tab for trusted click' }
+      const x = Number(payload.x)
+      const y = Number(payload.y)
+      if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        return { ok: false, error: 'Invalid click coordinates' }
+      }
+      return trustedClickAt(tabId, x, y)
+    }
 
     case 'WORKFLOW_START': {
       const payload = message.payload as WorkflowStartPayload
@@ -221,10 +234,13 @@ onRuntimeMessage(async (message) => {
         selector?: string
         fallbacks?: string[]
         text?: string
+        value?: string
         kind?: string
         exact?: boolean
         matchMode?: string
         urlHint?: string
+        actionId?: string
+        fireEvent?: boolean
       }
 
       let tabId: number | undefined
@@ -253,12 +269,16 @@ onRuntimeMessage(async (message) => {
             selector: payload.selector,
             fallbacks: payload.fallbacks ?? [],
             text: payload.text,
+            value: payload.value,
             options: {
               kind: payload.kind ?? 'selector',
               exact: Boolean(payload.exact),
               matchMode: payload.matchMode ?? 'contains',
+              actionId: payload.actionId ?? '',
+              fireEvent: payload.fireEvent !== false,
             },
-            timeoutMs: 2500,
+            // Click/type events need a bit more time than find-only
+            timeoutMs: 8_000,
           },
         })
         if (!result?.ok) {

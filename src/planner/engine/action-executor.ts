@@ -17,7 +17,11 @@ async function sendDom(
   command: AutomationCommand,
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
   await ensureContentScript(tabId)
-  if (runGuardController.isEnabled()) {
+  // Avoid re-locking on every step (races with click bypass). Lock only if needed.
+  if (
+    runGuardController.isEnabled() &&
+    runGuardController.getLockedTabId() !== tabId
+  ) {
     await runGuardController.lockTab(tabId)
   }
   return sendTabMessage(tabId, { type: 'AUTOMATION_COMMAND', payload: command })

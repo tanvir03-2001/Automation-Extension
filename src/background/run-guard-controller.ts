@@ -1,4 +1,5 @@
 import { ensureContentScript } from '@/background/ensure-content-script'
+import { detachAllTrustedClicks, detachTrustedClick } from '@/background/trusted-click'
 import { sendTabMessage } from '@/shared/messaging/bus'
 
 const KEEPALIVE_ALARM = 'ae-planner-keepalive'
@@ -27,8 +28,10 @@ class RunGuardController {
     const tabId = this.lockedTabId
     this.lockedTabId = null
     await chrome.alarms.clear(KEEPALIVE_ALARM).catch(() => undefined)
+    await detachAllTrustedClicks()
     if (tabId != null) {
       await this.unlockTab(tabId)
+      await detachTrustedClick(tabId)
     }
   }
 

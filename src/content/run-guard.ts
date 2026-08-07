@@ -3,9 +3,8 @@ const STYLE_ID = 'ae-run-guard-style'
 
 /**
  * Block real user key presses only.
- * Do NOT block input/beforeinput/paste — Chrome marks execCommand('insertText')
- * events as isTrusted, and those must reach ChatGPT/ProseMirror for Type/Paste.
  * Pointer blocking is handled by the full-screen overlay (hit-testing).
+ * Status UI is a tiny top-right Live badge — not a large banner.
  */
 const KEYBOARD_EVENTS = ['keydown', 'keyup', 'keypress'] as const
 
@@ -28,7 +27,9 @@ function blockTrustedKeyboard(event: Event): void {
 }
 
 function ensureStyle(): void {
-  if (document.getElementById(STYLE_ID)) return
+  const existing = document.getElementById(STYLE_ID)
+  if (existing) existing.remove()
+
   const style = document.createElement('style')
   style.id = STYLE_ID
   style.textContent = `
@@ -38,77 +39,73 @@ function ensureStyle(): void {
       z-index: 2147483646;
       pointer-events: auto;
       cursor: not-allowed;
-      background:
-        linear-gradient(180deg, rgba(8, 18, 28, 0.18), rgba(8, 18, 28, 0.08));
+      background: transparent;
       font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
     }
     #${ROOT_ID}.ae-run-guard-bypass {
       pointer-events: none !important;
       cursor: default;
-      background: transparent;
     }
-    #${ROOT_ID}.ae-run-guard-bypass .ae-run-guard-banner {
+    #${ROOT_ID}.ae-run-guard-bypass .ae-run-guard-badge {
       pointer-events: none !important;
-      opacity: 0.55;
+      opacity: 0.7;
     }
-    #${ROOT_ID} .ae-run-guard-banner {
+    #${ROOT_ID} .ae-run-guard-badge {
       position: absolute;
-      left: 50%;
-      top: 16px;
-      transform: translateX(-50%);
-      display: flex;
+      top: 12px;
+      right: 12px;
+      display: inline-flex;
       align-items: center;
-      gap: 10px;
-      max-width: min(520px, calc(100vw - 24px));
-      padding: 10px 14px;
+      gap: 7px;
+      padding: 6px 10px 6px 8px;
       border-radius: 999px;
-      border: 1px solid rgba(16, 185, 129, 0.45);
-      background: rgba(15, 23, 42, 0.92);
-      color: #ecfdf5;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(248, 113, 113, 0.45);
+      background: rgba(15, 23, 42, 0.72);
+      color: #fecaca;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       pointer-events: auto;
-      cursor: default;
+      cursor: pointer;
+      user-select: none;
+    }
+    #${ROOT_ID} .ae-run-guard-badge:hover {
+      background: rgba(15, 23, 42, 0.88);
+      border-color: rgba(248, 113, 113, 0.7);
     }
     #${ROOT_ID} .ae-run-guard-dot {
       width: 8px;
       height: 8px;
       border-radius: 999px;
-      background: #34d399;
-      box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
-      animation: ae-run-guard-pulse 1.4s ease-out infinite;
+      background: #ef4444;
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      animation: ae-run-guard-blink 1.1s ease-out infinite;
       flex-shrink: 0;
     }
-    #${ROOT_ID} .ae-run-guard-text {
-      font-size: 12px;
-      line-height: 1.35;
-      font-weight: 600;
-    }
-    #${ROOT_ID} .ae-run-guard-text span {
-      display: block;
-      margin-top: 2px;
+    #${ROOT_ID} .ae-run-guard-live {
       font-size: 11px;
-      font-weight: 500;
-      color: rgba(236, 253, 245, 0.72);
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #fee2e2;
+      line-height: 1;
     }
-    #${ROOT_ID} .ae-run-guard-btn {
-      margin-left: 4px;
-      border: 1px solid rgba(248, 250, 252, 0.2);
-      background: rgba(248, 250, 252, 0.08);
-      color: #f8fafc;
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    #${ROOT_ID} .ae-run-guard-btn:hover {
-      background: rgba(248, 250, 252, 0.16);
-    }
-    @keyframes ae-run-guard-pulse {
-      0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
-      70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+    @keyframes ae-run-guard-blink {
+      0% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65);
+        transform: scale(1);
+      }
+      55% {
+        opacity: 0.35;
+        box-shadow: 0 0 0 7px rgba(239, 68, 68, 0);
+        transform: scale(0.92);
+      }
+      100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        transform: scale(1);
+      }
     }
   `
   document.documentElement.appendChild(style)
@@ -117,27 +114,31 @@ function ensureStyle(): void {
 function ensureRoot(): HTMLElement {
   ensureStyle()
   let root = document.getElementById(ROOT_ID)
-  if (root) return root
+  if (root) {
+    // Upgrade old banner UI if still present
+    if (!root.querySelector('.ae-run-guard-badge')) {
+      root.innerHTML = `
+        <div class="ae-run-guard-badge" role="status" aria-live="polite" title="Automation live — click to pause · Esc to unlock">
+          <span class="ae-run-guard-dot" aria-hidden="true"></span>
+          <span class="ae-run-guard-live">Live</span>
+        </div>
+      `
+      bindBadge(root)
+    }
+    return root
+  }
 
   root = document.createElement('div')
   root.id = ROOT_ID
   root.setAttribute('data-ae-run-guard', 'true')
   root.innerHTML = `
-    <div class="ae-run-guard-banner" role="status" aria-live="polite">
-      <div class="ae-run-guard-dot"></div>
-      <div class="ae-run-guard-text">
-        Automation running — page input locked
-        <span>Your mouse &amp; keyboard won’t affect this tab. Esc or Pause to unlock.</span>
-      </div>
-      <button type="button" class="ae-run-guard-btn" data-ae-guard-pause>Pause</button>
+    <div class="ae-run-guard-badge" role="status" aria-live="polite" title="Automation live — click to pause · Esc to unlock">
+      <span class="ae-run-guard-dot" aria-hidden="true"></span>
+      <span class="ae-run-guard-live">Live</span>
     </div>
   `
 
-  root.querySelector('[data-ae-guard-pause]')?.addEventListener('click', (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    void chrome.runtime.sendMessage({ type: 'PLANNER_PAUSE' })
-  })
+  bindBadge(root)
 
   for (const type of [
     'click',
@@ -162,7 +163,7 @@ function ensureRoot(): HTMLElement {
       (event) => {
         if (bypassCount > 0) return
         if (!(event.target instanceof Element)) return
-        if (event.target.closest('[data-ae-guard-pause]')) return
+        if (event.target.closest('.ae-run-guard-badge')) return
         event.preventDefault()
         event.stopPropagation()
       },
@@ -172,6 +173,17 @@ function ensureRoot(): HTMLElement {
 
   document.documentElement.appendChild(root)
   return root
+}
+
+function bindBadge(root: HTMLElement): void {
+  const badge = root.querySelector('.ae-run-guard-badge')
+  if (!badge || badge.getAttribute('data-ae-bound') === '1') return
+  badge.setAttribute('data-ae-bound', '1')
+  badge.addEventListener('click', (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    void chrome.runtime.sendMessage({ type: 'PLANNER_PAUSE' })
+  })
 }
 
 function attachListeners(): void {
@@ -223,15 +235,11 @@ export async function withGuardBypass<T>(fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-export function lockRunGuard(message?: string): { ok: true; locked: true } {
+export function lockRunGuard(_message?: string): { ok: true; locked: true } {
   locked = true
   attachListeners()
   const root = ensureRoot()
   if (bypassCount === 0) root.classList.remove('ae-run-guard-bypass')
-  const label = root.querySelector('.ae-run-guard-text')
-  if (label && message) {
-    label.innerHTML = `${message}<span>Your mouse &amp; keyboard won’t affect this tab. Esc or Pause to unlock.</span>`
-  }
   return { ok: true, locked: true }
 }
 

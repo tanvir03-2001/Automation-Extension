@@ -199,7 +199,6 @@ function CanvasInner() {
   const updateWorkflowGraph = usePlannerStore((s) => s.updateWorkflowGraph)
   const addActionNode = usePlannerStore((s) => s.addActionNode)
   const selectNode = usePlannerStore((s) => s.selectNode)
-  const selectedNodeId = usePlannerStore((s) => s.selectedNodeId)
   const setDocsActionId = usePlannerStore((s) => s.setDocsActionId)
   const checkpoint = usePlannerStore((s) => s.checkpoint)
   const runHud = useActiveRunLabel()
@@ -275,26 +274,21 @@ function CanvasInner() {
     }
   }, [])
 
+  // Sync label/params from store only — never touch `selected` here (avoids RF #185 loops).
   useEffect(() => {
     if (!workflow) return
     setNodes((current) => {
       let changed = false
       const next = current.map((node) => {
         const storeNode = workflow.nodes.find((item) => item.id === node.id)
-        const shouldSelect = node.id === selectedNodeId
-        if (!storeNode) return node
-        if (storeNode.data === node.data && node.selected === shouldSelect) return node
+        if (!storeNode || storeNode.data === node.data) return node
         changed = true
-        return {
-          ...node,
-          data: storeNode.data,
-          selected: shouldSelect,
-        }
+        return { ...node, data: storeNode.data }
       })
       if (changed) nodesRef.current = next
       return changed ? next : current
     })
-  }, [workflow, selectedNodeId])
+  }, [workflow])
 
   useEffect(() => {
     setEdges((current) => {
@@ -303,6 +297,19 @@ function CanvasInner() {
         checkpoint,
         selectedEdgeId,
       })
+      // Bail out if nothing visible changed — prevents selection thrash / update loops.
+      const same =
+        current.length === next.length &&
+        current.every((edge, index) => {
+          const other = next[index]
+          return (
+            edge.id === other?.id &&
+            edge.style?.stroke === other?.style?.stroke &&
+            edge.animated === other?.animated &&
+            Boolean(edge.selected) === Boolean(other?.selected)
+          )
+        })
+      if (same) return current
       edgesRef.current = next
       return next
     })
@@ -550,26 +557,35 @@ function CanvasInner() {
         onConnect={onConnect}
         onReconnect={onReconnect}
         onSelectionChange={({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
-          // Checkpoint edge re-styles often fire an empty selection — do NOT clear the drawer.
-          if (selectedNodes[0]) {
-            setSelectedEdgeId(null)
-            selectNode(selectedNodes[0].id)
-            setDocsActionId(null)
+          // Ignore empty flashes from edge re-style. Only update store when id actually changes.
+          const nextNodeId = selectedNodes[0]?.id ?? null
+          const nextEdgeId = selectedEdges[0]?.id ?? null
+          const currentNodeId = usePlannerStore.getState().selectedNodeId
+
+          if (nextNodeId) {
+            if (selectedEdgeId) setSelectedEdgeId(null)
+            if (currentNodeId !== nextNodeId) {
+              selectNode(nextNodeId)
+              setDocsActionId(null)
+            }
             return
           }
-          if (selectedEdges[0]) {
-            setSelectedEdgeId(selectedEdges[0].id)
-            selectNode(null)
+
+          if (nextEdgeId) {
+            if (selectedEdgeId !== nextEdgeId) setSelectedEdgeId(nextEdgeId)
+            if (currentNodeId !== null) selectNode(null)
           }
         }}
         onPaneClick={() => {
-          selectNode(null)
-          setSelectedEdgeId(null)
+          if (usePlannerStore.getState().selectedNodeId !== null) selectNode(null)
+          if (selectedEdgeId) setSelectedEdgeId(null)
         }}
         onNodeClick={(_event, node) => {
-          setSelectedEdgeId(null)
-          selectNode(node.id)
-          setDocsActionId(null)
+          if (selectedEdgeId) setSelectedEdgeId(null)
+          if (usePlannerStore.getState().selectedNodeId !== node.id) {
+            selectNode(node.id)
+            setDocsActionId(null)
+          }
         }}
         edgesFocusable
         edgesReconnectable

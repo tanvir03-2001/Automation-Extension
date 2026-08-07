@@ -337,10 +337,12 @@ function scoreMatch(el: HTMLElement, parts: ReturnType<typeof parseAeSelector>):
   }
 
   const rect = el.getBoundingClientRect()
-  // Prefer elements lower on the page (latest message actions)
-  score += Math.min(30, rect.top / 100)
+  // Prefer elements lower on the page (latest message actions, e.g. Continue)
+  score += Math.min(50, rect.top / 40)
   // Prefer in viewport
-  if (rect.top >= 0 && rect.bottom <= window.innerHeight) score += 15
+  if (rect.top >= 0 && rect.bottom <= window.innerHeight) score += 20
+  // Prefer near bottom of viewport (chat action row)
+  if (rect.bottom > window.innerHeight * 0.45) score += 20
 
   return score
 }

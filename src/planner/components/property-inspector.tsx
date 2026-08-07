@@ -130,6 +130,10 @@ export function PropertyInspector() {
         return
       }
 
+      const value = String(
+        params.text ?? params.value ?? params.manualText ?? params.content ?? '',
+      )
+
       const response = await sendRuntimeMessage<{
         ok: boolean
         error?: string
@@ -141,6 +145,8 @@ export function PropertyInspector() {
           tagName?: string
           text?: string
           message?: string
+          triggered?: string | null
+          triggerError?: string
         }
       }>({
         type: 'TEST_SELECTOR',
@@ -148,10 +154,13 @@ export function PropertyInspector() {
           selector,
           fallbacks,
           text,
+          value,
           kind,
           exact: Boolean(params.exact),
           matchMode: String(params.matchMode ?? 'contains'),
           urlHint: resolveUrlHint(workflow),
+          actionId,
+          fireEvent: true,
         },
       })
 
@@ -164,12 +173,17 @@ export function PropertyInspector() {
       }
 
       const data = response.result
+      const eventOk = !data?.triggerError
       setTestResult({
-        ok: Boolean(data?.found && data?.visible !== false),
+        ok: Boolean(data?.found && data?.visible !== false && eventOk),
         message: data?.message ?? (data?.found ? 'OK — element পাওয়া গেছে' : 'Fail — পাওয়া যায়নি'),
-        detail: data?.matchedBy
-          ? `Matched: ${data.matchedBy}${data.clickable ? ' · clickable' : ''}`
-          : undefined,
+        detail: [
+          data?.matchedBy ? `Matched: ${data.matchedBy}` : '',
+          data?.clickable ? 'clickable' : '',
+          data?.triggered ? `Event: ${data.triggered}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · ') || undefined,
       })
     } catch (err) {
       setTestResult({
@@ -273,7 +287,7 @@ export function PropertyInspector() {
         <div className="mt-3 space-y-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3">
           <p className="text-xs font-semibold text-foreground">Quick test</p>
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Page-এ selector আসলেই কাজ করে কি না এখনই চেক করুন (element highlight হবে)।
+            Target element-এ green border দেখাবে এবং এই step-এর event (click / hover / type…) একই সাথে fire করবে।
           </p>
           <Button
             size="sm"

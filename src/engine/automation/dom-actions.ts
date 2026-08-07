@@ -634,14 +634,16 @@ async function pasteInstant(el: HTMLElement, value: string): Promise<void> {
   )
 }
 
-function flashHighlight(el: HTMLElement): void {
+function flashHighlight(el: HTMLElement, durationMs = 2200): void {
   const prevOutline = el.style.outline
   const prevOffset = el.style.outlineOffset
   const prevShadow = el.style.boxShadow
   const prevTransition = el.style.transition
+  const prevRadius = el.style.borderRadius
   el.style.transition = 'outline 0.15s ease, box-shadow 0.15s ease'
   el.style.outline = '3px solid #14b8a6'
   el.style.outlineOffset = '3px'
+  el.style.borderRadius = el.style.borderRadius || '8px'
   el.style.boxShadow = '0 0 0 6px rgba(20,184,166,0.28)'
   el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
   window.setTimeout(() => {
@@ -649,80 +651,295 @@ function flashHighlight(el: HTMLElement): void {
     el.style.outlineOffset = prevOffset
     el.style.boxShadow = prevShadow
     el.style.transition = prevTransition
-  }, 1600)
+    el.style.borderRadius = prevRadius
+  }, durationMs)
 }
 
-/** DeepSeek / React: click the role=button host, not inner span/background. */
-async function robustClick(el: HTMLElement): Promise<void> {
-  const clickTarget = promoteToClickHost(el)
-  clickTarget.scrollIntoView({
-    block: 'center',
-    inline: 'nearest',
-    behavior: 'instant' as ScrollBehavior,
-  })
-  await sleep(100)
-
-  const rect = clickTarget.getBoundingClientRect()
-  const x = rect.left + rect.width / 2
-  const y = rect.top + rect.height / 2
-
-  try {
-    clickTarget.focus({ preventScroll: true })
-  } catch {
-    /* ignore */
-  }
-
-  const mouseInit: MouseEventInit = {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    view: window,
-    clientX: x,
-    clientY: y,
-    screenX: x,
-    screenY: y,
-    button: 0,
-    buttons: 1,
-    detail: 1,
-  }
-
-  const pointerInit: PointerEventInit = {
-    ...mouseInit,
-    pointerId: 1,
-    pointerType: 'mouse',
-    isPrimary: true,
-  }
-
-  clickTarget.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
-  clickTarget.dispatchEvent(new MouseEvent('mousedown', mouseInit))
-  await sleep(40)
-  clickTarget.dispatchEvent(
-    new PointerEvent('pointerup', { ...pointerInit, buttons: 0 }),
-  )
-  clickTarget.dispatchEvent(new MouseEvent('mouseup', { ...mouseInit, buttons: 0 }))
-  clickTarget.dispatchEvent(new MouseEvent('click', { ...mouseInit, buttons: 0 }))
-  clickTarget.click()
-
-  // DeepSeek ds-button (role=button tabindex=0) also activates via Enter
-  if (
-    clickTarget.getAttribute('role') === 'button' ||
-    clickTarget.className.toString().includes('ds-button')
-  ) {
-    await sleep(40)
-    const keyInit: KeyboardEventInit = {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 13,
-      which: 13,
+async function performPointerAction(
+  el: HTMLElement,
+  mode: 'click' | 'double_click' | 'right_click' | 'hover' = 'click',
+): Promise<void> {
+  const host = promoteToClickHost(el)
+  if (mode === 'hover') {
+    const rect = host.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const init: MouseEventInit = {
       bubbles: true,
       cancelable: true,
       composed: true,
+      view: window,
+      clientX: x,
+      clientY: y,
     }
-    clickTarget.dispatchEvent(new KeyboardEvent('keydown', keyInit))
-    clickTarget.dispatchEvent(new KeyboardEvent('keyup', keyInit))
+    host.dispatchEvent(new MouseEvent('mouseover', init))
+    host.dispatchEvent(new MouseEvent('mouseenter', { ...init, bubbles: false }))
+    host.dispatchEvent(new MouseEvent('mousemove', init))
+    return
+  }
+  if (mode === 'right_click') {
+    const rect = host.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const init: MouseEventInit = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      button: 2,
+      buttons: 2,
+    }
+    host.dispatchEvent(new MouseEvent('contextmenu', init))
+    return
+  }
+  if (mode === 'double_click') {
+    await robustClick(host)
+    host.dispatchEvent(
+      new MouseEvent('dblclick', {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view: window,
+        detail: 2,
+      }),
+    )
+    return
+  }
+  await robustClick(host)
+}
+
+/** Run the step's real event during Quick test (after green highlight). */
+async function triggerQuickTestEvent(
+  host: HTMLElement,
+  actionId: string,
+  command: AutomationCommand,
+): Promise<string | null> {
+  const id = actionId.trim()
+  if (!id) return null
+
+  if (id === 'mouse.click' || id === 'element.click') {
+    await performPointerAction(host, 'click')
+    return 'clicked'
+  }
+  if (id === 'ai.click_send') {
+    await clickChatSend(command.selector, Math.min(command.timeoutMs ?? 8_000, 8_000))
+    return 'send clicked'
+  }
+  if (id === 'mouse.double_click') {
+    await performPointerAction(host, 'double_click')
+    return 'double-clicked'
+  }
+  if (id === 'mouse.right_click') {
+    await performPointerAction(host, 'right_click')
+    return 'right-clicked'
+  }
+  if (id === 'mouse.hover') {
+    await performPointerAction(host, 'hover')
+    return 'hovered'
+  }
+  if (id === 'keyboard.paste_text') {
+    const value = String(command.value ?? command.text ?? '')
+    if (!value) {
+      host.focus()
+      return 'focused (no paste text set)'
+    }
+    await pasteInstant(host, value)
+    return 'pasted'
+  }
+  if (id === 'keyboard.type_text') {
+    const value = String(command.value ?? command.text ?? '')
+    if (!value) {
+      host.focus()
+      return 'focused (no type text set)'
+    }
+    await typeHumanLike(host, value, 20, 45)
+    return 'typed'
+  }
+  if (id === 'keyboard.fill' || id === 'keyboard.clear_and_type') {
+    const value = String(command.value ?? command.text ?? '')
+    if (value) {
+      await fillInstant(host, value)
+      return 'filled'
+    }
+    host.focus()
+    return 'focused'
   }
 
-  await sleep(150)
+  // Wait / condition / extract — find + highlight only
+  return null
+}
+
+function invokeReactClick(el: HTMLElement): boolean {
+  let current: HTMLElement | null = el
+  while (current && current !== document.body) {
+    const propKey = Object.keys(current).find(
+      (key) =>
+        key.startsWith('__reactProps$') ||
+        key.startsWith('__reactEventHandlers$') ||
+        key.startsWith('__reactFiber$'),
+    )
+    if (propKey) {
+      const bag = (current as unknown as Record<string, unknown>)[propKey] as Record<
+        string,
+        unknown
+      > | null
+      const props =
+        (bag?.memoizedProps as Record<string, unknown> | undefined) ||
+        (bag?.pendingProps as Record<string, unknown> | undefined) ||
+        bag
+      const handlers = ['onClick', 'onMouseUp', 'onPointerUp', 'onMouseDown', 'onPointerDown']
+      for (const name of handlers) {
+        const fn = props?.[name]
+        if (typeof fn === 'function') {
+          try {
+            ;(fn as (event: Record<string, unknown>) => void)({
+              preventDefault() {},
+              stopPropagation() {},
+              persist() {},
+              target: current,
+              currentTarget: current,
+              type: name.slice(2).toLowerCase(),
+              bubbles: true,
+              cancelable: true,
+              isTrusted: true,
+              button: 0,
+              buttons: 1,
+              nativeEvent: new MouseEvent('click', { bubbles: true }),
+            })
+            return true
+          } catch {
+            /* try next */
+          }
+        }
+      }
+    }
+    current = current.parentElement
+  }
+  return false
+}
+
+async function requestTrustedClick(x: number, y: number): Promise<boolean> {
+  try {
+    const response = (await chrome.runtime.sendMessage({
+      type: 'TRUSTED_CLICK',
+      payload: { x, y },
+    })) as { ok?: boolean }
+    return Boolean(response?.ok)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * DeepSeek / React often ignore synthetic clicks (isTrusted=false).
+ * Strategy: hide guard → React props → DOM events → MAIN world + CDP trusted click.
+ */
+async function robustClick(el: HTMLElement): Promise<void> {
+  const clickTarget = promoteToClickHost(el)
+  const guard = document.getElementById('ae-run-guard-root') as HTMLElement | null
+  const prevDisplay = guard?.style.display
+  const prevVisibility = guard?.style.visibility
+  const prevPointer = guard?.style.pointerEvents
+  if (guard) {
+    guard.style.display = 'none'
+    guard.style.visibility = 'hidden'
+    guard.style.pointerEvents = 'none'
+  }
+
+  try {
+    clickTarget.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+      behavior: 'instant' as ScrollBehavior,
+    })
+    await sleep(160)
+
+    const rect = clickTarget.getBoundingClientRect()
+    if (rect.width < 2 || rect.height < 2) {
+      throw new Error('Click target has no size — selector may point to a hidden node')
+    }
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+
+    try {
+      clickTarget.focus({ preventScroll: true })
+    } catch {
+      /* ignore */
+    }
+
+    // 1) React fiber / props handlers
+    invokeReactClick(clickTarget)
+    await sleep(60)
+
+    // 2) Full pointer + mouse sequence on the host
+    const mouseInit: MouseEventInit = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      screenX: x,
+      screenY: y,
+      button: 0,
+      buttons: 1,
+      detail: 1,
+    }
+    const pointerInit: PointerEventInit = {
+      ...mouseInit,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+    }
+
+    clickTarget.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
+    clickTarget.dispatchEvent(new MouseEvent('mousedown', mouseInit))
+    await sleep(40)
+    clickTarget.dispatchEvent(new PointerEvent('pointerup', { ...pointerInit, buttons: 0 }))
+    clickTarget.dispatchEvent(new MouseEvent('mouseup', { ...mouseInit, buttons: 0 }))
+    clickTarget.dispatchEvent(new MouseEvent('click', { ...mouseInit, buttons: 0 }))
+    clickTarget.click()
+
+    // Content span (DeepSeek: .ds-button__content) — still promote handlers on host
+    const content = clickTarget.querySelector<HTMLElement>('.ds-button__content, span')
+    if (content && content !== clickTarget) {
+      invokeReactClick(content)
+    }
+
+    // Keyboard activate for role=button
+    if (
+      clickTarget.getAttribute('role') === 'button' ||
+      clickTarget.className.toString().includes('ds-button') ||
+      clickTarget.tagName === 'BUTTON'
+    ) {
+      await sleep(30)
+      for (const key of ['Enter', ' '] as const) {
+        const keyInit: KeyboardEventInit = {
+          key,
+          code: key === 'Enter' ? 'Enter' : 'Space',
+          keyCode: key === 'Enter' ? 13 : 32,
+          which: key === 'Enter' ? 13 : 32,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        }
+        clickTarget.dispatchEvent(new KeyboardEvent('keydown', keyInit))
+        clickTarget.dispatchEvent(new KeyboardEvent('keyup', keyInit))
+      }
+    }
+
+    // 3) Trusted CDP click (isTrusted=true) — required for DeepSeek Continue
+    await requestTrustedClick(x, y)
+    await sleep(180)
+  } finally {
+    if (guard) {
+      guard.style.display = prevDisplay ?? ''
+      guard.style.visibility = prevVisibility ?? ''
+      guard.style.pointerEvents = prevPointer ?? ''
+    }
+  }
 }
 
 async function clickChatSend(selector?: string, timeoutMs = 20_000): Promise<void> {
@@ -816,8 +1033,22 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
       }
       case 'click': {
         if (!command.selector) throw new Error('selector is required')
-        const el = await waitForElement(command.selector, command.timeoutMs, fb)
-        await robustClick(el as HTMLElement)
+        // Prefer clickable host; wait until it is actually clickable when possible
+        let el: Element
+        try {
+          el = await waitForClickable(command.selector, Math.min(command.timeoutMs ?? 30_000, 12_000), fb)
+        } catch {
+          el = await waitForElement(command.selector, command.timeoutMs, fb)
+        }
+        const mode = String(command.options?.mode ?? 'click') as
+          | 'click'
+          | 'double_click'
+          | 'right_click'
+          | 'hover'
+        await performPointerAction(
+          promoteToClickHost(el),
+          mode === 'double_click' || mode === 'right_click' || mode === 'hover' ? mode : 'click',
+        )
         return { ok: true }
       }
       case 'clickSend': {
@@ -916,6 +1147,8 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         const primary = String(command.selector ?? '').trim()
         const textHint = String(command.text ?? '').trim()
         const kind = String(command.options?.kind ?? 'selector')
+        const actionId = String(command.options?.actionId ?? '')
+        const fireEvent = command.options?.fireEvent !== false
 
         let el: Element | null = null
         let matchedBy = ''
@@ -938,11 +1171,15 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
               matchedBy: present ? `page text “${textHint}”` : '',
               tagName: '',
               text: textHint,
+              triggered: null,
               message: present
                 ? `OK — page-এ “${textHint}” পাওয়া গেছে`
                 : `Fail — page-এ “${textHint}” নেই`,
             },
           }
+        } else if (actionId === 'ai.click_send' && !primary && fb.length === 0) {
+          el = findSendButton(undefined)
+          matchedBy = el ? 'send button' : ''
         } else {
           if (!primary && fb.length === 0) {
             return {
@@ -954,6 +1191,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
                 matchedBy: '',
                 tagName: '',
                 text: '',
+                triggered: null,
                 message: 'Fail — কোনো selector সেট নেই',
               },
             }
@@ -986,6 +1224,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
               matchedBy: '',
               tagName: '',
               text: '',
+              triggered: null,
               message: 'Fail — page-এ element পাওয়া যায়নি',
             },
           }
@@ -999,7 +1238,30 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
           .trim()
           .slice(0, 80)
 
+        // Green border first, then fire the step event (click / hover / type / …)
         flashHighlight(host)
+        await sleep(280)
+
+        let triggered: string | null = null
+        let triggerError: string | undefined
+        if (fireEvent && visible) {
+          try {
+            triggered = await triggerQuickTestEvent(host, actionId, command)
+          } catch (error) {
+            triggerError = error instanceof Error ? error.message : String(error)
+          }
+        }
+
+        const baseMsg = visible
+          ? `OK — পাওয়া গেছে (${host.tagName.toLowerCase()}${clickable ? ', clickable' : ''}): “${label || matchedBy}”`
+          : `Found but hidden — “${label || matchedBy}”`
+
+        let message = baseMsg
+        if (triggerError) {
+          message = `${baseMsg} · Event fail: ${triggerError}`
+        } else if (triggered) {
+          message = `${baseMsg} · Event: ${triggered}`
+        }
 
         return {
           ok: true,
@@ -1011,9 +1273,9 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
             tagName: host.tagName.toLowerCase(),
             text: label,
             role: host.getAttribute('role') ?? '',
-            message: visible
-              ? `OK — পাওয়া গেছে (${host.tagName.toLowerCase()}${clickable ? ', clickable' : ''}): “${label || matchedBy}”`
-              : `Found but hidden — “${label || matchedBy}”`,
+            triggered,
+            triggerError,
+            message,
           },
         }
       }
