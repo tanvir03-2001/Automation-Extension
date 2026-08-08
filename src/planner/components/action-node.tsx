@@ -17,6 +17,11 @@ import {
   localizeAction,
 } from '@/shared/i18n/action-locale'
 import { useLocale, useT } from '@/shared/i18n/use-t'
+import {
+  formatKeyLabel,
+  normalizeChord,
+  parseKeyChord,
+} from '@/planner/data/keyboard-keys'
 
 type FlowActionNode = Node<PlannerNodeData, 'action' | 'start' | 'end'>
 
@@ -72,6 +77,15 @@ export const ActionFlowNode = memo(function ActionFlowNode({
   const isStart = data.actionId === 'flow.start'
   const isEnd = data.actionId === 'flow.end'
   const isConnector = data.actionId === 'flow.connector'
+  const isKeyPress =
+    data.actionId === 'keyboard.press_key' || data.actionId === 'keyboard.shortcut'
+  const keyChord = isKeyPress
+    ? normalizeChord(
+        parseKeyChord(
+          data.params?.keys ?? data.params?.key ?? data.params?.shortcut ?? 'Enter',
+        ),
+      )
+    : []
   const accent = data.color ?? action?.color ?? '#0f766e'
   const isActive = runVisual === 'running' || runVisual === 'paused' || runVisual === 'waiting'
   const badge = runVisual === 'idle' ? null : RUN_BADGE[runVisual]
@@ -146,6 +160,48 @@ export const ActionFlowNode = memo(function ActionFlowNode({
             <p className="mt-0.5 whitespace-pre-wrap break-words text-xl font-bold leading-snug tracking-tight text-foreground">
               {displayLabel || 'Connector'}
             </p>
+          </div>
+        </div>
+      ) : isKeyPress ? (
+        <div className="flex items-start gap-3 px-3.5 pb-3 pt-4">
+          <div
+            className={cn(
+              'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-primary-foreground shadow-sm',
+              isActive && 'animate-pulse',
+            )}
+            style={{ background: accent }}
+          >
+            <ActionIcon name={action?.icon} className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {t('cat.keyboard')} · press
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {keyChord.length === 0 ? (
+                <span className="text-sm font-semibold text-muted-foreground">No key</span>
+              ) : (
+                keyChord.map((key, index) => (
+                  <span key={`${key}-${index}`} className="inline-flex items-center gap-1">
+                    {index > 0 ? (
+                      <span className="text-[11px] font-bold text-muted-foreground">+</span>
+                    ) : null}
+                    <span className="inline-flex min-w-[1.75rem] items-center justify-center rounded-md border border-border bg-muted/80 px-2 py-0.5 text-xs font-bold tracking-wide text-foreground shadow-sm">
+                      {formatKeyLabel(key)}
+                    </span>
+                  </span>
+                ))
+              )}
+            </div>
+            {isActive ? (
+              <p className="mt-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                {runVisual === 'paused'
+                  ? 'Paused on this step'
+                  : runVisual === 'waiting'
+                    ? 'Waiting here…'
+                    : 'Pressing keys…'}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : (

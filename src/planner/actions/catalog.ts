@@ -84,15 +84,37 @@ const browserActions: ActionDefinition[] = [
     id: 'browser.go_back',
     name: 'Go Back',
     category: 'browser',
-    description: 'Navigate back in history',
+    description: "Navigate back in this tab's history (same as the browser Back button)",
+    tooltip:
+      'Same as browser Back. If there is no previous page, the step succeeds and is skipped (unless Fail if no history is on).',
     icon: 'ArrowLeft',
+    fields: [
+      {
+        key: 'failIfNoHistory',
+        label: 'Fail if no history',
+        type: 'boolean',
+        defaultValue: false,
+        help: 'Off (default): skip when already at the first page. On: fail the run if Back is impossible.',
+      },
+    ],
   }),
   def({
     id: 'browser.go_forward',
     name: 'Go Forward',
     category: 'browser',
-    description: 'Navigate forward in history',
+    description: "Navigate forward in this tab's history",
+    tooltip:
+      'Same as browser Forward. If there is no forward page, the step succeeds and is skipped (unless Fail if no history is on).',
     icon: 'ArrowRight',
+    fields: [
+      {
+        key: 'failIfNoHistory',
+        label: 'Fail if no history',
+        type: 'boolean',
+        defaultValue: false,
+        help: 'Off (default): skip when Forward is impossible. On: fail the run instead.',
+      },
+    ],
   }),
   def({
     id: 'browser.close_tab',
@@ -233,6 +255,158 @@ const mouseActions: ActionDefinition[] = [
     ],
   }),
   def({
+    id: 'mouse.click_text',
+    name: 'Click by Text',
+    category: 'mouse',
+    description: 'Find visible text on the page and click that element (contains or exact)',
+    tooltip:
+      'Searches the page for matching text/label, then runs the same universal click as Click.',
+    howto: [
+      'Drag Click by Text onto the canvas.',
+      'Type the text you see on the control (e.g. Auto, Generate, Continue).',
+      'Choose Contains (default) or Exact match mode.',
+      'Optional: Pick with mouse to fill the text from a real element.',
+    ],
+    icon: 'TextCursorInput',
+    supportsSelector: true,
+    favoriteDefault: true,
+    fields: [
+      {
+        key: 'text',
+        label: 'Text to find',
+        type: 'string',
+        required: true,
+        placeholder: 'Generate',
+        help: 'Visible label / inner text to search for (case-insensitive)',
+      },
+      {
+        key: 'matchMode',
+        label: 'Match mode',
+        type: 'select',
+        defaultValue: 'contains',
+        options: [
+          { label: 'Contains', value: 'contains' },
+          { label: 'Exact', value: 'exact' },
+        ],
+      },
+      {
+        ...selectorField,
+        required: false,
+        help: 'Optional — Pick with mouse to fill text from a specific element',
+      },
+    ],
+  }),
+  def({
+    id: 'mouse.click_aria',
+    name: 'Click by Aria Label',
+    category: 'mouse',
+    description: 'Click a control by its aria-label (great for icon buttons like Go back)',
+    tooltip: 'Uses aria-label / title. Same universal click engine as Click.',
+    howto: [
+      'Use for icon-only controls that expose aria-label (Go back, Close, Menu…).',
+      'Type the aria-label, or Pick with mouse to fill it.',
+    ],
+    icon: 'Scan',
+    supportsSelector: true,
+    fields: [
+      {
+        key: 'text',
+        label: 'Aria label',
+        type: 'string',
+        required: true,
+        placeholder: 'Go back',
+      },
+      {
+        key: 'matchMode',
+        label: 'Match mode',
+        type: 'select',
+        defaultValue: 'exact',
+        options: [
+          { label: 'Exact', value: 'exact' },
+          { label: 'Contains', value: 'contains' },
+        ],
+      },
+      {
+        ...selectorField,
+        required: false,
+        help: 'Optional — Pick with mouse',
+      },
+    ],
+  }),
+  def({
+    id: 'mouse.click_button',
+    name: 'Click Button by Name',
+    category: 'mouse',
+    description: 'Click a button-like control by its visible name',
+    tooltip:
+      'Only button / combobox / role=button style controls. Same universal click as Click.',
+    howto: [
+      'Type the button name (Send, Continue, Prompt Enhance…).',
+      'Contains match by default — switch to Exact if needed.',
+    ],
+    icon: 'RectangleHorizontal',
+    supportsSelector: true,
+    fields: [
+      {
+        key: 'text',
+        label: 'Button name',
+        type: 'string',
+        required: true,
+        placeholder: 'Continue',
+      },
+      {
+        key: 'matchMode',
+        label: 'Match mode',
+        type: 'select',
+        defaultValue: 'contains',
+        options: [
+          { label: 'Contains', value: 'contains' },
+          { label: 'Exact', value: 'exact' },
+        ],
+      },
+      {
+        ...selectorField,
+        required: false,
+      },
+    ],
+  }),
+  def({
+    id: 'mouse.click_link',
+    name: 'Click Link',
+    category: 'mouse',
+    description: 'Click a link by visible text or href fragment',
+    tooltip: 'Finds <a> / role=link by text or href, then universal-clicks it.',
+    howto: [
+      'Enter link text (Library) or part of the URL path (/image).',
+      'Match mode applies to both text and href.',
+    ],
+    icon: 'Link',
+    supportsSelector: true,
+    fields: [
+      {
+        key: 'text',
+        label: 'Link text or href',
+        type: 'string',
+        required: true,
+        placeholder: 'Library',
+      },
+      {
+        key: 'matchMode',
+        label: 'Match mode',
+        type: 'select',
+        defaultValue: 'contains',
+        options: [
+          { label: 'Contains', value: 'contains' },
+          { label: 'Exact', value: 'exact' },
+        ],
+      },
+      {
+        ...selectorField,
+        required: false,
+      },
+    ],
+  }),
+  def({
     id: 'mouse.double_click',
     name: 'Double Click',
     category: 'mouse',
@@ -274,7 +448,7 @@ const mouseActions: ActionDefinition[] = [
     id: 'mouse.click_coordinates',
     name: 'Click Coordinates',
     category: 'mouse',
-    description: 'Click at x/y coordinates',
+    description: 'Click at x/y viewport coordinates (universal click engine)',
     icon: 'Crosshair',
     fields: [
       { key: 'x', label: 'X', type: 'number', required: true },
@@ -425,27 +599,59 @@ const keyboardActions: ActionDefinition[] = [
     id: 'keyboard.press_key',
     name: 'Press Key',
     category: 'keyboard',
-    description: 'Press a single key',
+    description: 'Press any key from a full keyboard list (Enter, Esc, letters, F-keys…)',
+    tooltip:
+      'Pick a key from the list. Add Ctrl/Alt/Shift/Win for chords like Ctrl+Enter. The canvas shows the keycaps.',
+    howto: [
+      'Open Press Key → pick the key from the list (search works).',
+      'For combos: select modifiers (Ctrl/Alt/Shift) plus one main key.',
+      'Optional: focus a page element with Pick with mouse before pressing.',
+    ],
     icon: 'Command',
+    supportsSelector: true,
+    favoriteDefault: true,
     fields: [
-      { key: 'key', label: 'Key', type: 'key', required: true, defaultValue: 'Enter' },
-      { ...selectorField, required: false },
+      {
+        key: 'key',
+        label: 'Key / chord',
+        type: 'key',
+        required: true,
+        defaultValue: 'Enter',
+        help: 'Stored as Enter or Control+Enter',
+      },
+      {
+        ...selectorField,
+        required: false,
+        help: 'Optional — focus this element before pressing the key',
+      },
     ],
   }),
   def({
     id: 'keyboard.shortcut',
     name: 'Shortcut Keys',
     category: 'keyboard',
-    description: 'Press a key combination',
+    description: 'Press 2–3 keys together (Ctrl+C, Ctrl+Shift+Enter, …)',
+    tooltip: 'Same key picker as Press Key, focused on multi-key chords. Canvas shows the keycaps.',
+    howto: [
+      'Pick modifiers + one main key from the list.',
+      'Example: Ctrl + C, Ctrl + Enter, Alt + Tab.',
+    ],
     icon: 'CornerDownLeft',
+    supportsSelector: true,
     fields: [
       {
         key: 'shortcut',
         label: 'Shortcut',
-        type: 'string',
+        type: 'key',
         required: true,
-        placeholder: 'Control+A',
+        placeholder: 'Control+Enter',
         defaultValue: 'Control+Enter',
+        help: 'Pick from the keyboard list — up to 4 keys (mods + main)',
+      },
+      {
+        ...selectorField,
+        required: false,
+        help: 'Optional — focus this element before the shortcut',
       },
     ],
   }),
@@ -1370,6 +1576,31 @@ const dataActions: ActionDefinition[] = [
 ]
 
 const downloadActions: ActionDefinition[] = [
+  def({
+    id: 'downloads.click_download',
+    name: 'Download Click',
+    category: 'downloads',
+    description:
+      'Click a download button exactly once — never double-clicks (safe for file downloads)',
+    tooltip:
+      'Pick the page Download button with your mouse. Fires a single trusted click only — no fallback retries.',
+    howto: [
+      'Drag Download Click onto the canvas.',
+      'Use Pick with mouse on the real Download button/link.',
+      'This action always clicks once — it will never fire a second click strategy.',
+      'Place it when the download control is visible (after Wait Until Visible if needed).',
+    ],
+    icon: 'Download',
+    supportsSelector: true,
+    favoriteDefault: true,
+    fields: [
+      {
+        ...selectorField,
+        required: true,
+        help: 'Pick the Download button with mouse — required',
+      },
+    ],
+  }),
   def({
     id: 'downloads.download_url',
     name: 'Download Image/File',

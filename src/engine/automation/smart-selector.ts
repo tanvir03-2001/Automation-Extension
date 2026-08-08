@@ -20,8 +20,12 @@ export interface SmartPickResult {
   attributes: Record<string, string>
 }
 
+/** Real controls that should receive clicks (not tooltip/focus wrappers). */
+const CLICK_HOST_SELECTOR =
+  'button, [role="button"], [role="combobox"], [role="listbox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], [data-slot="dropdown-menu-trigger"], a[href], a[aria-label], summary, .ds-button, [class*="ds-button"], input[type="button"], input[type="submit"], input[type="reset"]'
+
 const INTERACTIVE_SELECTOR =
-  'button, a[href], a[aria-label], [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
+  'button, a[href], a[aria-label], [role="button"], [role="combobox"], [role="listbox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
 
 function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -117,40 +121,73 @@ function collectAttributes(el: Element): Record<string, string> {
 
 function looksClickable(el: Element): boolean {
   if (!(el instanceof HTMLElement)) return false
-  if (el.matches(INTERACTIVE_SELECTOR)) return true
+  if (el.matches(INTERACTIVE_SELECTOR) || el.matches(CLICK_HOST_SELECTOR)) return true
   if (el.getAttribute('tabindex') != null) return true
   if (typeof el.onclick === 'function') return true
   const role = el.getAttribute('role')
-  if (role === 'button' || role === 'link' || role === 'tab' || role === 'menuitem') return true
+  if (
+    role === 'button' ||
+    role === 'link' ||
+    role === 'tab' ||
+    role === 'menuitem' ||
+    role === 'combobox' ||
+    role === 'listbox'
+  ) {
+    return true
+  }
   const style = window.getComputedStyle(el)
   if (style.cursor === 'pointer') return true
   const cls = `${el.className || ''}`
-  if (/btn|button|clickable|continue/i.test(cls)) return true
+  if (/btn|button|clickable|continue|select-trigger/i.test(cls)) return true
   return false
 }
 
 /**
  * Climb to the real click host.
- * DeepSeek Continue is: div[role=button].ds-button > span.ds-button__content
- * Never return the inner span/background — clicks must hit role=button.
+ * DeepSeek Continue: div[role=button].ds-button > span.ds-button__content
+ * Radix Select: div[data-slot=tooltip-trigger] > button[role=combobox]
+ * Never return tooltip/focus wrappers when an inner control exists.
  */
 export function promoteToClickHost(el: Element): HTMLElement {
-  const host =
-    el.closest<HTMLElement>(
-      'button, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], a[href], a[aria-label], summary',
-    ) ||
-    el.closest<HTMLElement>('.ds-button, [class*="ds-button"]') ||
-    el.closest<HTMLElement>('[aria-label]') ||
-    el.closest<HTMLElement>(INTERACTIVE_SELECTOR)
+  const start = el instanceof HTMLElement ? el : el.parentElement
+  if (!start) return el as HTMLElement
 
-  if (host) return host
+  // 1) Self or ancestor is the real control (SVG/span → button/combobox)
+  const ancestorHost = start.closest<HTMLElement>(CLICK_HOST_SELECTOR)
+  if (ancestorHost) return ancestorHost
 
-  let cur: HTMLElement | null = el instanceof HTMLElement ? el : el.parentElement
-  while (cur && cur !== document.body) {
-    if (looksClickable(cur) && (shortLabel(cur) || cur.getAttribute('aria-label'))) return cur
+  // 2) Wrapper case: tooltip-trigger / tabindex shell around the real control
+  //    closest() cannot see descendants — must query inside.
+  let cur: HTMLElement | null = start
+  for (let depth = 0; cur && depth < 5; depth += 1) {
+    const nested = cur.querySelector<HTMLElement>(CLICK_HOST_SELECTOR)
+    if (nested && isVisible(nested)) return nested
     cur = cur.parentElement
   }
-  return el instanceof HTMLElement ? el : (el.parentElement as HTMLElement) || (el as HTMLElement)
+
+  const ariaHost = start.closest<HTMLElement>('[aria-label]')
+  if (ariaHost) {
+    const nested = ariaHost.querySelector<HTMLElement>(CLICK_HOST_SELECTOR)
+    if (nested && isVisible(nested)) return nested
+    return ariaHost
+  }
+
+  const interactive = start.closest<HTMLElement>(INTERACTIVE_SELECTOR)
+  if (interactive) return interactive
+
+  cur = start
+  while (cur && cur !== document.body) {
+    // Do not treat bare tabindex wrappers as the host when empty of semantics
+    if (
+      looksClickable(cur) &&
+      (shortLabel(cur) || cur.getAttribute('aria-label')) &&
+      cur.matches(CLICK_HOST_SELECTOR)
+    ) {
+      return cur
+    }
+    cur = cur.parentElement
+  }
+  return start
 }
 
 /** Prefer the clickable host when user clicks an icon / SVG / span inside a button. */
@@ -202,9 +239,9 @@ function listButtonLike(): HTMLElement[] {
   const found = new Set<HTMLElement>()
   for (const el of listInteractive()) found.add(promoteToClickHost(el))
 
-  // DeepSeek / similar: role=button.ds-button and short-label pills
+  // DeepSeek / Radix select / similar
   const nodes = document.querySelectorAll<HTMLElement>(
-    'button, a[href], a[aria-label], [role="button"], [role="link"], .ds-button, [class*="ds-button"], [aria-label]',
+    'button, a[href], a[aria-label], [role="button"], [role="combobox"], [role="link"], [data-slot="select-trigger"], .ds-button, [class*="ds-button"], [aria-label]',
   )
   for (const el of nodes) {
     if (!isVisible(el) || inIgnoredRegion(el)) continue
@@ -288,8 +325,12 @@ function matchSemantic(el: Element, parts: ReturnType<typeof parseAeSelector>): 
       (want === 'button' &&
         (tag === 'button' ||
           el.getAttribute('role') === 'button' ||
+          el.getAttribute('role') === 'combobox' ||
+          el.getAttribute('data-slot') === 'select-trigger' ||
           looksClickable(el) ||
-          Boolean(shortLabel(el))))
+          Boolean(shortLabel(el)))) ||
+      (want === 'combobox' &&
+        (role === 'combobox' || el.getAttribute('data-slot') === 'select-trigger'))
     if (!roleOk) return false
   }
 
@@ -342,9 +383,14 @@ function scoreMatch(el: HTMLElement, parts: ReturnType<typeof parseAeSelector>):
   }
 
   if (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') score += 40
+  if (el.getAttribute('role') === 'combobox' || el.getAttribute('data-slot') === 'select-trigger') {
+    score += 45
+  }
   if (el.tagName === 'A' || el.getAttribute('role') === 'link') score += 35
   if (el.className.toString().includes('ds-button')) score += 25
   if (looksClickable(el)) score += 10
+  // Prefer real controls over tooltip/focus wrappers
+  if (el.getAttribute('data-slot') === 'tooltip-trigger') score -= 50
   // Penalize content-only nodes if any slip through
   if (el.className.toString().includes('__content') || el.className.toString().includes('__background')) {
     score -= 80

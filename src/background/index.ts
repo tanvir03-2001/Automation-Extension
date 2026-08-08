@@ -17,7 +17,7 @@ import {
 import { tabController } from '@/engine/automation/tab-controller'
 import { ensureContentScript } from '@/background/ensure-content-script'
 import { KEEPALIVE_ALARM, runGuardController } from '@/background/run-guard-controller'
-import { trustedClickAt } from '@/background/trusted-click'
+import { trustedClickAt, trustedKeyChord } from '@/background/trusted-click'
 import { sendTabMessage } from '@/shared/messaging/bus'
 import type { WorkflowDefinition } from '@/shared/types/workflow'
 import type { VisualWorkflow } from '@/planner/types/plan'
@@ -199,6 +199,17 @@ onRuntimeMessage(async (message, sender) => {
           ? payload.mode
           : 'auto'
       return trustedClickAt(tabId, x, y, { mode })
+    }
+
+    case 'TRUSTED_KEYS': {
+      const payload = (message.payload ?? {}) as { keys?: string[]; tabId?: number }
+      const tabId = payload.tabId ?? sender.tab?.id
+      if (tabId == null) return { ok: false, error: 'No tab for key press' }
+      const keys = Array.isArray(payload.keys)
+        ? payload.keys.map((k) => String(k)).filter(Boolean)
+        : []
+      if (keys.length === 0) return { ok: false, error: 'No keys provided' }
+      return trustedKeyChord(tabId, keys)
     }
 
     case 'WORKFLOW_START': {

@@ -238,48 +238,94 @@ function compareNumbers(
   }
 }
 
-function findButtonByLabel(label: string, exact: boolean): HTMLElement | null {
-  const needle = label.trim().toLowerCase()
-  if (!needle) return null
-  const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      'button, a[role="button"], [role="button"], input[type="button"], input[type="submit"], input[type="reset"], a',
-    ),
-  )
-  return (
-    candidates.find((el) => {
-      if (!isElementVisible(el)) return false
-      const text = elementLabelText(el)
-      return exact ? text === needle : text.includes(needle)
-    }) ?? null
-  )
+const TEXT_CLICK_CANDIDATE_SELECTOR =
+  'button, a, [role="button"], [role="combobox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], label, span, div, li, p, h1, h2, h3, h4, td, th, summary'
+
+const BUTTON_LIKE_SELECTOR =
+  'button, a[role="button"], [role="button"], [role="combobox"], [data-slot="select-trigger"], input[type="button"], input[type="submit"], input[type="reset"], a'
+
+function labelMatchesNeedle(label: string, needle: string, exact: boolean): boolean {
+  const l = label.trim().toLowerCase()
+  const n = needle.trim().toLowerCase()
+  if (!n || !l) return false
+  return exact ? l === n : l.includes(n)
 }
 
-/** Prefer the smallest visible element whose label/text equals the needle (exact). */
-function findElementByExactText(label: string): HTMLElement | null {
-  const needle = label.trim().toLowerCase()
-  if (!needle) return null
-  const byButton = findButtonByLabel(label, true)
-  if (byButton) return byButton
-
-  const candidates = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      'button, a, [role="button"], [role="link"], [role="menuitem"], [role="tab"], label, span, div, li, p, h1, h2, h3, h4, td, th, summary',
-    ),
-  )
+function pickSmallestMatch(candidates: HTMLElement[]): HTMLElement | null {
   let best: HTMLElement | null = null
   let bestScore = Infinity
   for (const el of candidates) {
-    if (!isElementVisible(el)) continue
-    if (elementLabelText(el) !== needle) continue
-    const rect = el.getBoundingClientRect()
+    const host = promoteToClickHost(el)
+    if (!isElementVisible(host)) continue
+    const rect = host.getBoundingClientRect()
     const score = Math.max(1, rect.width * rect.height)
     if (score < bestScore) {
-      best = el
+      best = host
       bestScore = score
     }
   }
   return best
+}
+
+function findButtonByLabel(label: string, exact: boolean): HTMLElement | null {
+  const needle = label.trim().toLowerCase()
+  if (!needle) return null
+  const matches = Array.from(document.querySelectorAll<HTMLElement>(BUTTON_LIKE_SELECTOR)).filter(
+    (el) => {
+      if (!isElementVisible(el)) return false
+      return labelMatchesNeedle(elementLabelText(el), needle, exact)
+    },
+  )
+  return pickSmallestMatch(matches)
+}
+
+/** Prefer the smallest visible element whose label/text equals the needle (exact). */
+function findElementByExactText(label: string): HTMLElement | null {
+  return findElementByTextMatch(label, true)
+}
+
+/** Find by visible text / label — contains or exact. Prefers smallest clickable host. */
+function findElementByTextMatch(label: string, exact: boolean): HTMLElement | null {
+  const needle = label.trim().toLowerCase()
+  if (!needle) return null
+  const byButton = findButtonByLabel(label, exact)
+  if (byButton) return byButton
+
+  const matches = Array.from(
+    document.querySelectorAll<HTMLElement>(TEXT_CLICK_CANDIDATE_SELECTOR),
+  ).filter((el) => {
+    if (!isElementVisible(el)) return false
+    return labelMatchesNeedle(elementLabelText(el), needle, exact)
+  })
+  return pickSmallestMatch(matches)
+}
+
+function findElementByAriaLabel(label: string, exact: boolean): HTMLElement | null {
+  const needle = label.trim().toLowerCase()
+  if (!needle) return null
+  const matches = Array.from(document.querySelectorAll<HTMLElement>('[aria-label], [title]')).filter(
+    (el) => {
+      if (!isElementVisible(el)) return false
+      const aria = (el.getAttribute('aria-label') || el.getAttribute('title') || '').trim()
+      return labelMatchesNeedle(aria, needle, exact)
+    },
+  )
+  return pickSmallestMatch(matches)
+}
+
+function findLinkByTextOrHref(label: string, exact: boolean): HTMLElement | null {
+  const needle = label.trim().toLowerCase()
+  if (!needle) return null
+  const matches = Array.from(
+    document.querySelectorAll<HTMLElement>('a[href], a[aria-label], [role="link"]'),
+  ).filter((el) => {
+    if (!isElementVisible(el)) return false
+    const text = elementLabelText(el)
+    const href = (el.getAttribute('href') || '').toLowerCase()
+    if (labelMatchesNeedle(text, needle, exact)) return true
+    return exact ? href === needle : href.includes(needle)
+  })
+  return pickSmallestMatch(matches)
 }
 
 async function waitForExactTextClickTarget(
@@ -300,6 +346,104 @@ async function waitForExactTextClickTarget(
     `Timed out waiting for exact match to click: ${label || selector || ''}`,
   )
   return result === true ? document.body : result
+}
+
+async function waitForTextClickTarget(
+  label: string,
+  exact: boolean,
+  timeoutMs = 30_000,
+  selector?: string,
+  fallbacks: string[] = [],
+): Promise<Element> {
+  const result = await pollUntil(
+    () => {
+      if (selector) {
+        const el = findEl(selector, fallbacks)
+        if (el && isElementVisible(el)) return el
+      }
+      return findElementByTextMatch(label, exact)
+    },
+    timeoutMs,
+    `Timed out waiting for text to click (${exact ? 'exact' : 'contains'}): ${label || selector || ''}`,
+  )
+  return result === true ? document.body : result
+}
+
+async function waitForAriaClickTarget(
+  label: string,
+  exact: boolean,
+  timeoutMs = 30_000,
+  selector?: string,
+  fallbacks: string[] = [],
+): Promise<Element> {
+  const result = await pollUntil(
+    () => {
+      if (selector) {
+        const el = findEl(selector, fallbacks)
+        if (el && isElementVisible(el)) return el
+      }
+      return findElementByAriaLabel(label, exact)
+    },
+    timeoutMs,
+    `Timed out waiting for aria-label to click: ${label || selector || ''}`,
+  )
+  return result === true ? document.body : result
+}
+
+async function waitForLinkClickTarget(
+  label: string,
+  exact: boolean,
+  timeoutMs = 30_000,
+  selector?: string,
+  fallbacks: string[] = [],
+): Promise<Element> {
+  const result = await pollUntil(
+    () => {
+      if (selector) {
+        const el = findEl(selector, fallbacks)
+        if (el && isElementVisible(el)) return el
+      }
+      return findLinkByTextOrHref(label, exact)
+    },
+    timeoutMs,
+    `Timed out waiting for link to click: ${label || selector || ''}`,
+  )
+  return result === true ? document.body : result
+}
+
+/** Click at viewport coordinates using the same multi-strategy engine. */
+async function robustClickAt(x: number, y: number): Promise<void> {
+  const guard = document.getElementById('ae-run-guard-root') as HTMLElement | null
+  const prevDisplay = guard?.style.display
+  const prevVisibility = guard?.style.visibility
+  const prevPointer = guard?.style.pointerEvents
+  if (guard) {
+    guard.style.display = 'none'
+    guard.style.visibility = 'hidden'
+    guard.style.pointerEvents = 'none'
+  }
+  try {
+    const hit = document.elementFromPoint(x, y)
+    if (hit instanceof Element) {
+      const host = promoteToClickHost(hit)
+      if (isElementVisible(host)) {
+        await robustClick(host)
+        return
+      }
+    }
+    // No usable host under the point — fire CDP/MAIN at raw coordinates
+    const beforeUrl = location.href
+    await requestTrustedClick(x, y, 'cdp')
+    await sleep(200)
+    if (location.href !== beforeUrl) return
+    await requestTrustedClick(x, y, 'main')
+  } finally {
+    if (guard) {
+      guard.style.display = prevDisplay ?? ''
+      guard.style.visibility = prevVisibility ?? ''
+      guard.style.pointerEvents = prevPointer ?? ''
+    }
+  }
 }
 
 async function waitForButton(
@@ -751,7 +895,7 @@ async function previewBeforeAction(el: HTMLElement): Promise<void> {
 
 async function performPointerAction(
   el: HTMLElement,
-  mode: 'click' | 'double_click' | 'right_click' | 'hover' = 'click',
+  mode: 'click' | 'double_click' | 'right_click' | 'hover' | 'click_once' = 'click',
 ): Promise<void> {
   const host = promoteToClickHost(el)
   await previewBeforeAction(host)
@@ -802,6 +946,10 @@ async function performPointerAction(
     )
     return
   }
+  if (mode === 'click_once') {
+    await singleTrustedClick(host)
+    return
+  }
   await robustClick(host)
 }
 
@@ -814,9 +962,21 @@ async function triggerQuickTestEvent(
   const id = actionId.trim()
   if (!id) return null
 
-  if (id === 'mouse.click' || id === 'element.click') {
+  if (
+    id === 'mouse.click' ||
+    id === 'element.click' ||
+    id === 'mouse.click_exact' ||
+    id === 'mouse.click_text' ||
+    id === 'mouse.click_aria' ||
+    id === 'mouse.click_button' ||
+    id === 'mouse.click_link'
+  ) {
     await performPointerAction(host, 'click')
     return 'clicked'
+  }
+  if (id === 'downloads.click_download') {
+    await performPointerAction(host, 'click_once')
+    return 'download clicked once'
   }
   if (id === 'ai.click_send') {
     await clickChatSend(command.selector, Math.min(command.timeoutMs ?? 8_000, 8_000))
@@ -882,11 +1042,147 @@ async function requestTrustedClick(
   }
 }
 
+async function requestTrustedKeys(keys: string[]): Promise<boolean> {
+  try {
+    const response = (await chrome.runtime.sendMessage({
+      type: 'TRUSTED_KEYS',
+      payload: { keys },
+    })) as { ok?: boolean }
+    return Boolean(response?.ok)
+  } catch {
+    return false
+  }
+}
+
+const PRESS_MODIFIERS = new Set(['Control', 'Alt', 'Shift', 'Meta'])
+
+function normalizePressChord(keys: string[]): string[] {
+  const aliases: Record<string, string> = {
+    ctrl: 'Control',
+    control: 'Control',
+    alt: 'Alt',
+    option: 'Alt',
+    shift: 'Shift',
+    meta: 'Meta',
+    cmd: 'Meta',
+    command: 'Meta',
+    win: 'Meta',
+    esc: 'Escape',
+    escape: 'Escape',
+    enter: 'Enter',
+    return: 'Enter',
+    space: ' ',
+    spacebar: ' ',
+    backspace: 'Backspace',
+    del: 'Delete',
+    delete: 'Delete',
+  }
+  const unique: string[] = []
+  for (const raw of keys) {
+    const t = String(raw ?? '').trim()
+    if (!t) continue
+    const lower = t.toLowerCase()
+    let next = aliases[lower] ?? t
+    if (/^[a-z]$/i.test(next)) next = next.toUpperCase()
+    if (/^f([1-9]|1[0-2])$/i.test(next)) next = next.toUpperCase()
+    if (!unique.includes(next)) unique.push(next)
+  }
+  const orderedMods = ['Control', 'Alt', 'Shift', 'Meta'].filter((m) => unique.includes(m))
+  const rest = unique.filter((k) => !PRESS_MODIFIERS.has(k))
+  return [...orderedMods, ...rest]
+}
+
+function keyEventInit(
+  key: string,
+  mods: { ctrlKey: boolean; altKey: boolean; shiftKey: boolean; metaKey: boolean },
+): KeyboardEventInit {
+  const codeMap: Record<string, string> = {
+    Enter: 'Enter',
+    Escape: 'Escape',
+    Tab: 'Tab',
+    ' ': 'Space',
+    Backspace: 'Backspace',
+    Delete: 'Delete',
+    ArrowUp: 'ArrowUp',
+    ArrowDown: 'ArrowDown',
+    ArrowLeft: 'ArrowLeft',
+    ArrowRight: 'ArrowRight',
+    Control: 'ControlLeft',
+    Alt: 'AltLeft',
+    Shift: 'ShiftLeft',
+    Meta: 'MetaLeft',
+  }
+  let code = codeMap[key]
+  let eventKey = key
+  if (/^[A-Z]$/.test(key)) {
+    code = `Key${key}`
+    eventKey = mods.shiftKey ? key : key.toLowerCase()
+  } else if (/^[0-9]$/.test(key)) {
+    code = `Digit${key}`
+  } else if (/^F([1-9]|1[0-2])$/.test(key)) {
+    code = key
+  }
+  return {
+    key: eventKey,
+    code: code ?? key,
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    ctrlKey: mods.ctrlKey,
+    altKey: mods.altKey,
+    shiftKey: mods.shiftKey,
+    metaKey: mods.metaKey,
+  }
+}
+
+async function dispatchKeyChord(target: HTMLElement, keys: string[]): Promise<void> {
+  const chord = normalizePressChord(keys)
+  if (chord.length === 0) return
+  const mods = {
+    ctrlKey: chord.includes('Control'),
+    altKey: chord.includes('Alt'),
+    shiftKey: chord.includes('Shift'),
+    metaKey: chord.includes('Meta'),
+  }
+
+  // Hold modifiers down, press main keys, then release modifiers
+  for (const key of chord.filter((k) => PRESS_MODIFIERS.has(k))) {
+    target.dispatchEvent(new KeyboardEvent('keydown', keyEventInit(key, mods)))
+    await sleep(20)
+  }
+  for (const key of chord.filter((k) => !PRESS_MODIFIERS.has(k))) {
+    const init = keyEventInit(key, mods)
+    target.dispatchEvent(new KeyboardEvent('keydown', init))
+    target.dispatchEvent(new KeyboardEvent('keypress', init))
+    await sleep(30)
+    target.dispatchEvent(new KeyboardEvent('keyup', init))
+    await sleep(20)
+  }
+  for (const key of [...chord].reverse().filter((k) => PRESS_MODIFIERS.has(k))) {
+    target.dispatchEvent(new KeyboardEvent('keyup', keyEventInit(key, mods)))
+    await sleep(15)
+  }
+}
+
+const OVERLAY_UI_SELECTOR = [
+  '[role="menu"]',
+  '[role="listbox"]',
+  '[role="dialog"]',
+  '[data-radix-popper-content-wrapper]',
+  '[data-radix-menu-content]',
+  '[data-radix-dropdown-menu-content]',
+  '[data-radix-select-content]',
+  '[data-slot="dropdown-menu-content"]',
+  '[data-slot="popover-content"]',
+  '[data-slot="select-content"]',
+  '[data-slot="menu-content"]',
+  '[data-state="open"]',
+  '[aria-expanded="true"]',
+].join(', ')
+
 function countOpenMenus(): number {
   let n = 0
-  const nodes = document.querySelectorAll<HTMLElement>(
-    '[role="menu"], [role="listbox"], [data-state="open"], [aria-expanded="true"]',
-  )
+  const nodes = document.querySelectorAll<HTMLElement>(OVERLAY_UI_SELECTOR)
   for (const el of nodes) {
     if (!el.isConnected) continue
     const style = window.getComputedStyle(el)
@@ -897,13 +1193,61 @@ function countOpenMenus(): number {
   return n
 }
 
+/** Profile / account / dropdown toggles — a second click closes what the first opened. */
+function looksLikeToggleMenuHost(el: HTMLElement): boolean {
+  if (el.getAttribute('aria-haspopup')) return true
+  if (el.getAttribute('aria-expanded') != null) return true
+  const state = el.getAttribute('data-state')
+  if (state === 'open' || state === 'closed') return true
+  if (
+    el.closest(
+      '[data-slot="dropdown-menu-trigger"], [data-slot="popover-trigger"], [data-radix-collection-item]',
+    )
+  ) {
+    return true
+  }
+  const role = (el.getAttribute('role') || '').toLowerCase()
+  if (role === 'menu' || role === 'menuitem') return true
+  const label = (
+    el.getAttribute('aria-label') ||
+    el.getAttribute('title') ||
+    el.innerText ||
+    ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+  if (
+    /\b(profile|account|avatar|user menu|open menu|settings menu|logout|personal)\b/.test(
+      label,
+    )
+  ) {
+    return true
+  }
+  // Compact circular avatar controls (sidebar profile)
+  const rect = el.getBoundingClientRect()
+  if (
+    rect.width > 0 &&
+    rect.width <= 56 &&
+    rect.height > 0 &&
+    rect.height <= 56 &&
+    Math.abs(rect.width - rect.height) < 12 &&
+    (el.tagName === 'BUTTON' || role === 'button')
+  ) {
+    return true
+  }
+  return false
+}
+
 interface ClickSnapshot {
   url: string
   path: string
   title: string
   expanded: string | null
   pressed: string | null
+  dataState: string | null
   openMenus: number
+  bodyChildCount: number
   connected: boolean
 }
 
@@ -914,7 +1258,9 @@ function snapshotClickState(el: HTMLElement): ClickSnapshot {
     title: document.title,
     expanded: el.getAttribute('aria-expanded'),
     pressed: el.getAttribute('aria-pressed'),
+    dataState: el.getAttribute('data-state'),
     openMenus: countOpenMenus(),
+    bodyChildCount: document.body?.childElementCount ?? 0,
     connected: el.isConnected,
   }
 }
@@ -926,7 +1272,10 @@ function clickHadEffect(before: ClickSnapshot, el: HTMLElement | null): boolean 
   if (!el || !el.isConnected) return true
   if (el.getAttribute('aria-expanded') !== before.expanded) return true
   if (el.getAttribute('aria-pressed') !== before.pressed) return true
+  if (el.getAttribute('data-state') !== before.dataState) return true
   if (countOpenMenus() !== before.openMenus) return true
+  // Portaled menus often append a node under body without aria hooks we know
+  if ((document.body?.childElementCount ?? 0) !== before.bodyChildCount) return true
   return false
 }
 
@@ -1113,16 +1462,70 @@ async function dispatchSyntheticClick(clickTarget: HTMLElement, x: number, y: nu
 }
 
 /**
+ * Single trusted click only — never retries with a second strategy.
+ * Used for Download Click so browsers never start two downloads.
+ */
+async function singleTrustedClick(el: HTMLElement): Promise<void> {
+  const clickTarget = promoteToClickHost(el)
+  const guard = document.getElementById('ae-run-guard-root') as HTMLElement | null
+  const prevDisplay = guard?.style.display
+  const prevVisibility = guard?.style.visibility
+  const prevPointer = guard?.style.pointerEvents
+  if (guard) {
+    guard.style.display = 'none'
+    guard.style.visibility = 'hidden'
+    guard.style.pointerEvents = 'none'
+  }
+
+  try {
+    clickTarget.scrollIntoView({
+      block: 'nearest',
+      inline: 'nearest',
+      behavior: 'instant' as ScrollBehavior,
+    })
+    await sleep(120)
+
+    const rect = clickTarget.getBoundingClientRect()
+    if (rect.width < 2 || rect.height < 2) {
+      throw new Error('Download click target has no size — re-pick the Download button')
+    }
+
+    const { x, y } = resolveClickPoint(clickTarget)
+    try {
+      clickTarget.focus({ preventScroll: true })
+    } catch {
+      /* ignore */
+    }
+
+    // Exactly one CDP click — no MAIN / synthetic / React fallbacks
+    const ok = await requestTrustedClick(x, y, 'cdp')
+    if (!ok) {
+      throw new Error(
+        'Download Click failed to fire a trusted click. Keep the page focused and retry.',
+      )
+    }
+    await sleep(200)
+  } finally {
+    if (guard) {
+      guard.style.display = prevDisplay ?? ''
+      guard.style.visibility = prevVisibility ?? ''
+      guard.style.pointerEvents = prevPointer ?? ''
+    }
+  }
+}
+
+/**
  * Universal click for buttons, links, menus, Next.js nav, DeepSeek, etc.
  *
  * Strategy (stop as soon as the page reacts — avoids open→close on toggles):
  *  1) CDP trusted click at a hit-tested point
- *  2) If no effect → MAIN-world pointer + .click()
+ *  2) If no effect → MAIN-world (skipped when CDP already fired on a toggle/menu)
  *  3) If still no effect → isolated synthetic events
  *  4) If still no effect → React props invoke OR native .click()
  */
 async function robustClick(el: HTMLElement): Promise<void> {
   const clickTarget = promoteToClickHost(el)
+  const isToggle = looksLikeToggleMenuHost(clickTarget)
   const guard = document.getElementById('ae-run-guard-root') as HTMLElement | null
   const prevDisplay = guard?.style.display
   const prevVisibility = guard?.style.visibility
@@ -1165,14 +1568,33 @@ async function robustClick(el: HTMLElement): Promise<void> {
       return clickHadEffect(before, clickTarget)
     }
 
-    // 1) Trusted CDP (isTrusted=true) — required by many modern apps
-    await requestTrustedClick(x, y, 'cdp')
-    if (await waitForEffect(320)) {
+    // Toggle menus (profile avatar, dropdowns): one CDP click only.
+    // A second strategy almost always closes the menu that just opened.
+    if (isToggle) {
+      const cdpOk = await requestTrustedClick(x, y, 'cdp')
+      if (cdpOk) {
+        await waitForEffect(450)
+        restorePageScrollIfStale()
+        return
+      }
+      // CDP unavailable — one MAIN attempt only, then stop
+      await requestTrustedClick(x, y, 'main')
+      await waitForEffect(280)
       restorePageScrollIfStale()
       return
     }
 
-    // 2) MAIN world (page JS context) — Next.js / React Link & router.back()
+    // 1) Trusted CDP (isTrusted=true) — required by many modern apps
+    const cdpOk = await requestTrustedClick(x, y, 'cdp')
+    if (cdpOk) {
+      // CDP already delivered one real click — never stack another strategy
+      // (profile menus / toggles open then immediately close otherwise).
+      await waitForEffect(400)
+      restorePageScrollIfStale()
+      return
+    }
+
+    // 2) MAIN world — only when CDP attach/send failed
     await requestTrustedClick(x, y, 'main')
     if (await waitForEffect(280)) {
       restorePageScrollIfStale()
@@ -1306,10 +1728,27 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
           | 'double_click'
           | 'right_click'
           | 'hover'
+          | 'click_once'
         await performPointerAction(
           promoteToClickHost(el),
-          mode === 'double_click' || mode === 'right_click' || mode === 'hover' ? mode : 'click',
+          mode === 'double_click' ||
+            mode === 'right_click' ||
+            mode === 'hover' ||
+            mode === 'click_once'
+            ? mode
+            : 'click',
         )
+        return { ok: true }
+      }
+      case 'clickOnce': {
+        if (!command.selector) throw new Error('selector is required — Pick the Download button')
+        let el: Element
+        try {
+          el = await waitForClickable(command.selector, Math.min(command.timeoutMs ?? 30_000, 12_000), fb)
+        } catch {
+          el = await waitForElement(command.selector, command.timeoutMs, fb)
+        }
+        await performPointerAction(promoteToClickHost(el), 'click_once')
         return { ok: true }
       }
       case 'clickExact': {
@@ -1325,6 +1764,73 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         )
         await performPointerAction(promoteToClickHost(el), 'click')
         return { ok: true, data: { matchedText: label || undefined } }
+      }
+      case 'clickByText': {
+        const label = String(command.text ?? command.value ?? '').trim()
+        if (!label && !command.selector) {
+          throw new Error('Text to find is required (or Pick with mouse)')
+        }
+        const exact = String(command.options?.matchMode ?? 'contains') === 'exact'
+        const el = await waitForTextClickTarget(
+          label,
+          exact,
+          command.timeoutMs,
+          command.selector,
+          fb,
+        )
+        await performPointerAction(promoteToClickHost(el), 'click')
+        return { ok: true, data: { matchedText: label || undefined, matchMode: exact ? 'exact' : 'contains' } }
+      }
+      case 'clickByAria': {
+        const label = String(command.text ?? command.value ?? '').trim()
+        if (!label && !command.selector) {
+          throw new Error('Aria label is required (or Pick with mouse)')
+        }
+        const exact = String(command.options?.matchMode ?? 'exact') !== 'contains'
+        const el = await waitForAriaClickTarget(
+          label,
+          exact,
+          command.timeoutMs,
+          command.selector,
+          fb,
+        )
+        await performPointerAction(promoteToClickHost(el), 'click')
+        return { ok: true, data: { matchedAria: label || undefined } }
+      }
+      case 'clickByButton': {
+        const label = String(command.text ?? command.value ?? '').trim()
+        if (!label && !command.selector) {
+          throw new Error('Button name is required (or Pick with mouse)')
+        }
+        const exact = String(command.options?.matchMode ?? 'contains') === 'exact'
+        const el = await waitForButton(label, command.timeoutMs, exact, command.selector, fb)
+        await performPointerAction(promoteToClickHost(el), 'click')
+        return { ok: true, data: { matchedButton: label || undefined } }
+      }
+      case 'clickByLink': {
+        const label = String(command.text ?? command.value ?? '').trim()
+        if (!label && !command.selector) {
+          throw new Error('Link text or href is required (or Pick with mouse)')
+        }
+        const exact = String(command.options?.matchMode ?? 'contains') === 'exact'
+        const el = await waitForLinkClickTarget(
+          label,
+          exact,
+          command.timeoutMs,
+          command.selector,
+          fb,
+        )
+        await performPointerAction(promoteToClickHost(el), 'click')
+        return { ok: true, data: { matchedLink: label || undefined } }
+      }
+      case 'clickAt': {
+        const x = Number(command.options?.x ?? command.value)
+        const y = Number(command.options?.y)
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          throw new Error('Valid X and Y coordinates are required')
+        }
+        await robustClickAt(x, y)
+        return { ok: true, data: { x, y } }
       }
       case 'clickSend': {
         await clickChatSend(command.selector, command.timeoutMs ?? 20_000)
@@ -1379,19 +1885,26 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
             ? document.activeElement
             : document.body
         await previewBeforeAction(target)
-        target.dispatchEvent(
-          new KeyboardEvent('keydown', {
-            key: command.key ?? 'Enter',
-            bubbles: true,
-          }),
-        )
-        target.dispatchEvent(
-          new KeyboardEvent('keyup', {
-            key: command.key ?? 'Enter',
-            bubbles: true,
-          }),
-        )
-        return { ok: true }
+        try {
+          target.focus({ preventScroll: true })
+        } catch {
+          /* ignore */
+        }
+
+        const rawKeys = Array.isArray(command.options?.keys)
+          ? (command.options!.keys as unknown[]).map((k) => String(k))
+          : String(command.key ?? command.value ?? 'Enter')
+              .split('+')
+              .map((part) => part.trim())
+              .filter(Boolean)
+
+        const chord = normalizePressChord(rawKeys)
+        // Trusted CDP chord first — avoid double-firing Enter/shortcuts
+        const trusted = await requestTrustedKeys(chord)
+        if (!trusted) {
+          await dispatchKeyChord(target, chord)
+        }
+        return { ok: true, data: { keys: chord, trusted } }
       }
       case 'scroll': {
         if (command.selector) {

@@ -8,6 +8,15 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Connect Start → Open URL with the green dots.',
     'If “Reuse existing tab” is on, an already-open tab is focused instead of opening another.',
   ],
+  'browser.go_back': [
+    'Same as the browser Back button for the automation tab.',
+    'If there is no previous page, the step is skipped and the run continues (see Activity warn).',
+    'Turn on “Fail if no history” only when Back must succeed. For a fixed page after logout, use Open URL.',
+  ],
+  'browser.go_forward': [
+    'Same as the browser Forward button.',
+    'If there is no forward page, the step is skipped and the run continues by default.',
+  ],
   'ai.open_chatgpt': [
     'Opens ChatGPT or focuses it if the tab is already open.',
     'Connect it after Start, then usually Wait For Page.',
@@ -27,6 +36,32 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Type the exact label, or Pick with mouse to fill Exact text from the page.',
     'Partial matches are ignored — only a full label match is clicked.',
   ],
+  'mouse.click_text': [
+    'Finds text on the page (Contains or Exact) and clicks that control.',
+    'Uses the same universal click engine as Click (CDP → MAIN → synthetic).',
+    'Best when the label is visible but the selector is unstable.',
+  ],
+  'mouse.click_aria': [
+    'Clicks by aria-label / title — ideal for icon buttons (Go back, Close, Menu).',
+    'Same universal click engine as Click.',
+  ],
+  'mouse.click_button': [
+    'Clicks button-like controls only (button, combobox, role=button, select triggers).',
+    'Match by visible name with Contains or Exact.',
+  ],
+  'mouse.click_link': [
+    'Clicks an <a> / role=link by visible text or href fragment.',
+    'Same universal click engine as Click.',
+  ],
+  'mouse.click_coordinates': [
+    'Clicks at viewport X/Y. If an element is under the point, promotes to its click host.',
+    'Uses the same multi-strategy click engine.',
+  ],
+  'downloads.click_download': [
+    'Dedicated download-button click — fires exactly one trusted click.',
+    'Never retries with MAIN/synthetic/React fallbacks (avoids double downloads).',
+    'Pick the Download control with your mouse before running.',
+  ],
   'keyboard.type_text': [
     'Types text into the focused box (or a picked selector).',
     'Choose Manual text, or a Text library like Story Title.',
@@ -39,6 +74,15 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Instead of typing letter by letter, pastes the whole prompt instantly.',
     'Faster for long prompts — use when you do not need human-like typing.',
     'Connect it after New chat / focus, then usually Click Send.',
+  ],
+  'keyboard.press_key': [
+    'Pick any key from the full keyboard list (Enter, Esc, letters, F-keys…).',
+    'Add Ctrl / Alt / Shift / Win for chords like Ctrl+Enter.',
+    'The canvas node shows the selected keycaps.',
+  ],
+  'keyboard.shortcut': [
+    'Press 2–3 keys together (Ctrl+C, Ctrl+Shift+Enter…).',
+    'Same picker as Press Key — select modifiers plus one main key.',
   ],
   'ai.click_send': [
     'Clicks the Send button after text is typed.',
@@ -133,9 +177,18 @@ const EXTRA_TOOLTIP: Record<string, string> = {
   'mouse.click': 'Clicks a page element. Pick the target with your mouse.',
   'mouse.click_exact':
     'Clicks by exact text/label match. Pick with mouse or type the full label.',
+  'mouse.click_text': 'Find text on the page and click it (contains or exact).',
+  'mouse.click_aria': 'Click by aria-label — great for icon-only controls.',
+  'mouse.click_button': 'Click a button/combobox by its visible name.',
+  'mouse.click_link': 'Click a link by text or href.',
+  'mouse.click_coordinates': 'Click at X/Y using the universal click engine.',
+  'downloads.click_download':
+    'Single-click only for Download buttons — pick with mouse; never double-clicks.',
   'keyboard.type_text': 'Types text (manual or from a Story Title library).',
   'keyboard.paste_text':
     'Pastes full text instantly — same library & {_template} features as Type Text.',
+  'keyboard.press_key': 'Pick any key (or Ctrl/Alt/Shift chord) from the keyboard list.',
+  'keyboard.shortcut': 'Press multiple keys together — same picker, chord-focused.',
   'ai.click_send': 'Clicks the chat Send button.',
   'ai.wait_response': 'Waits until ChatGPT finishes answering.',
   'clipboard.copy_event':

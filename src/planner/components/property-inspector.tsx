@@ -23,6 +23,8 @@ import {
   CONDITION_MANAGED_KEYS,
   ConditionFields,
 } from '@/planner/components/condition-fields'
+import { KeyPressFields } from '@/planner/components/key-press-fields'
+import { formatChord } from '@/planner/data/keyboard-keys'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -47,6 +49,14 @@ function labelAfterPick(currentLabel: string, actionId: string, pickedText?: str
     }
     return currentLabel
   }
+  if (actionId === 'downloads.click_download') {
+    if (
+      currentLabel === 'Download Click' ||
+      currentLabel.startsWith('Download Click ·')
+    ) {
+      return `Download Click · ${snippet}`
+    }
+  }
   if (actionId === 'mouse.click_exact') {
     if (
       currentLabel === 'Click Exact Match' ||
@@ -54,6 +64,19 @@ function labelAfterPick(currentLabel: string, actionId: string, pickedText?: str
       currentLabel.startsWith('Click Exact Match ·')
     ) {
       return `Click Exact · ${snippet}`
+    }
+  }
+  const textClickPrefixes: Record<string, string[]> = {
+    'mouse.click_text': ['Click by Text', 'Click Text ·'],
+    'mouse.click_aria': ['Click by Aria Label', 'Click Aria ·'],
+    'mouse.click_button': ['Click Button by Name', 'Click Button ·'],
+    'mouse.click_link': ['Click Link', 'Click Link ·'],
+  }
+  const prefixes = textClickPrefixes[actionId]
+  if (prefixes) {
+    const [base, short] = prefixes
+    if (currentLabel === base || currentLabel.startsWith(short) || currentLabel.startsWith(`${base} ·`)) {
+      return `${short} ${snippet}`
     }
   }
   if (currentLabel === 'Click') return `Click · ${snippet}`
@@ -228,9 +251,20 @@ export function PropertyInspector() {
         selector: picked.selector,
         selectorFallbacks: fallbacks,
       }
-      if (latest.data.actionId === 'mouse.click_exact' && snippet) {
+      if (
+        (latest.data.actionId === 'mouse.click_exact' ||
+          latest.data.actionId === 'mouse.click_text' ||
+          latest.data.actionId === 'mouse.click_aria' ||
+          latest.data.actionId === 'mouse.click_button' ||
+          latest.data.actionId === 'mouse.click_link') &&
+        snippet
+      ) {
         nextParams.text = snippet
-        nextParams.exact = true
+        if (latest.data.actionId === 'mouse.click_exact') nextParams.exact = true
+        if (latest.data.actionId === 'mouse.click_aria') {
+          const aria = picked.attributes?.['aria-label'] || snippet
+          nextParams.text = aria
+        }
       }
       updateNodeData(workflowId, latest.id, {
         selector: {
@@ -252,12 +286,19 @@ export function PropertyInspector() {
       selectorFallbacks: fallbacks,
     }
     if (
-      latest.data.actionId === 'mouse.click_exact' &&
+      (latest.data.actionId === 'mouse.click_exact' ||
+        latest.data.actionId === 'mouse.click_text' ||
+        latest.data.actionId === 'mouse.click_aria' ||
+        latest.data.actionId === 'mouse.click_button' ||
+        latest.data.actionId === 'mouse.click_link') &&
       fieldKey === 'selector' &&
       snippet
     ) {
       nextParams.text = snippet
-      nextParams.exact = true
+      if (latest.data.actionId === 'mouse.click_exact') nextParams.exact = true
+      if (latest.data.actionId === 'mouse.click_aria') {
+        nextParams.text = picked.attributes?.['aria-label'] || snippet
+      }
     }
     updateNodeData(workflowId, latest.id, {
       params: nextParams,
@@ -361,12 +402,16 @@ export function PropertyInspector() {
               <p className="text-xs font-semibold text-foreground">
                 {selectedNode.data.actionId === 'clipboard.copy_event'
                   ? 'Pick Copy button with mouse'
-                  : 'Pick element with mouse'}
+                  : selectedNode.data.actionId === 'downloads.click_download'
+                    ? 'Pick Download button with mouse'
+                    : 'Pick element with mouse'}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                 {selectedNode.data.actionId === 'clipboard.copy_event'
                   ? 'বাটনে ক্লিক করুন → পেজ খুলবে → page-এর Copy বাটনে ক্লিক করুন। Runtime-এ সেই বাটন click হবে, text capture হবে, Copy Store-এ save হবে।'
-                  : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
+                  : selectedNode.data.actionId === 'downloads.click_download'
+                    ? 'পেজের Download বাটন/লিংক pick করুন। Runtime-এ ঠিক একবারই click হবে — কখনো double-click নয়।'
+                    : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
               </p>
               <Button
                 size="sm"
@@ -383,7 +428,9 @@ export function PropertyInspector() {
                   ? 'Click an element on the page…'
                   : selectedNode.data.actionId === 'clipboard.copy_event'
                     ? 'Pick Copy button'
-                    : 'Pick click target'}
+                    : selectedNode.data.actionId === 'downloads.click_download'
+                      ? 'Pick Download button'
+                      : 'Pick click target'}
               </Button>
               {lastPicked ? (
                 <p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">
@@ -455,6 +502,56 @@ export function PropertyInspector() {
             />
           ) : null}
 
+          {selectedNode.data.actionId === 'keyboard.press_key' ||
+          selectedNode.data.actionId === 'keyboard.shortcut' ? (
+            <Field
+              label={
+                selectedNode.data.actionId === 'keyboard.shortcut'
+                  ? 'Shortcut (multi-key)'
+                  : 'Key to press'
+              }
+              help="Pick from the full keyboard list. Use Ctrl/Alt/Shift + a main key for chords."
+            >
+              <KeyPressFields
+                allowChord
+                value={String(
+                  selectedNode.data.actionId === 'keyboard.shortcut'
+                    ? (selectedNode.data.params.shortcut ??
+                        selectedNode.data.params.key ??
+                        'Control+Enter')
+                    : (selectedNode.data.params.key ??
+                        selectedNode.data.params.shortcut ??
+                        'Enter'),
+                )}
+                onChange={(chord, keys) => {
+                  const pretty = formatChord(keys) || chord
+                  const base =
+                    selectedNode.data.actionId === 'keyboard.shortcut'
+                      ? 'Shortcut'
+                      : 'Press'
+                  const nextLabel =
+                    selectedNode.data.label === 'Press Key' ||
+                    selectedNode.data.label === 'Shortcut Keys' ||
+                    selectedNode.data.label.startsWith('Press ·') ||
+                    selectedNode.data.label.startsWith('Shortcut ·') ||
+                    selectedNode.data.label.startsWith('Press Key ·') ||
+                    selectedNode.data.label.startsWith('Shortcut Keys ·')
+                      ? `${base} · ${pretty}`
+                      : selectedNode.data.label
+                  updateNodeData(workflowId, selectedNode.id, {
+                    label: nextLabel,
+                    params: {
+                      ...selectedNode.data.params,
+                      key: chord,
+                      shortcut: chord,
+                      keys,
+                    },
+                  })
+                }}
+              />
+            </Field>
+          ) : null}
+
           {selectedNode.data.actionId === 'conditions.if' ||
           selectedNode.data.actionId === 'conditions.switch' ? (
             <ConditionFields
@@ -486,6 +583,13 @@ export function PropertyInspector() {
               (selectedNode.data.actionId === 'keyboard.type_text' ||
                 selectedNode.data.actionId === 'keyboard.paste_text') &&
               TYPE_TEXT_MANAGED_KEYS.has(field.key)
+            ) {
+              return null
+            }
+            if (
+              (selectedNode.data.actionId === 'keyboard.press_key' ||
+                selectedNode.data.actionId === 'keyboard.shortcut') &&
+              (field.type === 'key' || field.key === 'key' || field.key === 'shortcut')
             ) {
               return null
             }

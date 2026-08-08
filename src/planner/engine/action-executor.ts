@@ -281,14 +281,51 @@ export async function executePlannerAction(args: {
 
       case 'browser.go_back': {
         activeTabId = await ensureTab(activeTabId)
-        await chrome.tabs.goBack(activeTabId)
-        return { status: 'success', activeTabId }
+        const back = await tabController.goBack(activeTabId)
+        const failIfNoHistory = Boolean(params.failIfNoHistory ?? false)
+        if (!back.navigated) {
+          if (failIfNoHistory) {
+            throw new Error(
+              back.message ??
+                "No previous page in this tab's history. Use Open URL if you need a fixed destination.",
+            )
+          }
+          await activityLog.append(
+            'warn',
+            'Planner',
+            back.message ?? 'Go Back skipped — no previous page in history',
+          )
+          return {
+            status: 'success',
+            activeTabId,
+            output: { navigated: false, skipped: true },
+          }
+        }
+        return { status: 'success', activeTabId, output: { navigated: true } }
       }
 
       case 'browser.go_forward': {
         activeTabId = await ensureTab(activeTabId)
-        await chrome.tabs.goForward(activeTabId)
-        return { status: 'success', activeTabId }
+        const forward = await tabController.goForward(activeTabId)
+        const failIfNoHistory = Boolean(params.failIfNoHistory ?? false)
+        if (!forward.navigated) {
+          if (failIfNoHistory) {
+            throw new Error(
+              forward.message ?? "No forward page in this tab's history.",
+            )
+          }
+          await activityLog.append(
+            'warn',
+            'Planner',
+            forward.message ?? 'Go Forward skipped — no forward page in history',
+          )
+          return {
+            status: 'success',
+            activeTabId,
+            output: { navigated: false, skipped: true },
+          }
+        }
+        return { status: 'success', activeTabId, output: { navigated: true } }
       }
 
       case 'browser.close_tab': {
@@ -361,6 +398,22 @@ export async function executePlannerAction(args: {
         return { status: 'success', activeTabId }
       }
 
+      case 'downloads.click_download': {
+        activeTabId = await ensureTab(activeTabId)
+        if (!selector) {
+          throw new Error('Download Click needs a picked Download button — use Pick with mouse')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickOnce',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) {
+          throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        }
+        return { status: 'success', activeTabId }
+      }
+
       case 'mouse.click_exact': {
         activeTabId = await ensureTab(activeTabId)
         const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
@@ -377,6 +430,98 @@ export async function executePlannerAction(args: {
         if (!result.ok) {
           throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
         }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'mouse.click_text': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
+        if (!text && !selector) {
+          throw new Error('Provide text to find, or Pick with mouse on the target')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickByText',
+          text,
+          selector: selector || undefined,
+          timeoutMs: args.timeoutMs,
+          options: { matchMode: String(params.matchMode ?? 'contains') },
+        })
+        if (!result.ok) {
+          throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'mouse.click_aria': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? params.ariaLabel ?? '').trim()
+        if (!text && !selector) {
+          throw new Error('Provide aria-label, or Pick with mouse on the target')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickByAria',
+          text,
+          selector: selector || undefined,
+          timeoutMs: args.timeoutMs,
+          options: { matchMode: String(params.matchMode ?? 'exact') },
+        })
+        if (!result.ok) {
+          throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'mouse.click_button': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
+        if (!text && !selector) {
+          throw new Error('Provide button name, or Pick with mouse on the target')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickByButton',
+          text,
+          selector: selector || undefined,
+          timeoutMs: args.timeoutMs,
+          options: { matchMode: String(params.matchMode ?? 'contains') },
+        })
+        if (!result.ok) {
+          throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'mouse.click_link': {
+        activeTabId = await ensureTab(activeTabId)
+        const text = String(params.text ?? params.href ?? '').trim()
+        if (!text && !selector) {
+          throw new Error('Provide link text or href, or Pick with mouse on the target')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickByLink',
+          text,
+          selector: selector || undefined,
+          timeoutMs: args.timeoutMs,
+          options: { matchMode: String(params.matchMode ?? 'contains') },
+        })
+        if (!result.ok) {
+          throw Object.assign(new Error(result.error), { name: 'ElementNotFoundError' })
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'mouse.click_coordinates': {
+        activeTabId = await ensureTab(activeTabId)
+        const x = Number(params.x)
+        const y = Number(params.y)
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          throw new Error('Click Coordinates needs valid X and Y numbers')
+        }
+        const result = await runDom(activeTabId, {
+          action: 'clickAt',
+          timeoutMs: args.timeoutMs,
+          options: { x, y },
+        })
+        if (!result.ok) throw new Error(result.error)
         return { status: 'success', activeTabId, output: result.data }
       }
 
@@ -532,16 +677,29 @@ export async function executePlannerAction(args: {
         return { status: 'success', activeTabId }
       }
 
-      case 'keyboard.press_key': {
+      case 'keyboard.press_key':
+      case 'keyboard.shortcut': {
         activeTabId = await ensureTab(activeTabId)
+        const chordRaw =
+          params.keys ??
+          params.key ??
+          params.shortcut ??
+          (args.actionId === 'keyboard.shortcut' ? 'Control+Enter' : 'Enter')
+        const keys = Array.isArray(chordRaw)
+          ? chordRaw.map((k) => String(k))
+          : String(chordRaw)
+              .split('+')
+              .map((part) => part.trim())
+              .filter(Boolean)
         const result = await runDom(activeTabId, {
           action: 'pressKey',
-          selector,
-          key: String(params.key ?? 'Enter'),
+          selector: selector || undefined,
+          key: keys.join('+'),
           timeoutMs: args.timeoutMs,
+          options: { keys },
         })
         if (!result.ok) throw new Error(result.error)
-        return { status: 'success', activeTabId }
+        return { status: 'success', activeTabId, output: result.data }
       }
 
       case 'element.wait_visible':

@@ -198,22 +198,34 @@ export const ACTION_BN: Record<string, ActionLocaleEntry> = {
   'browser.go_back': {
     name: 'পিছনে যান',
     description: 'হিস্টরিতে আগের পেজে যায়',
-    tooltip: 'ব্রাউজারের Back বাটনের মতো।',
+    tooltip:
+      'ব্রাউজারের Back বাটনের মতো। আগের পেজ না থাকলে স্টেপ স্কিপ হয় ও রান চলতে থাকে (Fail if no history বন্ধ থাকলে)।',
     howto: [
       'পিছনে যান — এই অ্যাকশন ক্যানভাসে টেনে আনুন।',
-      'এক সবুজ ডট থেকে অন্য সবুজ ডটে টেনে স্টেপ কানেক্ট করুন।',
-      'ক্যানভাসে স্টেপে ক্লিক করে ডানদিকে অপশন এডিট করুন।',
+      'হিস্টরি না থাকলে ডিফল্টে স্কিপ — রান ফেল হবে না।',
+      'আসলেই Back লাগলে “Fail if no history” চালু করুন, অথবা Open URL ব্যবহার করুন।',
     ],
+    fields: {
+      failIfNoHistory: {
+        label: 'হিস্টরি না থাকলে ফেল',
+      },
+    },
   },
   'browser.go_forward': {
     name: 'সামনে যান',
     description: 'হিস্টরিতে পরের পেজে যায়',
-    tooltip: 'ব্রাউজারের Forward বাটনের মতো।',
+    tooltip:
+      'ব্রাউজারের Forward বাটনের মতো। ফরওয়ার্ড না থাকলে ডিফল্টে স্কিপ হয়।',
     howto: [
       'সামনে যান — এই অ্যাকশন ক্যানভাসে টেনে আনুন।',
-      'এক সবুজ ডট থেকে অন্য সবুজ ডটে টেনে স্টেপ কানেক্ট করুন।',
+      'ফরওয়ার্ড হিস্টরি না থাকলে ডিফল্টে স্কিপ।',
       'ক্যানভাসে স্টেপে ক্লিক করে ডানদিকে অপশন এডিট করুন।',
     ],
+    fields: {
+      failIfNoHistory: {
+        label: 'হিস্টরি না থাকলে ফেল',
+      },
+    },
   },
   'browser.handle_dialog': {
     name: 'ডায়ালগ হ্যান্ডেল',
@@ -592,6 +604,24 @@ export const ACTION_BN: Record<string, ActionLocaleEntry> = {
       },
       'outputKey': {
         label: 'ভ্যারিয়েবল হিসেবে সেভ',
+      },
+    },
+  },
+  'downloads.click_download': {
+    name: 'ডাউনলোড ক্লিক',
+    description: 'ডাউনলোড বাটনে ঠিক একবার ক্লিক — কোনো অবস্থাতেই ডাবল ক্লিক হয় না',
+    tooltip:
+      'মাউস দিয়ে পেজের Download বাটন pick করুন। শুধু একটি trusted click — কোনো retry/fallback নেই।',
+    howto: [
+      'ক্যানভাসে Download Click টেনে আনুন।',
+      'Pick with mouse দিয়ে আসল Download বাটন/লিংক বেছে নিন।',
+      'এই অ্যাকশন সবসময় একবারই click করে — দ্বিতীয় strategy কখনো চালায় না।',
+      'ডাউনলোড বাটন দেখা যাওয়ার পর রাখুন (লাগলে আগে Wait Until Visible)।',
+    ],
+    fields: {
+      selector: {
+        label: 'সিলেক্টর',
+        help: 'মাউস দিয়ে Download বাটন pick করুন — আবশ্যক',
       },
     },
   },
@@ -1042,16 +1072,18 @@ export const ACTION_BN: Record<string, ActionLocaleEntry> = {
   },
   'keyboard.press_key': {
     name: 'কী চাপুন',
-    description: 'একটি কী চাপে',
-    tooltip: 'একটি কীবোর্ড কী পাঠায় (যেমন Enter)।',
+    description: 'পূর্ণ কীবোর্ড লিস্ট থেকে যেকোনো কী চাপে (Enter, Esc, অক্ষর, F-keys…)',
+    tooltip:
+      'লিস্ট থেকে কী বেছে নিন। Ctrl/Alt/Shift/Win যোগ করে Ctrl+Enter এর মতো কর্ড বানান। ক্যানভাসে কীক্যাপ দেখায়।',
     howto: [
-      'কী চাপুন — এই অ্যাকশন ক্যানভাসে টেনে আনুন।',
-      'এক সবুজ ডট থেকে অন্য সবুজ ডটে টেনে স্টেপ কানেক্ট করুন।',
-      'ক্যানভাসে স্টেপে ক্লিক করে ডানদিকে অপশন এডিট করুন।',
+      'Press Key খুলে লিস্ট থেকে কী বেছে নিন (সার্চ করা যায়)।',
+      'কম্বোর জন্য মডিফায়ার (Ctrl/Alt/Shift) + একটি মেইন কী সিলেক্ট করুন।',
+      'চাইলে আগে পেজ এলিমেন্ট Pick করে ফোকাস করুন।',
     ],
     fields: {
-      'key': {
-        label: 'কী',
+      key: {
+        label: 'কী / কর্ড',
+        help: 'Enter বা Control+Enter হিসেবে সেভ হয়',
       },
     },
   },
@@ -1067,12 +1099,11 @@ export const ACTION_BN: Record<string, ActionLocaleEntry> = {
   },
   'keyboard.shortcut': {
     name: 'শর্টকাট কী',
-    description: 'কী কম্বিনেশন চাপে',
-    tooltip: 'যেমন Control+Enter।',
+    description: '২–৩টি কী একসাথে চাপে (Ctrl+C, Ctrl+Shift+Enter…)',
+    tooltip: 'Press Key এর মতোই পিকার — মাল্টি-কী কর্ডের জন্য। ক্যানভাসে কীক্যাপ দেখায়।',
     howto: [
-      'শর্টকাট কী — এই অ্যাকশন ক্যানভাসে টেনে আনুন।',
-      'এক সবুজ ডট থেকে অন্য সবুজ ডটে টেনে স্টেপ কানেক্ট করুন।',
-      'ক্যানভাসে স্টেপে ক্লিক করে ডানদিকে অপশন এডিট করুন।',
+      'মডিফায়ার + একটি মেইন কী লিস্ট থেকে বেছে নিন।',
+      'উদাহরণ: Ctrl + C, Ctrl + Enter, Alt + Tab।',
     ],
     fields: {
       'shortcut': {
@@ -1280,22 +1311,72 @@ export const ACTION_BN: Record<string, ActionLocaleEntry> = {
       },
     },
   },
-  'mouse.click_coordinates': {
-    name: 'কোঅর্ডিনেটে ক্লিক',
-    description: 'x/y কোঅর্ডিনেটে ক্লিক করে',
-    tooltip: 'স্ক্রিনের নির্দিষ্ট পয়েন্টে ক্লিক করে।',
+  'mouse.click_text': {
+    name: 'টেক্সট দিয়ে ক্লিক',
+    description: 'পেজে দেখা টেক্সট খুঁজে সেই এলিমেন্টে ক্লিক করে (contains বা exact)',
+    tooltip: 'টেক্সট/লেবেল খুঁজে Click এর মতোই ইউনিভার্সাল ক্লিক চালায়।',
     howto: [
-      'কোঅর্ডিনেটে ক্লিক — এই অ্যাকশন ক্যানভাসে টেনে আনুন।',
-      'এক সবুজ ডট থেকে অন্য সবুজ ডটে টেনে স্টেপ কানেক্ট করুন।',
-      'ক্যানভাসে স্টেপে ক্লিক করে ডানদিকে অপশন এডিট করুন।',
+      'ক্যানভাসে Click by Text টেনে আনুন।',
+      'কন্ট্রোলে দেখা টেক্সট টাইপ করুন (যেমন Auto, Generate)।',
+      'Contains (ডিফল্ট) বা Exact ম্যাচ মোড বেছে নিন।',
+      'চাইলে Pick with mouse দিয়ে টেক্সট অটো ভরুন।',
     ],
     fields: {
-      'x': {
-        label: 'X',
-      },
-      'y': {
-        label: 'স্ক্রল Y',
-      },
+      text: { label: 'যে টেক্সট খুঁজবে', placeholder: 'Generate' },
+      matchMode: { label: 'ম্যাচ মোড' },
+      selector: { label: 'সিলেক্টর', help: 'অপশনাল — মাউস দিয়ে পিক' },
+    },
+  },
+  'mouse.click_aria': {
+    name: 'অ্যারিয়া লেবেল দিয়ে ক্লিক',
+    description: 'aria-label দিয়ে কন্ট্রোলে ক্লিক (Go back এর মতো আইকন বাটনের জন্য ভালো)',
+    tooltip: 'aria-label / title ব্যবহার করে। Click এর মতোই ইউনিভার্সাল ক্লিক।',
+    howto: [
+      'আইকন-অনলি কন্ট্রোলের জন্য ব্যবহার করুন যাদের aria-label আছে।',
+      'লেবেল টাইপ করুন বা Pick with mouse করুন।',
+    ],
+    fields: {
+      text: { label: 'অ্যারিয়া লেবেল', placeholder: 'Go back' },
+      matchMode: { label: 'ম্যাচ মোড' },
+    },
+  },
+  'mouse.click_button': {
+    name: 'নাম দিয়ে বাটন ক্লিক',
+    description: 'বাটন-লাইক কন্ট্রোলের ভিজিবল নাম দিয়ে ক্লিক করে',
+    tooltip: 'শুধু button / combobox / role=button স্টাইল। Click এর মতোই ক্লিক।',
+    howto: [
+      'বাটনের নাম টাইপ করুন (Send, Continue, Prompt Enhance…)।',
+      'ডিফল্ট Contains — লাগলে Exact বেছে নিন।',
+    ],
+    fields: {
+      text: { label: 'বাটনের নাম', placeholder: 'Continue' },
+      matchMode: { label: 'ম্যাচ মোড' },
+    },
+  },
+  'mouse.click_link': {
+    name: 'লিংক ক্লিক',
+    description: 'ভিজিবল টেক্সট বা href অংশ দিয়ে লিংকে ক্লিক করে',
+    tooltip: '<a> / role=link খুঁজে ইউনিভার্সাল ক্লিক করে।',
+    howto: [
+      'লিংকের টেক্সট (Library) বা URL অংশ (/image) দিন।',
+      'ম্যাচ মোড টেক্সট ও href দুটোতেই লাগে।',
+    ],
+    fields: {
+      text: { label: 'লিংক টেক্সট বা href', placeholder: 'Library' },
+      matchMode: { label: 'ম্যাচ মোড' },
+    },
+  },
+  'mouse.click_coordinates': {
+    name: 'কোঅর্ডিনেটে ক্লিক',
+    description: 'x/y ভিউপোর্ট কোঅর্ডিনেটে ক্লিক (ইউনিভার্সাল ক্লিক ইঞ্জিন)',
+    tooltip: 'স্ক্রিনের নির্দিষ্ট পয়েন্টে ক্লিক করে। নিচে এলিমেন্ট থাকলে সেটাতে promote করে।',
+    howto: [
+      'X ও Y দিন (ভিউপোর্ট পিক্সেল)।',
+      'পয়েন্টের নিচে কন্ট্রোল থাকলে সেই host-এ ক্লিক হয়।',
+    ],
+    fields: {
+      x: { label: 'X' },
+      y: { label: 'Y' },
     },
   },
   'mouse.double_click': {
