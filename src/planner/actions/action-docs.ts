@@ -92,12 +92,24 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Waits until the AI finishes generating (Stop button disappears).',
     'Place it after Send, before Collect JSON Parts or Repeat If More Titles.',
   ],
+  'clipboard.click_to_clipboard': [
+    'Pick a page Copy button, then at runtime click it and keep the text on the clipboard.',
+    'Also saves into {{clipboardText}} and __clipboard for later steps.',
+    'Does not write to Copy Store — use Copy Event when you need story-1, story-2… names.',
+  ],
   'clipboard.copy_event': [
     'One event for the full copy pipeline — pick, click, capture, name, format, store.',
     'Use “Pick Copy button” and click the real Copy control on the page.',
     'Default source: click that button → read clipboard → save as story-{_NumberAuto}.',
     'Later steps can use {{COPY:story-1}} (and COPY_NAME / COPY_NUMBER).',
     'Other modes: extract text from an element, or paste {{aiResponse}} manually.',
+  ],
+  'loops.map': [
+    'Four handles: in (start), loop (body), return (next item), completed (done).',
+    'In Properties: Section dropdown (Text libraries / Copy Store) → then pick the list inside.',
+    'Wire: previous → in; loop → body; last body step → return; completed → after-loop steps.',
+    'Inside the body use {{item}} and {{index}}.',
+    'Break inside the body skips remaining items and exits via completed.',
   ],
   'ai.collect_json_parts': [
     'Place after Wait Response.',
@@ -191,8 +203,12 @@ const EXTRA_TOOLTIP: Record<string, string> = {
   'keyboard.shortcut': 'Press multiple keys together — same picker, chord-focused.',
   'ai.click_send': 'Clicks the chat Send button.',
   'ai.wait_response': 'Waits until ChatGPT finishes answering.',
+  'clipboard.click_to_clipboard':
+    'Click a Copy button and keep the result on the clipboard ({{clipboardText}}).',
   'clipboard.copy_event':
     'Pick Copy button → click → save to Copy Store (story-1, story-2…) in one step.',
+  'loops.map':
+    'Pick Text libraries or Copy Store from nested dropdowns; loop / return / completed handles.',
   'ai.collect_json_parts':
     'If OUTPUT_LIMIT_REACHED, collects Part 1…N into one complete JSON and downloads it.',
   'flow.repeat_if_more': 'If more library titles remain, jump back and run again.',

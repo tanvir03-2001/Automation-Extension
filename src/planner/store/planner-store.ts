@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import type {
   AutomationPlan,
   ExecutionCheckpoint,
+  PlanDatasetKind,
   PlanTextLibrary,
   PlannerEdge,
   PlannerNode,
@@ -11,6 +12,15 @@ import type {
 } from '@/planner/types/plan'
 import { getActionById } from '@/planner/actions/catalog'
 import { parseNumberedTextList } from '@/planner/engine/text-library'
+import {
+  createEmptyDataset,
+  findDatasetNameConflict,
+  isValidDatasetName,
+  normalizePlanData,
+  removeDatasetById,
+  syncTextLibrariesFromDatasets,
+  upsertDatasetFromTextLibrary,
+} from '@/planner/engine/dataset-utils'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { clearDurableWorkflowStore } from '@/engine/copy-store/durable'
 import {
@@ -87,6 +97,31 @@ interface PlannerState {
     args: { id?: string; name: string; rawText: string },
   ) => string
   deleteTextLibrary: (planId: string, libraryId: string) => void
+  createCustomSection: (
+    planId: string,
+    args: { title: string; description?: string },
+  ) => string
+  updateCustomSectionMeta: (
+    planId: string,
+    sectionId: string,
+    patch: { title?: string; description?: string },
+  ) => void
+  updateCustomSectionData: (planId: string, sectionId: string, data: unknown) => void
+  deleteCustomSection: (planId: string, sectionId: string) => void
+  /** Dynamic Dataset manager */
+  createDataset: (
+    planId: string,
+    args: { name: string; description?: string; kind?: PlanDatasetKind },
+  ) => string
+  updateDatasetMeta: (
+    planId: string,
+    datasetId: string,
+    patch: { name?: string; description?: string },
+  ) => void
+  updateDatasetData: (planId: string, datasetId: string, data: unknown) => void
+  deleteDataset: (planId: string, datasetId: string) => void
+  /** Live unique-name check for Dataset manager (while typing). */
+  isDatasetNameAvailable: (planId: string, name: string, excludeId?: string) => boolean
   persist: () => Promise<void>
 
   exportWorkspacePayload: () => AnyExportPayload
@@ -140,10 +175,7 @@ export const usePlannerStore = create<PlannerState>()(
 
       hydrate: async () => {
         const data = await loadWorkspace()
-        const plans = (data.plans ?? []).map((plan) => ({
-          ...plan,
-          textLibraries: plan.textLibraries ?? [],
-        }))
+        const plans = (data.plans ?? []).map((plan) => normalizePlanData(plan))
         const locale = data.locale === 'bn' ? 'bn' : 'en'
         set({
           plans,
@@ -198,6 +230,8 @@ export const usePlannerStore = create<PlannerState>()(
           tags: [],
           workflowIds: [workflowId],
           textLibraries: [],
+          customSections: [],
+          datasets: [],
           createdAt: now,
           updatedAt: now,
         }
@@ -489,11 +523,14 @@ export const usePlannerStore = create<PlannerState>()(
             if (plan.id !== planId) return plan
             const libs = plan.textLibraries ?? []
             const exists = libs.some((item) => item.id === libraryId)
+            const textLibraries = exists
+              ? libs.map((item) => (item.id === libraryId ? library : item))
+              : [...libs, library]
+            const datasets = upsertDatasetFromTextLibrary(plan.datasets ?? [], library)
             return {
               ...plan,
-              textLibraries: exists
-                ? libs.map((item) => (item.id === libraryId ? library : item))
-                : [...libs, library],
+              textLibraries,
+              datasets,
               updatedAt: now,
             }
           }),
@@ -511,9 +548,159 @@ export const usePlannerStore = create<PlannerState>()(
               : {
                   ...plan,
                   textLibraries: (plan.textLibraries ?? []).filter((lib) => lib.id !== libraryId),
+                  datasets: removeDatasetById(plan.datasets ?? [], libraryId),
                   updatedAt: new Date().toISOString(),
                 },
           ),
+        }))
+        void get().persist()
+      },
+
+      createCustomSection: (planId, args) => {
+        // Legacy API → create a Dataset (keeps old callers working)
+        return get().createDataset(planId, {
+          name: args.title,
+          description: args.description,
+          kind: 'legacyCustomSection',
+        })
+      },
+
+      updateCustomSectionMeta: (planId, sectionId, patch) => {
+        get().updateDatasetMeta(planId, sectionId, {
+          name: patch.title,
+          description: patch.description,
+        })
+      },
+
+      updateCustomSectionData: (planId, sectionId, data) => {
+        get().updateDatasetData(planId, sectionId, data)
+      },
+
+      deleteCustomSection: (planId, sectionId) => {
+        get().deleteDataset(planId, sectionId)
+      },
+
+      isDatasetNameAvailable: (planId, name, excludeId) => {
+        if (!isValidDatasetName(name)) return false
+        const plan = get().plans.find((item) => item.id === planId)
+        if (!plan) return true
+        return !findDatasetNameConflict(plan.datasets ?? [], name, excludeId)
+      },
+
+      createDataset: (planId, args) => {
+        const now = new Date().toISOString()
+        if (!isValidDatasetName(args.name)) {
+          throw new Error('Dataset name is required')
+        }
+        const plan = get().plans.find((item) => item.id === planId)
+        if (!plan) throw new Error('Workflow not found')
+        if (findDatasetNameConflict(plan.datasets ?? [], args.name)) {
+          throw new Error('Dataset name already exists')
+        }
+        const dataset = createEmptyDataset({
+          name: args.name,
+          description: args.description,
+          kind: args.kind ?? 'custom',
+        })
+        dataset.updatedAt = now
+
+        set((state) => ({
+          dirty: true,
+          plans: state.plans.map((item) => {
+            if (item.id !== planId) return item
+            const datasets = [...(item.datasets ?? []), dataset]
+            const textLibraries =
+              dataset.kind === 'textLibrary'
+                ? syncTextLibrariesFromDatasets(datasets, item.textLibraries ?? [])
+                : item.textLibraries ?? []
+            return {
+              ...item,
+              datasets,
+              textLibraries,
+              updatedAt: now,
+            }
+          }),
+        }))
+        void get().persist()
+        return dataset.id
+      },
+
+      updateDatasetMeta: (planId, datasetId, patch) => {
+        const now = new Date().toISOString()
+        const plan = get().plans.find((item) => item.id === planId)
+        if (!plan) return
+        if (patch.name !== undefined) {
+          if (!isValidDatasetName(patch.name)) throw new Error('Dataset name is required')
+          if (findDatasetNameConflict(plan.datasets ?? [], patch.name, datasetId)) {
+            throw new Error('Dataset name already exists')
+          }
+        }
+        set((state) => ({
+          dirty: true,
+          plans: state.plans.map((item) => {
+            if (item.id !== planId) return item
+            const datasets = (item.datasets ?? []).map((dataset) =>
+              dataset.id !== datasetId
+                ? dataset
+                : {
+                    ...dataset,
+                    name:
+                      patch.name !== undefined
+                        ? patch.name.trim() || dataset.name
+                        : dataset.name,
+                    description:
+                      patch.description !== undefined
+                        ? patch.description.trim() || undefined
+                        : dataset.description,
+                    updatedAt: now,
+                  },
+            )
+            return {
+              ...item,
+              datasets,
+              textLibraries: syncTextLibrariesFromDatasets(datasets, item.textLibraries ?? []),
+              updatedAt: now,
+            }
+          }),
+        }))
+        void get().persist()
+      },
+
+      updateDatasetData: (planId, datasetId, data) => {
+        const now = new Date().toISOString()
+        set((state) => ({
+          dirty: true,
+          plans: state.plans.map((item) => {
+            if (item.id !== planId) return item
+            const datasets = (item.datasets ?? []).map((dataset) =>
+              dataset.id !== datasetId ? dataset : { ...dataset, data, updatedAt: now },
+            )
+            return {
+              ...item,
+              datasets,
+              textLibraries: syncTextLibrariesFromDatasets(datasets, item.textLibraries ?? []),
+              updatedAt: now,
+            }
+          }),
+        }))
+        void get().persist()
+      },
+
+      deleteDataset: (planId, datasetId) => {
+        const now = new Date().toISOString()
+        set((state) => ({
+          dirty: true,
+          plans: state.plans.map((item) => {
+            if (item.id !== planId) return item
+            const datasets = removeDatasetById(item.datasets ?? [], datasetId)
+            return {
+              ...item,
+              datasets,
+              textLibraries: syncTextLibrariesFromDatasets(datasets, item.textLibraries ?? []),
+              customSections: (item.customSections ?? []).filter((section) => section.id !== datasetId),
+              updatedAt: now,
+            }
+          }),
         }))
         void get().persist()
       },
@@ -789,13 +976,14 @@ export const usePlannerStore = create<PlannerState>()(
 
         if (payload.kind === 'workspace') {
           if (mode === 'replace') {
+            const plans = payload.plans.map((plan) => normalizePlanData(plan))
             set({
-              plans: payload.plans,
+              plans,
               workflows: payload.workflows,
               favoriteActionIds: payload.favorites ?? get().favoriteActionIds,
               theme: payload.theme ?? get().theme,
               locale: payload.locale === 'bn' ? 'bn' : payload.locale === 'en' ? 'en' : get().locale,
-              selectedPlanId: payload.plans[0]?.id ?? null,
+              selectedPlanId: plans[0]?.id ?? null,
               selectedWorkflowId: payload.workflows[0]?.id ?? null,
               dirty: true,
               graphRevision: get().graphRevision + 1,

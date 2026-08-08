@@ -1081,6 +1081,70 @@ const conditionActions: ActionDefinition[] = [
 
 const loopActions: ActionDefinition[] = [
   def({
+    id: 'loops.map',
+    name: 'Map',
+    category: 'loops',
+    description:
+      'Iterate an array: Loop out processes each item, Loop return advances to the next, Completed runs when finished (or after Break).',
+    tooltip:
+      'Pick Text libraries or Copy Store → choose a list → Loop out → body → return → next; Completed when done. Break → Completed.',
+    howto: [
+      'Drag Map onto the canvas.',
+      'In Properties, pick Section (Text libraries or Copy Store), then pick the list inside it — no typing.',
+      'Connect the previous step into Map’s left “in” (execution) handle.',
+      'Connect Map’s “loop” output into the first step of the body; use {{item}} / {{index}} inside the body.',
+      'Connect the last body step back into Map’s “return” handle (not “in”).',
+      'Connect Map’s “completed” output to the step that should run after the whole list.',
+      'Optional: place Break inside the body to skip remaining items and go to Completed immediately.',
+    ],
+    icon: 'Waypoints',
+    controlFlow: true,
+    favoriteDefault: true,
+    fields: [
+      // Managed by MapArrayFields (nested Section → list dropdowns)
+      {
+        key: 'collectionSource',
+        label: 'Section',
+        type: 'string',
+        required: true,
+        help: 'Text libraries or Copy Store (and future workflow sections)',
+      },
+      {
+        key: 'collectionRef',
+        label: 'List',
+        type: 'string',
+        required: true,
+        help: 'Library or Copy Store entry selected from the second dropdown',
+      },
+      {
+        key: 'collectionPath',
+        label: 'Nested path',
+        type: 'string',
+        help: 'Optional deep path inside the selected JSON (Copy Store / nested lists)',
+      },
+      {
+        key: 'collectionKey',
+        label: 'Array variable',
+        type: 'string',
+        help: 'Legacy / display mirror — set automatically by the picker',
+      },
+      {
+        key: 'itemVariable',
+        label: 'Item variable',
+        type: 'string',
+        defaultValue: 'item',
+        help: 'Each element is written here (use {{item}} in later steps)',
+      },
+      {
+        key: 'indexVariable',
+        label: 'Index variable',
+        type: 'string',
+        defaultValue: 'index',
+        help: '0-based index for the current item (use {{index}})',
+      },
+    ],
+  }),
+  def({
     id: 'loops.for',
     name: 'For',
     category: 'loops',
@@ -1120,11 +1184,37 @@ const loopActions: ActionDefinition[] = [
     id: 'loops.foreach',
     name: 'ForEach',
     category: 'loops',
-    description: 'Loop over an array variable',
+    description:
+      'Loop over a Dataset (or array variable). Prefer Dataset selector — data is referenced, not copied.',
+    tooltip: 'Pick a Dataset / Text library / Copy Store list, or use a variable name',
     icon: 'ListTree',
     controlFlow: true,
     fields: [
-      { key: 'collectionKey', label: 'Collection variable', type: 'string', required: true },
+      {
+        key: 'collectionSource',
+        label: 'Section',
+        type: 'string',
+        help: 'Dataset or built-in section (same picker as Map)',
+      },
+      {
+        key: 'collectionRef',
+        label: 'List',
+        type: 'string',
+        help: 'List inside the selected Dataset / section',
+      },
+      {
+        key: 'collectionPath',
+        label: 'Nested path',
+        type: 'string',
+        help: 'Optional deep path inside Copy Store / nested JSON',
+      },
+      {
+        key: 'collectionKey',
+        label: 'Collection variable (legacy)',
+        type: 'string',
+        required: false,
+        help: 'Optional variable name if not using Dataset selector',
+      },
       { key: 'itemVariable', label: 'Item variable', type: 'string', defaultValue: 'item' },
     ],
   }),
@@ -1132,7 +1222,9 @@ const loopActions: ActionDefinition[] = [
     id: 'loops.break',
     name: 'Break',
     category: 'loops',
-    description: 'Break out of the current loop',
+    description: 'Break out of the current Map loop (skips remaining items → Completed)',
+    tooltip:
+      'Place inside a Map body. Stops the current iteration immediately, skips the rest of the array, and continues from Map’s Completed output.',
     icon: 'CircleStop',
     controlFlow: true,
   }),
@@ -1638,6 +1730,48 @@ const downloadActions: ActionDefinition[] = [
 ]
 
 const clipboardActions: ActionDefinition[] = [
+  def({
+    id: 'clipboard.click_to_clipboard',
+    name: 'Click to Clipboard',
+    category: 'clipboard',
+    description:
+      'Click a page Copy button and keep the result on the clipboard (also mirrored as {{clipboardText}} / __clipboard).',
+    tooltip: 'Pick Copy button → click → text stays on clipboard for paste / later steps',
+    howto: [
+      'Drag Click to Clipboard onto the canvas.',
+      'Use “Pick Copy button” and click the real Copy control on the page.',
+      'At runtime the workflow clicks that button, waits briefly, then reads the clipboard.',
+      'The captured text is kept on the OS clipboard and in {{clipboardText}} / __clipboard.',
+      'Need Copy Store names (story-1…)? Use Copy Event instead.',
+    ],
+    icon: 'ClipboardCopy',
+    favoriteDefault: true,
+    supportsSelector: true,
+    fields: [
+      {
+        ...selectorField,
+        key: 'selector',
+        label: 'Copy button selector',
+        required: true,
+        placeholder: 'Pick the Copy button with mouse',
+        help: 'Use Pick Copy button — required',
+      },
+      {
+        key: 'clickDelayMs',
+        label: 'Wait after click (ms)',
+        type: 'number',
+        defaultValue: 250,
+        help: 'Delay before reading clipboard after clicking Copy',
+      },
+      {
+        key: 'outputKey',
+        label: 'Save as variable',
+        type: 'string',
+        defaultValue: 'clipboardText',
+        help: 'Run variable for the captured text (also always sets __clipboard)',
+      },
+    ],
+  }),
   def({
     id: 'clipboard.copy_event',
     name: 'Copy Event',

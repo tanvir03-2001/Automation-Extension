@@ -7,6 +7,12 @@ import { executePlannerAction } from '@/planner/engine/action-executor'
 import { resetWorkflowQueueCursors } from '@/planner/engine/text-library'
 import { copyStore } from '@/engine/copy-store'
 import { loadDurableWorkflowStore } from '@/engine/copy-store/durable'
+import {
+  MAP_BREAK_BRANCH,
+  MAP_ENTRY_HANDLE_KEY,
+  MAP_STACK_KEY,
+  readMapStack,
+} from '@/planner/engine/map-loop'
 import type {
   ExecutionCheckpoint,
   PlannerEdge,
@@ -364,9 +370,39 @@ export class PlannerRunner {
               break
             }
 
+            // Map Break: leave innermost Map immediately via its “completed” edge
+            if (result.branch === MAP_BREAK_BRANCH) {
+              this.pushHistory(node.id, 'success', undefined, result.output)
+              const stack = readMapStack(this.checkpoint.variables)
+              const frame = stack[stack.length - 1]
+              if (!frame) {
+                this.pushHistory(node.id, 'failed', 'Break: no active Map loop')
+                this.checkpoint.status = 'failed'
+                await this.persist()
+                return
+              }
+              const nextStack = stack.slice(0, -1)
+              this.checkpoint.variables[MAP_STACK_KEY] = nextStack
+              delete this.checkpoint.variables[frame.itemVariable]
+              delete this.checkpoint.variables[frame.indexVariable]
+              delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
+              this.checkpoint.loopCounts[frame.nodeId] = frame.items.length
+              this.checkpoint.previousNodeId = node.id
+              const completed = outgoing(workflow.edges, frame.nodeId, 'completed')
+              this.checkpoint.currentNodeId = completed[0]?.target ?? null
+              done = true
+              break
+            }
+
             this.pushHistory(node.id, 'success', undefined, result.output)
 
+            if (node.data.actionId === 'loops.map' && result.branch === 'loop') {
+              const idx = Number((result.output as { index?: number } | undefined)?.index)
+              this.checkpoint.loopCounts[node.id] = Number.isFinite(idx) ? idx + 1 : 1
+            }
+
             if (result.nextNodeId === null) {
+              delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
               this.checkpoint.currentNodeId = null
               this.checkpoint.status = 'completed'
               await this.persist()
@@ -386,6 +422,7 @@ export class PlannerRunner {
                 await this.persist()
                 return
               }
+              delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
               this.checkpoint.previousNodeId = node.id
               this.checkpoint.currentNodeId = resolved
             } else if (result.branch === 'nested' && result.output) {
@@ -395,6 +432,7 @@ export class PlannerRunner {
               // Save return pointer then jump into nested start
               this.checkpoint.temporaryVariables.__returnWorkflowId = workflow.id
               this.checkpoint.temporaryVariables.__returnNodeId = outgoing(workflow.edges, node.id)[0]?.target
+              delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
               this.checkpoint.workflowId = nested.id
               copyStore.syncActiveCopyStoreMirror(this.checkpoint.variables, nested.id)
               this.checkpoint.previousNodeId = node.id
@@ -547,9 +585,18 @@ export class PlannerRunner {
     const edges = branch
       ? outgoing(workflow.edges, nodeId, branch)
       : outgoing(workflow.edges, nodeId)
-    const next = edges[0]?.target ?? null
+    const edge = edges[0]
+    const next = edge?.target ?? null
     this.checkpoint.previousNodeId = nodeId
     this.checkpoint.currentNodeId = next
+
+    // Multi-target nodes (Map): remember which target handle the next node was entered through
+    const entryHandle = edge?.targetHandle
+    if (entryHandle) {
+      this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY] = entryHandle
+    } else {
+      delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
+    }
 
     if (
       next == null &&
@@ -561,6 +608,7 @@ export class PlannerRunner {
       copyStore.syncActiveCopyStoreMirror(this.checkpoint.variables, this.checkpoint.workflowId)
       delete this.checkpoint.temporaryVariables.__returnWorkflowId
       delete this.checkpoint.temporaryVariables.__returnNodeId
+      delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
     }
   }
 

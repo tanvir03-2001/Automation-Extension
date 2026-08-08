@@ -127,6 +127,35 @@ export interface PlanTextLibrary {
   updatedAt: string
 }
 
+/**
+ * User-defined top-level JSON section on a Workflow (AutomationPlan).
+ * Legacy — migrated into `datasets` on hydrate; kept for import compatibility.
+ */
+export interface PlanCustomSection {
+  id: string
+  title: string
+  description?: string
+  data: unknown
+  updatedAt: string
+}
+
+/** Dataset kinds — custom JSON, or dual-written text list for TypeText. */
+export type PlanDatasetKind = 'custom' | 'textLibrary' | 'legacyCustomSection'
+
+/**
+ * Dynamic Dataset on a Workflow (AutomationPlan).
+ * Events reference datasets by id (no data copy). Names must be unique per plan.
+ */
+export interface PlanDataset {
+  id: string
+  name: string
+  description?: string
+  /** Arbitrary nested JSON — no fixed property names */
+  data: unknown
+  kind: PlanDatasetKind
+  updatedAt: string
+}
+
 export interface AutomationPlan {
   id: string
   name: string
@@ -134,8 +163,12 @@ export interface AutomationPlan {
   color?: string
   tags: string[]
   workflowIds: string[]
-  /** Shared text lists for Type Text (story titles, prompts, etc.) */
+  /** Shared text lists for TypeText (story titles, prompts, etc.) — dual-written from datasets */
   textLibraries: PlanTextLibrary[]
+  /** @deprecated Prefer `datasets`. Kept for older exports / migration. */
+  customSections: PlanCustomSection[]
+  /** Canonical dynamic Dataset manager store */
+  datasets: PlanDataset[]
   createdAt: string
   updatedAt: string
 }

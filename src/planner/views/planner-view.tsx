@@ -11,8 +11,7 @@ import { PropertyInspector } from '@/planner/components/property-inspector'
 import { ActionDocsDrawer } from '@/planner/components/action-docs-drawer'
 import { BuilderToolbar } from '@/planner/components/builder-toolbar'
 import { ImportExportMenu } from '@/planner/components/import-export-menu'
-import { TextLibrariesPanel } from '@/planner/components/text-libraries-panel'
-import { CopyStorePanel } from '@/planner/components/copy-store-panel'
+import { DatasetManagerPanel } from '@/planner/components/dataset-manager-panel'
 import { RunLogPanel } from '@/planner/components/run-log-panel'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { ACTION_LIBRARY } from '@/planner/actions/catalog'
@@ -525,9 +524,7 @@ export function PlannerView() {
             )}
           </div>
 
-          <TextLibrariesPanel planId={selectedPlanId} />
-
-          <CopyStorePanel workflowId={selectedWorkflowId} />
+          <DatasetManagerPanel planId={selectedPlanId} />
 
           <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
             <p className="font-display text-lg font-semibold">{t('planner.actionLibrary')}</p>

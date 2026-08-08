@@ -242,7 +242,8 @@ function CanvasInner() {
           (edge) =>
             edge.source === connection.source &&
             edge.target === connection.target &&
-            (edge.sourceHandle ?? 'out') === (connection.sourceHandle ?? 'out'),
+            (edge.sourceHandle ?? 'out') === (connection.sourceHandle ?? 'out') &&
+            (edge.targetHandle ?? '') === (connection.targetHandle ?? ''),
         )
         if (duplicate) return current
 
@@ -251,6 +252,7 @@ function CanvasInner() {
             ...connection,
             id: `e_${connection.source}_${connection.target}_${Date.now()}`,
             sourceHandle: connection.sourceHandle ?? 'out',
+            targetHandle: connection.targetHandle ?? undefined,
             ...defaultPlannerEdgeOptions,
           },
           current,

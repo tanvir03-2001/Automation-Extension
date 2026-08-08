@@ -54,6 +54,24 @@ export type AnyExportPayload =
   | SnippetPayload
   | LegacyWorkflowPayload
 
+/**
+ * Build a safe download filename from a display name.
+ * Example: "ChatGPT Story Titles Batch" → "ChatGPT-Story-Titles-Batch.json"
+ */
+export function safeDownloadName(name: string, fallback = 'export'): string {
+  const cleaned = String(name ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s.-]+/g, '')
+    .trim()
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+  const base = cleaned || fallback
+  return base.toLowerCase().endsWith('.json') ? base : `${base}.json`
+}
+
 export function downloadJson(filename: string, data: unknown): void {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -310,6 +328,8 @@ export function remapPlanBundle(
       name: `${plan.name} (imported)`,
       workflowIds: remapped.map((wf) => wf.id),
       textLibraries: plan.textLibraries ?? [],
+      customSections: plan.customSections ?? [],
+      datasets: plan.datasets ?? [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },

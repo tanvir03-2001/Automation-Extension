@@ -69,6 +69,7 @@ export const ActionFlowNode = memo(function ActionFlowNode({
   const isIfBranch =
     data.actionId === 'conditions.if' || data.actionId === 'element.if_visible'
   const isSwitch = data.actionId === 'conditions.switch'
+  const isMap = data.actionId === 'loops.map'
   const switchCases = String(data.params?.cases ?? '')
     .split(',')
     .map((item) => item.trim())
@@ -90,11 +91,11 @@ export const ActionFlowNode = memo(function ActionFlowNode({
   const isActive = runVisual === 'running' || runVisual === 'paused' || runVisual === 'waiting'
   const badge = runVisual === 'idle' ? null : RUN_BADGE[runVisual]
 
-  // Re-measure when connector title changes so handles track content size
+  // Re-measure when connector title / map handles change so RF tracks layout
   useEffect(() => {
-    if (!isConnector) return
+    if (!isConnector && !isMap) return
     updateNodeInternals(id)
-  }, [displayLabel, id, isConnector, updateNodeInternals])
+  }, [displayLabel, id, isConnector, isMap, updateNodeInternals])
 
   return (
     <div
@@ -137,13 +138,34 @@ export const ActionFlowNode = memo(function ActionFlowNode({
         </div>
       ) : null}
 
-      {!isStart && (
+      {!isStart && !isMap && (
         <Handle
           type="target"
           position={Position.Left}
           className="!-left-1.5 !h-3 !w-3 !border-2 !border-card !bg-slate-400"
         />
       )}
+
+      {isMap ? (
+        <>
+          <Handle
+            id="in"
+            type="target"
+            position={Position.Left}
+            style={{ top: '32%' }}
+            className="!-left-1.5 !h-3 !w-3 !border-2 !border-card !bg-slate-400"
+            title="Execution in"
+          />
+          <Handle
+            id="return"
+            type="target"
+            position={Position.Left}
+            style={{ top: '72%' }}
+            className="!-left-1.5 !h-3 !w-3 !border-2 !border-card !bg-amber-500"
+            title="Loop return"
+          />
+        </>
+      ) : null}
 
       {isConnector ? (
         <div className="flex w-max max-w-full items-center gap-3 px-4 pb-4 pt-5">
@@ -288,6 +310,31 @@ export const ActionFlowNode = memo(function ActionFlowNode({
                 {branch}
               </span>
             ))}
+          </div>
+        </>
+      ) : isMap ? (
+        <>
+          <Handle
+            id="loop"
+            type="source"
+            position={Position.Right}
+            style={{ top: '32%' }}
+            className="!-right-1.5 !h-3 !w-3 !border-2 !border-card !bg-orange-500"
+            title="Loop out"
+          />
+          <Handle
+            id="completed"
+            type="source"
+            position={Position.Right}
+            style={{ top: '72%' }}
+            className="!-right-1.5 !h-3 !w-3 !border-2 !border-card !bg-emerald-500"
+            title="Completed"
+          />
+          <div className="grid grid-cols-2 gap-x-2 border-t border-border px-3 py-1.5 text-[10px] font-medium text-muted-foreground">
+            <span className="text-slate-500">in</span>
+            <span className="text-right text-orange-500">loop</span>
+            <span className="text-amber-500">return</span>
+            <span className="text-right text-emerald-500">completed</span>
           </div>
         </>
       ) : !isEnd ? (

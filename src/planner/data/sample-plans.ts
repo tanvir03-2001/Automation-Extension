@@ -33,6 +33,8 @@ export const samplePlans: AutomationPlan[] = [
         ],
       },
     ],
+    customSections: [],
+    datasets: [],
     createdAt: now,
     updatedAt: now,
   },

@@ -10,6 +10,14 @@ import { sleep } from '@/engine/retry/retry-policy'
 import { resolveTypeText, typingDelayRange } from '@/planner/engine/text-library'
 import { collectJsonParts } from '@/planner/engine/multipart-collect'
 import { copyStore } from '@/engine/copy-store'
+import { resolveMapArrayItems } from '@/planner/engine/map-array-sources'
+import {
+  MAP_BREAK_BRANCH,
+  MAP_ENTRY_HANDLE_KEY,
+  MAP_STACK_KEY,
+  readMapStack,
+  type MapLoopFrame,
+} from '@/planner/engine/map-loop'
 import type { ActionHandlerResult } from '@/planner/actions/types'
 import type { AutomationCommand } from '@/shared/types/messages'
 
@@ -1221,6 +1229,71 @@ export async function executePlannerAction(args: {
         return { status: 'success', variables: { [key]: source }, output: source }
       }
 
+      case 'clipboard.click_to_clipboard': {
+        // Click page Copy button → read OS clipboard → mirror for later steps
+        if (!selector) throw new Error('Pick the Copy button with mouse (selector required)')
+        const clickDelayMs = Math.max(0, Number(params.clickDelayMs ?? 250))
+        const outputKey = String(params.outputKey ?? 'clipboardText').trim() || 'clipboardText'
+
+        activeTabId = await ensureTab(activeTabId)
+        const clicked = await runDom(activeTabId, {
+          action: 'click',
+          selector,
+          timeoutMs: args.timeoutMs,
+        })
+        if (!clicked.ok) {
+          throw Object.assign(new Error(clicked.error ?? 'Copy button click failed'), {
+            name: 'ElementNotFoundError',
+          })
+        }
+        if (clickDelayMs > 0) await sleep(clickDelayMs)
+
+        const read = await runDom(activeTabId, { action: 'readClipboard' })
+        let text = ''
+        if (read.ok && typeof read.data === 'string' && read.data.length > 0) {
+          text = read.data
+        } else {
+          throw new Error(
+            read.error ||
+              'Clipboard empty after clicking Copy button. Allow clipboard permission or pick a different Copy control.',
+          )
+        }
+
+        // Ensure OS clipboard still holds the text (some sites clear it) + variable mirror
+        const write = await runDom(activeTabId, {
+          action: 'writeClipboard',
+          value: text,
+          text,
+        })
+        if (!write.ok) {
+          await activityLog.append(
+            'warn',
+            'ClickToClipboard',
+            `Clipboard re-write failed (page copy may still be available): ${write.error ?? 'unknown'}`,
+          )
+        }
+
+        await activityLog.append(
+          'info',
+          'ClickToClipboard',
+          `Captured ${text.length} chars to clipboard`,
+        )
+
+        return {
+          status: 'success',
+          activeTabId,
+          variables: {
+            __clipboard: text,
+            [outputKey]: text,
+          },
+          output: {
+            text,
+            length: text.length,
+            clipboardOk: write.ok,
+          },
+        }
+      }
+
       case 'clipboard.copy_event': {
         // Unified Copy Event: pick Copy button → click → capture → store (+ format/name).
         const sourceMode = String(params.sourceMode ?? 'click_copy_button')
@@ -1387,11 +1460,164 @@ export async function executePlannerAction(args: {
         return { status: 'success' }
       }
 
+      case 'loops.map': {
+        const itemVariable = String(params.itemVariable ?? 'item').trim() || 'item'
+        const indexVariable = String(params.indexVariable ?? 'index').trim() || 'index'
+        const nodeId = args.nodeId
+        if (!nodeId) throw new Error('Map requires a node id')
+
+        const stack = readMapStack(args.variables)
+        const entryHandle = String(args.variables[MAP_ENTRY_HANDLE_KEY] ?? '')
+        const existingIdx = stack.findIndex((frame) => frame.nodeId === nodeId)
+        const isReturn = entryHandle === 'return' && existingIdx >= 0
+
+        if (!isReturn) {
+          // Fresh entry via “in” — resolve from Text libraries / Copy Store / legacy variable
+          const resolved = await resolveMapArrayItems({
+            params,
+            planId: args.planId,
+            workflowId: args.workflowId,
+            variables: args.variables,
+          })
+          const collectionKey =
+            resolved.refLabel ||
+            String(params.collectionKey ?? params.collectionRef ?? 'map').trim() ||
+            'map'
+          if (
+            !String(params.collectionSource ?? '').trim() &&
+            !String(params.collectionKey ?? '').trim()
+          ) {
+            throw new Error(
+              'Map needs an array source — pick Text libraries or Copy Store in Properties',
+            )
+          }
+          const items = resolved.items
+          const nextStack = stack.filter((frame) => frame.nodeId !== nodeId)
+          if (items.length === 0) {
+            await activityLog.append(
+              'info',
+              'Map',
+              `Empty array “${resolved.sourceLabel}: ${collectionKey}” — taking completed`,
+            )
+            return {
+              status: 'success',
+              branch: 'completed',
+              variables: {
+                [MAP_STACK_KEY]: nextStack,
+                [itemVariable]: undefined,
+                [indexVariable]: undefined,
+              },
+              output: { collectionKey, count: 0, branch: 'completed' },
+            }
+          }
+          const frame: MapLoopFrame = {
+            nodeId,
+            items,
+            index: 0,
+            itemVariable,
+            indexVariable,
+            collectionKey,
+          }
+          nextStack.push(frame)
+          await activityLog.append(
+            'info',
+            'Map',
+            `Start “${resolved.sourceLabel}: ${collectionKey}” (${items.length} items) → loop item 0`,
+          )
+          return {
+            status: 'success',
+            branch: 'loop',
+            variables: {
+              [MAP_STACK_KEY]: nextStack,
+              [itemVariable]: items[0],
+              [indexVariable]: 0,
+            },
+            output: {
+              collectionKey,
+              count: items.length,
+              index: 0,
+              item: items[0],
+              branch: 'loop',
+            },
+          }
+        }
+
+        // Re-entry via “return” — advance to next item or complete
+        const frame = stack[existingIdx]!
+        const nextIndex = frame.index + 1
+        if (nextIndex >= frame.items.length) {
+          const nextStack = stack.filter((_, idx) => idx !== existingIdx)
+          await activityLog.append(
+            'info',
+            'Map',
+            `Finished “${frame.collectionKey}” (${frame.items.length} items) → completed`,
+          )
+          return {
+            status: 'success',
+            branch: 'completed',
+            variables: {
+              [MAP_STACK_KEY]: nextStack,
+              [frame.itemVariable]: undefined,
+              [frame.indexVariable]: undefined,
+            },
+            output: {
+              collectionKey: frame.collectionKey,
+              count: frame.items.length,
+              branch: 'completed',
+            },
+          }
+        }
+
+        const nextStack = [...stack]
+        nextStack[existingIdx] = { ...frame, index: nextIndex }
+        const item = frame.items[nextIndex]
+        await activityLog.append(
+          'info',
+          'Map',
+          `Next “${frame.collectionKey}” → loop item ${nextIndex}/${frame.items.length - 1}`,
+        )
+        return {
+          status: 'success',
+          branch: 'loop',
+          variables: {
+            [MAP_STACK_KEY]: nextStack,
+            [frame.itemVariable]: item,
+            [frame.indexVariable]: nextIndex,
+          },
+          output: {
+            collectionKey: frame.collectionKey,
+            count: frame.items.length,
+            index: nextIndex,
+            item,
+            branch: 'loop',
+          },
+        }
+      }
+
+      case 'loops.break': {
+        // Only Map has a real loop stack today — exit innermost Map to “completed”.
+        // Outside Map, keep the legacy stub so existing graphs are unchanged.
+        const stack = readMapStack(args.variables)
+        if (stack.length > 0) {
+          await activityLog.append(
+            'info',
+            'Map',
+            'Break — skip remaining iterations → completed',
+          )
+          return {
+            status: 'success',
+            branch: MAP_BREAK_BRANCH,
+            output: { mapBreak: true },
+          }
+        }
+        return { status: 'success', branch: args.actionId }
+      }
+
       case 'loops.for':
       case 'loops.while':
       case 'loops.foreach':
-      case 'loops.break':
       case 'loops.continue':
+        // Legacy stubs — unchanged (no Map stack semantics)
         return { status: 'success', branch: args.actionId }
 
       default:

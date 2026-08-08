@@ -20,6 +20,10 @@ import {
   TypeTextFields,
 } from '@/planner/components/type-text-fields'
 import {
+  MAP_ARRAY_MANAGED_KEYS,
+  MapArrayFields,
+} from '@/planner/components/map-array-fields'
+import {
   CONDITION_MANAGED_KEYS,
   ConditionFields,
 } from '@/planner/components/condition-fields'
@@ -43,6 +47,15 @@ type QuickTestResult = {
 function labelAfterPick(currentLabel: string, actionId: string, pickedText?: string): string {
   if (!pickedText) return currentLabel
   const snippet = pickedText.slice(0, 28)
+  if (actionId === 'clipboard.click_to_clipboard') {
+    if (
+      currentLabel === 'Click to Clipboard' ||
+      currentLabel.startsWith('Click to Clipboard ·')
+    ) {
+      return `Click to Clipboard · ${snippet}`
+    }
+    return currentLabel
+  }
   if (actionId === 'clipboard.copy_event') {
     if (currentLabel === 'Copy Event' || currentLabel.startsWith('Copy Event ·')) {
       return `Copy Event · ${snippet}`
@@ -397,21 +410,25 @@ export function PropertyInspector() {
               action?.fields.some((field) => field.type === 'selector') ||
               selectedNode.data.actionId.startsWith('mouse.') ||
               selectedNode.data.actionId.startsWith('ai.click') ||
-              selectedNode.data.actionId === 'clipboard.copy_event') && (
+              selectedNode.data.actionId === 'clipboard.copy_event' ||
+              selectedNode.data.actionId === 'clipboard.click_to_clipboard') && (
             <div className="rounded-2xl border border-primary/30 bg-primary/10 p-3">
               <p className="text-xs font-semibold text-foreground">
-                {selectedNode.data.actionId === 'clipboard.copy_event'
+                {selectedNode.data.actionId === 'clipboard.copy_event' ||
+                selectedNode.data.actionId === 'clipboard.click_to_clipboard'
                   ? 'Pick Copy button with mouse'
                   : selectedNode.data.actionId === 'downloads.click_download'
                     ? 'Pick Download button with mouse'
                     : 'Pick element with mouse'}
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                {selectedNode.data.actionId === 'clipboard.copy_event'
-                  ? 'বাটনে ক্লিক করুন → পেজ খুলবে → page-এর Copy বাটনে ক্লিক করুন। Runtime-এ সেই বাটন click হবে, text capture হবে, Copy Store-এ save হবে।'
-                  : selectedNode.data.actionId === 'downloads.click_download'
-                    ? 'পেজের Download বাটন/লিংক pick করুন। Runtime-এ ঠিক একবারই click হবে — কখনো double-click নয়।'
-                    : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
+                {selectedNode.data.actionId === 'clipboard.click_to_clipboard'
+                  ? 'বাটনে ক্লিক করুন → পেজ খুলবে → page-এর Copy বাটনে ক্লিক করুন। Runtime-এ সেই বাটন click হবে এবং text clipboard-এ save থাকবে।'
+                  : selectedNode.data.actionId === 'clipboard.copy_event'
+                    ? 'বাটনে ক্লিক করুন → পেজ খুলবে → page-এর Copy বাটনে ক্লিক করুন। Runtime-এ সেই বাটন click হবে, text capture হবে, Copy Store-এ save হবে।'
+                    : selectedNode.data.actionId === 'downloads.click_download'
+                      ? 'পেজের Download বাটন/লিংক pick করুন। Runtime-এ ঠিক একবারই click হবে — কখনো double-click নয়।'
+                      : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
               </p>
               <Button
                 size="sm"
@@ -426,7 +443,8 @@ export function PropertyInspector() {
                 )}
                 {picking
                   ? 'Click an element on the page…'
-                  : selectedNode.data.actionId === 'clipboard.copy_event'
+                  : selectedNode.data.actionId === 'clipboard.copy_event' ||
+                      selectedNode.data.actionId === 'clipboard.click_to_clipboard'
                     ? 'Pick Copy button'
                     : selectedNode.data.actionId === 'downloads.click_download'
                       ? 'Pick Download button'
@@ -578,6 +596,19 @@ export function PropertyInspector() {
             />
           ) : null}
 
+          {selectedNode.data.actionId === 'loops.map' ||
+          selectedNode.data.actionId === 'loops.foreach' ? (
+            <MapArrayFields
+              workflowId={workflowId}
+              params={selectedNode.data.params}
+              onChange={(patch) =>
+                updateNodeData(workflowId, selectedNode.id, {
+                  params: { ...selectedNode.data.params, ...patch },
+                })
+              }
+            />
+          ) : null}
+
           {(action?.fields ?? []).map((field) => {
             if (
               (selectedNode.data.actionId === 'keyboard.type_text' ||
@@ -597,6 +628,13 @@ export function PropertyInspector() {
               (selectedNode.data.actionId === 'conditions.if' ||
                 selectedNode.data.actionId === 'conditions.switch') &&
               CONDITION_MANAGED_KEYS.has(field.key)
+            ) {
+              return null
+            }
+            if (
+              (selectedNode.data.actionId === 'loops.map' ||
+                selectedNode.data.actionId === 'loops.foreach') &&
+              MAP_ARRAY_MANAGED_KEYS.has(field.key)
             ) {
               return null
             }
