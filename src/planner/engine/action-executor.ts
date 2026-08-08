@@ -193,13 +193,25 @@ export async function executePlannerAction(args: {
 
   try {
     switch (args.actionId) {
-      case 'flow.start':
-      case 'flow.end':
+      case 'flow.start': {
+        // Debugger bar ON from Start → stays until End
+        const tabId = await runGuardController.beginTrustedDebug(args.activeTabId)
+        return { status: 'success', activeTabId: tabId ?? args.activeTabId }
+      }
+
+      case 'flow.end': {
+        // Debugger bar OFF at End
+        await runGuardController.endTrustedDebug()
+        return { status: 'success' }
+      }
+
       case 'flow.return':
         return { status: 'success' }
 
-      case 'flow.stop':
+      case 'flow.stop': {
+        await runGuardController.endTrustedDebug()
         return { status: 'success', nextNodeId: null }
+      }
 
       case 'flow.pause':
         return { status: 'waiting' }
@@ -245,7 +257,12 @@ export async function executePlannerAction(args: {
             })
           : await tabController.openUrl(url, Boolean(params.active ?? true))
         if (tab.id != null && runGuardController.isEnabled()) {
-          await runGuardController.lockTab(tab.id)
+          // Ensure debugger session sticks across Open URL (reattach if SW lost state)
+          if (!runGuardController.isTrustedDebugActive()) {
+            await runGuardController.beginTrustedDebug(tab.id)
+          } else {
+            await runGuardController.lockTab(tab.id)
+          }
         }
         return { status: 'success', activeTabId: tab.id, output: { tabId: tab.id, url } }
       }

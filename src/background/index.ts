@@ -140,9 +140,11 @@ async function bootstrap(): Promise<void> {
   const checkpoint = plannerRunner.getCheckpoint()
   if (checkpoint?.status === 'running') {
     runGuardController.start()
-    if (checkpoint.browserState.activeTabId != null) {
-      void runGuardController.lockTab(checkpoint.browserState.activeTabId)
-    }
+    void runGuardController
+      .beginTrustedDebug(checkpoint.browserState.activeTabId)
+      .then((tabId) => {
+        if (tabId != null) checkpoint.browserState.activeTabId = tabId
+      })
     void plannerRunner.resumeFromCheckpoint()
   }
 

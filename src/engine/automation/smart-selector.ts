@@ -21,7 +21,7 @@ export interface SmartPickResult {
 }
 
 const INTERACTIVE_SELECTOR =
-  'button, a[href], [role="button"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
+  'button, a[href], [role="button"], [role="menuitem"], [role="option"], [role="tab"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
 
 function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -136,7 +136,9 @@ function looksClickable(el: Element): boolean {
  */
 export function promoteToClickHost(el: Element): HTMLElement {
   const host =
-    el.closest<HTMLElement>('button, [role="button"], a[href], summary') ||
+    el.closest<HTMLElement>(
+      'button, [role="button"], [role="menuitem"], [role="option"], [role="tab"], a[href], summary',
+    ) ||
     el.closest<HTMLElement>('.ds-button, [class*="ds-button"]') ||
     el.closest<HTMLElement>(INTERACTIVE_SELECTOR)
 

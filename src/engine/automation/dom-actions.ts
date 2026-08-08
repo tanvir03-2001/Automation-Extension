@@ -542,6 +542,7 @@ async function typeHumanLike(
   delayMax: number,
 ): Promise<void> {
   const target = resolveEditableTarget(el)
+  await previewBeforeAction(target)
   target.scrollIntoView({ block: 'center', inline: 'nearest' })
   target.focus()
   target.click()
@@ -561,6 +562,7 @@ async function typeHumanLike(
 
 async function fillInstant(el: HTMLElement, value: string): Promise<void> {
   const target = resolveEditableTarget(el)
+  await previewBeforeAction(target)
   target.scrollIntoView({ block: 'center', inline: 'nearest' })
   target.focus()
   target.click()
@@ -658,6 +660,7 @@ function pasteLooksSuccessful(el: HTMLElement, value: string): boolean {
 /** Paste full text at once (no per-character typing). */
 async function pasteInstant(el: HTMLElement, value: string): Promise<void> {
   const target = resolveEditableTarget(el)
+  await previewBeforeAction(target)
   target.scrollIntoView({ block: 'center', inline: 'nearest' })
   target.focus()
   target.click()
@@ -716,6 +719,9 @@ async function pasteInstant(el: HTMLElement, value: string): Promise<void> {
   )
 }
 
+/** Show teal border on the target, wait, then the real event fires. */
+const ACTION_PREVIEW_MS = 500
+
 function flashHighlight(el: HTMLElement, durationMs = 2200): void {
   const prevOutline = el.style.outline
   const prevOffset = el.style.outlineOffset
@@ -737,11 +743,18 @@ function flashHighlight(el: HTMLElement, durationMs = 2200): void {
   }, durationMs)
 }
 
+/** Border first → half-second pause → caller fires the real event. */
+async function previewBeforeAction(el: HTMLElement): Promise<void> {
+  flashHighlight(el, ACTION_PREVIEW_MS + 2000)
+  await sleep(ACTION_PREVIEW_MS)
+}
+
 async function performPointerAction(
   el: HTMLElement,
   mode: 'click' | 'double_click' | 'right_click' | 'hover' = 'click',
 ): Promise<void> {
   const host = promoteToClickHost(el)
+  await previewBeforeAction(host)
   if (mode === 'hover') {
     const rect = host.getBoundingClientRect()
     const x = rect.left + rect.width / 2
@@ -853,55 +866,6 @@ async function triggerQuickTestEvent(
   return null
 }
 
-function invokeReactClick(el: HTMLElement): boolean {
-  let current: HTMLElement | null = el
-  while (current && current !== document.body) {
-    const propKey = Object.keys(current).find(
-      (key) =>
-        key.startsWith('__reactProps$') ||
-        key.startsWith('__reactEventHandlers$') ||
-        key.startsWith('__reactFiber$'),
-    )
-    if (propKey) {
-      const bag = (current as unknown as Record<string, unknown>)[propKey] as Record<
-        string,
-        unknown
-      > | null
-      const props =
-        (bag?.memoizedProps as Record<string, unknown> | undefined) ||
-        (bag?.pendingProps as Record<string, unknown> | undefined) ||
-        bag
-      const handlers = ['onClick', 'onMouseUp', 'onPointerUp', 'onMouseDown', 'onPointerDown']
-      for (const name of handlers) {
-        const fn = props?.[name]
-        if (typeof fn === 'function') {
-          try {
-            ;(fn as (event: Record<string, unknown>) => void)({
-              preventDefault() {},
-              stopPropagation() {},
-              persist() {},
-              target: current,
-              currentTarget: current,
-              type: name.slice(2).toLowerCase(),
-              bubbles: true,
-              cancelable: true,
-              isTrusted: true,
-              button: 0,
-              buttons: 1,
-              nativeEvent: new MouseEvent('click', { bubbles: true }),
-            })
-            return true
-          } catch {
-            /* try next */
-          }
-        }
-      }
-    }
-    current = current.parentElement
-  }
-  return false
-}
-
 async function requestTrustedClick(x: number, y: number): Promise<boolean> {
   try {
     const response = (await chrome.runtime.sendMessage({
@@ -914,9 +878,97 @@ async function requestTrustedClick(x: number, y: number): Promise<boolean> {
   }
 }
 
+/** True when a visible menu / dialog / popover is still open on the page. */
+function hasOpenOverlayUi(): boolean {
+  const nodes = document.querySelectorAll<HTMLElement>(
+    '[role="menu"], [role="listbox"], [role="dialog"], [aria-modal="true"], [data-state="open"], [data-radix-menu-content], [data-headlessui-state="open"]',
+  )
+  for (const el of nodes) {
+    if (!el.isConnected) continue
+    const style = window.getComputedStyle(el)
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+      continue
+    }
+    const rect = el.getBoundingClientRect()
+    if (rect.width > 2 && rect.height > 2) return true
+  }
+  return false
+}
+
+/**
+ * Sites often set overflow:hidden on <html>/<body> while a menu is open.
+ * After a failed/toggle click the menu can close while scroll-lock sticks — restore it.
+ * Leave lock alone while a menu/dialog is still visible.
+ */
+function restorePageScrollIfStale(): void {
+  if (hasOpenOverlayUi()) return
+
+  for (const el of [document.documentElement, document.body]) {
+    if (!el) continue
+    let clearedOverflow = false
+    if (el.style.overflow === 'hidden') {
+      el.style.overflow = ''
+      clearedOverflow = true
+    }
+    if (el.style.overflowY === 'hidden') {
+      el.style.overflowY = ''
+      clearedOverflow = true
+    }
+    if (el.style.overflowX === 'hidden') {
+      el.style.overflowX = ''
+      clearedOverflow = true
+    }
+    if (
+      el.classList.contains('overflow-hidden') ||
+      el.classList.contains('overflow-y-hidden') ||
+      el.classList.contains('overflow-x-hidden')
+    ) {
+      el.classList.remove('overflow-hidden', 'overflow-y-hidden', 'overflow-x-hidden')
+      clearedOverflow = true
+    }
+    // Scrollbar-gutter compensation left behind by some UI libs after a stuck lock
+    if (clearedOverflow && el.style.paddingRight) {
+      const n = Number.parseFloat(el.style.paddingRight)
+      if (Number.isFinite(n) && n > 0 && n <= 40) el.style.paddingRight = ''
+    }
+  }
+}
+
+async function dispatchSyntheticClick(clickTarget: HTMLElement, x: number, y: number): Promise<void> {
+  const mouseInit: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    view: window,
+    clientX: x,
+    clientY: y,
+    screenX: x,
+    screenY: y,
+    button: 0,
+    buttons: 1,
+    detail: 1,
+  }
+  const pointerInit: PointerEventInit = {
+    ...mouseInit,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+  }
+
+  // Exactly one click sequence. Do not also call invokeReactClick() or .click()
+  // afterward — that double-toggles profile/logout menus.
+  clickTarget.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
+  clickTarget.dispatchEvent(new MouseEvent('mousedown', mouseInit))
+  await sleep(40)
+  clickTarget.dispatchEvent(new PointerEvent('pointerup', { ...pointerInit, buttons: 0 }))
+  clickTarget.dispatchEvent(new MouseEvent('mouseup', { ...mouseInit, buttons: 0 }))
+  clickTarget.dispatchEvent(new MouseEvent('click', { ...mouseInit, buttons: 0 }))
+}
+
 /**
  * DeepSeek / React often ignore synthetic clicks (isTrusted=false).
- * Strategy: hide guard → React props → DOM events → MAIN world + CDP trusted click.
+ * Strategy: hide guard → ONE trusted CDP click → synthetic fallback only if CDP fails.
+ * Never stack multiple click strategies — that toggles menus open→close immediately.
  */
 async function robustClick(el: HTMLElement): Promise<void> {
   const clickTarget = promoteToClickHost(el)
@@ -951,70 +1003,15 @@ async function robustClick(el: HTMLElement): Promise<void> {
       /* ignore */
     }
 
-    // 1) React fiber / props handlers
-    invokeReactClick(clickTarget)
-    await sleep(60)
-
-    // 2) Full pointer + mouse sequence on the host
-    const mouseInit: MouseEventInit = {
-      bubbles: true,
-      cancelable: true,
-      composed: true,
-      view: window,
-      clientX: x,
-      clientY: y,
-      screenX: x,
-      screenY: y,
-      button: 0,
-      buttons: 1,
-      detail: 1,
-    }
-    const pointerInit: PointerEventInit = {
-      ...mouseInit,
-      pointerId: 1,
-      pointerType: 'mouse',
-      isPrimary: true,
+    // Primary: single trusted CDP click (isTrusted=true)
+    const trusted = await requestTrustedClick(x, y)
+    if (!trusted) {
+      // Fallback only when debugger/CDP path failed — still one click sequence
+      await dispatchSyntheticClick(clickTarget, x, y)
     }
 
-    clickTarget.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
-    clickTarget.dispatchEvent(new MouseEvent('mousedown', mouseInit))
-    await sleep(40)
-    clickTarget.dispatchEvent(new PointerEvent('pointerup', { ...pointerInit, buttons: 0 }))
-    clickTarget.dispatchEvent(new MouseEvent('mouseup', { ...mouseInit, buttons: 0 }))
-    clickTarget.dispatchEvent(new MouseEvent('click', { ...mouseInit, buttons: 0 }))
-    clickTarget.click()
-
-    // Content span (DeepSeek: .ds-button__content) — still promote handlers on host
-    const content = clickTarget.querySelector<HTMLElement>('.ds-button__content, span')
-    if (content && content !== clickTarget) {
-      invokeReactClick(content)
-    }
-
-    // Keyboard activate for role=button
-    if (
-      clickTarget.getAttribute('role') === 'button' ||
-      clickTarget.className.toString().includes('ds-button') ||
-      clickTarget.tagName === 'BUTTON'
-    ) {
-      await sleep(30)
-      for (const key of ['Enter', ' '] as const) {
-        const keyInit: KeyboardEventInit = {
-          key,
-          code: key === 'Enter' ? 'Enter' : 'Space',
-          keyCode: key === 'Enter' ? 13 : 32,
-          which: key === 'Enter' ? 13 : 32,
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        }
-        clickTarget.dispatchEvent(new KeyboardEvent('keydown', keyInit))
-        clickTarget.dispatchEvent(new KeyboardEvent('keyup', keyInit))
-      }
-    }
-
-    // 3) Trusted CDP click (isTrusted=true) — required for DeepSeek Continue
-    await requestTrustedClick(x, y)
     await sleep(180)
+    restorePageScrollIfStale()
   } finally {
     if (guard) {
       guard.style.display = prevDisplay ?? ''
@@ -1030,7 +1027,8 @@ async function clickChatSend(selector?: string, timeoutMs = 20_000): Promise<voi
   while (Date.now() - started < timeoutMs) {
     const btn = findSendButton(selector)
     if (btn && isSendButtonReady(selector)) {
-      await robustClick(btn)
+      // performPointerAction shows border → 500ms → click
+      await performPointerAction(btn, 'click')
       return
     }
     await sleep(200)
@@ -1039,6 +1037,7 @@ async function clickChatSend(selector?: string, timeoutMs = 20_000): Promise<voi
   // Fallback: Enter in composer (ChatGPT often sends on Enter)
   const composer = findChatComposer()
   if (composer) {
+    await previewBeforeAction(composer)
     composer.focus()
     placeCaretAtEnd(composer)
     composer.dispatchEvent(
@@ -1188,6 +1187,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
           command.timeoutMs,
           fb,
         )) as HTMLSelectElement
+        await previewBeforeAction(el)
         el.value = command.value ?? ''
         el.dispatchEvent(new Event('change', { bubbles: true }))
         return { ok: true }
@@ -1198,6 +1198,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
           : document.activeElement instanceof HTMLElement
             ? document.activeElement
             : document.body
+        await previewBeforeAction(target)
         target.dispatchEvent(
           new KeyboardEvent('keydown', {
             key: command.key ?? 'Enter',
@@ -1214,7 +1215,12 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
       }
       case 'scroll': {
         if (command.selector) {
-          const el = await waitForElement(command.selector, command.timeoutMs, fb)
+          const el = (await waitForElement(
+            command.selector,
+            command.timeoutMs,
+            fb,
+          )) as HTMLElement
+          await previewBeforeAction(el)
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
         } else {
           window.scrollBy(0, Number(command.options?.y ?? 600))
@@ -1369,18 +1375,21 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
           .trim()
           .slice(0, 80)
 
-        // Green border first, then fire the step event (click / hover / type / …)
-        flashHighlight(host)
-        await sleep(280)
-
         let triggered: string | null = null
         let triggerError: string | undefined
         if (fireEvent && visible) {
           try {
+            // Click/type/hover/… show border → 500ms → event inside their handlers.
             triggered = await triggerQuickTestEvent(host, actionId, command)
           } catch (error) {
             triggerError = error instanceof Error ? error.message : String(error)
           }
+          // Non-interactive steps (wait/condition): still show the match highlight.
+          if (triggered == null && !triggerError) {
+            flashHighlight(host)
+          }
+        } else {
+          flashHighlight(host)
         }
 
         const baseMsg = visible

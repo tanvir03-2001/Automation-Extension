@@ -73,6 +73,13 @@ interface PlannerState {
   addActionNode: (workflowId: string, actionId: string, position: { x: number; y: number }) => string
   removeNode: (workflowId: string, nodeId: string) => void
   duplicateNode: (workflowId: string, nodeId: string) => void
+  /** In-memory clipboard for Ctrl+C / Ctrl+V on selected planner events */
+  nodeClipboard: PlannerNode | null
+  copyNode: (workflowId: string, nodeId: string) => boolean
+  pasteNode: (
+    workflowId: string,
+    position?: { x: number; y: number },
+  ) => string | null
   toggleNodeEnabled: (workflowId: string, nodeId: string) => void
   saveVersion: (workflowId: string, label?: string) => void
   upsertTextLibrary: (
@@ -129,6 +136,7 @@ export const usePlannerStore = create<PlannerState>()(
       builderOpen: false,
       graphRevision: 0,
       docsActionId: null,
+      nodeClipboard: null,
 
       hydrate: async () => {
         const data = await loadWorkspace()
@@ -640,6 +648,51 @@ export const usePlannerStore = create<PlannerState>()(
               : item,
           ),
         }))
+      },
+
+      copyNode: (workflowId, nodeId) => {
+        const wf = get().workflows.find((item) => item.id === workflowId)
+        const source = wf?.nodes.find((node) => node.id === nodeId)
+        if (!source) return false
+        set({ nodeClipboard: structuredClone(source) })
+        return true
+      },
+
+      pasteNode: (workflowId, position) => {
+        const source = get().nodeClipboard
+        if (!source) return null
+        const wf = get().workflows.find((item) => item.id === workflowId)
+        if (!wf) return null
+
+        const base = position ?? {
+          x: source.position.x + 40,
+          y: source.position.y + 40,
+        }
+        const id = `n_${nanoid(8)}`
+        const copy: PlannerNode = {
+          ...structuredClone(source),
+          id,
+          position: { x: base.x, y: base.y },
+          selected: false,
+        }
+        // Next Ctrl+V offsets from this paste
+        const clipboardNext: PlannerNode = {
+          ...structuredClone(copy),
+          position: { x: base.x, y: base.y },
+        }
+
+        set((state) => ({
+          dirty: true,
+          graphRevision: state.graphRevision + 1,
+          selectedNodeId: id,
+          nodeClipboard: clipboardNext,
+          workflows: state.workflows.map((item) =>
+            item.id === workflowId
+              ? { ...item, nodes: [...item.nodes, copy], updatedAt: new Date().toISOString() }
+              : item,
+          ),
+        }))
+        return id
       },
 
       toggleNodeEnabled: (workflowId, nodeId) => {

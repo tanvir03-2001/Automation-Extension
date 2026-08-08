@@ -135,6 +135,13 @@ export class PlannerRunner {
     }
 
     runGuardController.start()
+    // Debugger bar ON immediately with Run / Flow Start — don't wait for Open URL.
+    const debugTabId = await runGuardController.beginTrustedDebug(
+      this.checkpoint.browserState.activeTabId,
+    )
+    if (debugTabId != null) {
+      this.checkpoint.browserState.activeTabId = debugTabId
+    }
     await this.persist()
     await activityLog.append('info', 'PlannerRunner', `Started visual workflow: ${workflow.name}`)
     void this.loop()
@@ -268,6 +275,8 @@ export class PlannerRunner {
         }
 
         if (node.data.actionId === 'flow.end' || node.type === 'end') {
+          // Debugger bar OFF at End (also mirrored in action-executor for explicit End nodes)
+          await runGuardController.endTrustedDebug()
           this.pushHistory(node.id, 'success')
           this.checkpoint.currentNodeId = null
           this.checkpoint.status = 'completed'
@@ -582,14 +591,19 @@ export class PlannerRunner {
 
   private async syncRunGuard(): Promise<void> {
     const cp = this.checkpoint
-    if (cp?.status === 'running') {
+    if (cp?.status === 'running' || cp?.status === 'paused') {
+      // Page lock stays; CDP debugger is opened at Run/Start and closed by End/Stop.
       runGuardController.start()
-      if (cp.browserState.activeTabId != null) {
+      if (cp.status === 'running' && !runGuardController.isTrustedDebugActive()) {
+        // SW wake mid-run: restore debugger without needing Start again
+        const tabId = await runGuardController.beginTrustedDebug(cp.browserState.activeTabId)
+        if (tabId != null) cp.browserState.activeTabId = tabId
+      } else if (cp.browserState.activeTabId != null) {
         await runGuardController.lockTab(cp.browserState.activeTabId)
       }
       return
     }
-    // Pause / complete / fail / cancel → unlock the page so the user can click again
+    // Complete / fail / cancel → unlock page + close debugger bar
     await runGuardController.stop()
   }
 

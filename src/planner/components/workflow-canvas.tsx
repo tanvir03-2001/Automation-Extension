@@ -291,17 +291,62 @@ function CanvasInner() {
   }, [scheduleSave, selectedEdgeId])
 
   useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return true
+      if (target.isContentEditable) return true
+      return Boolean(target.closest('[contenteditable="true"]'))
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' && event.key !== 'Backspace') return
-      const target = event.target as HTMLElement | null
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
-      if (!selectedEdgeId) return
-      event.preventDefault()
-      deleteSelectedEdge()
+      if (isEditableTarget(event.target)) return
+
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (!selectedEdgeId) return
+        event.preventDefault()
+        deleteSelectedEdge()
+        return
+      }
+
+      const mod = event.ctrlKey || event.metaKey
+      if (!mod || !workflowId) return
+
+      const key = event.key.toLowerCase()
+      if (key === 'c') {
+        const nodeId = usePlannerStore.getState().selectedNodeId
+        if (!nodeId) return
+        const ok = usePlannerStore.getState().copyNode(workflowId, nodeId)
+        if (ok) event.preventDefault()
+        return
+      }
+
+      if (key === 'v') {
+        if (!usePlannerStore.getState().nodeClipboard) return
+        const newId = usePlannerStore.getState().pasteNode(workflowId)
+        if (!newId) return
+        event.preventDefault()
+        loadedRevision.current = usePlannerStore.getState().graphRevision
+        const created = usePlannerStore
+          .getState()
+          .workflows.find((wf) => wf.id === workflowId)
+          ?.nodes.find((node) => node.id === newId)
+        if (created) {
+          setNodes((current) => {
+            const next = [
+              ...current.map((node) => ({ ...node, selected: false })),
+              { ...toFlowNodes([created])[0], selected: true },
+            ]
+            nodesRef.current = next
+            return next
+          })
+          selectNode(newId)
+          setSelectedEdgeId(null)
+        }
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [deleteSelectedEdge, selectedEdgeId])
+  }, [deleteSelectedEdge, selectNode, selectedEdgeId, workflowId])
 
   if (!workflow || !workflowId) {
     return (
