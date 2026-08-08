@@ -866,15 +866,164 @@ async function triggerQuickTestEvent(
   return null
 }
 
-async function requestTrustedClick(x: number, y: number): Promise<boolean> {
+async function requestTrustedClick(
+  x: number,
+  y: number,
+  mode: 'cdp' | 'main' | 'auto' = 'auto',
+): Promise<boolean> {
   try {
     const response = (await chrome.runtime.sendMessage({
       type: 'TRUSTED_CLICK',
-      payload: { x, y },
+      payload: { x, y, mode },
     })) as { ok?: boolean }
     return Boolean(response?.ok)
   } catch {
     return false
+  }
+}
+
+function countOpenMenus(): number {
+  let n = 0
+  const nodes = document.querySelectorAll<HTMLElement>(
+    '[role="menu"], [role="listbox"], [data-state="open"], [aria-expanded="true"]',
+  )
+  for (const el of nodes) {
+    if (!el.isConnected) continue
+    const style = window.getComputedStyle(el)
+    if (style.display === 'none' || style.visibility === 'hidden') continue
+    const rect = el.getBoundingClientRect()
+    if (rect.width > 2 && rect.height > 2) n += 1
+  }
+  return n
+}
+
+interface ClickSnapshot {
+  url: string
+  path: string
+  title: string
+  expanded: string | null
+  pressed: string | null
+  openMenus: number
+  connected: boolean
+}
+
+function snapshotClickState(el: HTMLElement): ClickSnapshot {
+  return {
+    url: location.href,
+    path: location.pathname + location.search + location.hash,
+    title: document.title,
+    expanded: el.getAttribute('aria-expanded'),
+    pressed: el.getAttribute('aria-pressed'),
+    openMenus: countOpenMenus(),
+    connected: el.isConnected,
+  }
+}
+
+function clickHadEffect(before: ClickSnapshot, el: HTMLElement | null): boolean {
+  if (location.href !== before.url) return true
+  if (location.pathname + location.search + location.hash !== before.path) return true
+  if (document.title !== before.title) return true
+  if (!el || !el.isConnected) return true
+  if (el.getAttribute('aria-expanded') !== before.expanded) return true
+  if (el.getAttribute('aria-pressed') !== before.pressed) return true
+  if (countOpenMenus() !== before.openMenus) return true
+  return false
+}
+
+/** Pick a point on the target that elementFromPoint still resolves to it (or a child). */
+function resolveClickPoint(el: HTMLElement): { x: number; y: number } {
+  const rect = el.getBoundingClientRect()
+  const fractions: Array<[number, number]> = [
+    [0.5, 0.5],
+    [0.25, 0.5],
+    [0.75, 0.5],
+    [0.5, 0.25],
+    [0.5, 0.75],
+    [0.15, 0.15],
+    [0.85, 0.85],
+    [0.1, 0.5],
+    [0.9, 0.5],
+  ]
+  for (const [fx, fy] of fractions) {
+    const x = rect.left + Math.max(1, rect.width) * fx
+    const y = rect.top + Math.max(1, rect.height) * fy
+    if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue
+    const hit = document.elementFromPoint(x, y)
+    if (!hit) continue
+    if (el === hit || el.contains(hit) || hit.contains(el)) {
+      return { x, y }
+    }
+  }
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  }
+}
+
+function invokeReactClick(el: HTMLElement, x: number, y: number): boolean {
+  let current: HTMLElement | null = el
+  while (current && current !== document.body) {
+    const propKey = Object.keys(current).find(
+      (key) =>
+        key.startsWith('__reactProps$') ||
+        key.startsWith('__reactEventHandlers$') ||
+        key.startsWith('__reactFiber$'),
+    )
+    if (propKey) {
+      const bag = (current as unknown as Record<string, unknown>)[propKey] as Record<
+        string,
+        unknown
+      > | null
+      const props =
+        (bag?.memoizedProps as Record<string, unknown> | undefined) ||
+        (bag?.pendingProps as Record<string, unknown> | undefined) ||
+        bag
+      for (const name of ['onClick', 'onMouseUp', 'onPointerUp', 'onMouseDown', 'onPointerDown']) {
+        const fn = props?.[name]
+        if (typeof fn === 'function') {
+          try {
+            ;(fn as (event: Record<string, unknown>) => void)({
+              preventDefault() {},
+              stopPropagation() {},
+              persist() {},
+              target: current,
+              currentTarget: current,
+              type: name.slice(2).toLowerCase(),
+              bubbles: true,
+              cancelable: true,
+              isTrusted: true,
+              button: 0,
+              buttons: 1,
+              clientX: x,
+              clientY: y,
+              nativeEvent: new MouseEvent('click', {
+                bubbles: true,
+                clientX: x,
+                clientY: y,
+              }),
+            })
+            return true
+          } catch {
+            /* try next */
+          }
+        }
+      }
+    }
+    current = current.parentElement
+  }
+  return false
+}
+
+function activateElementNative(el: HTMLElement): void {
+  const link = el.closest('a[href]') as HTMLAnchorElement | null
+  if (link?.href) {
+    link.click()
+    return
+  }
+  try {
+    el.click()
+  } catch {
+    /* ignore */
   }
 }
 
@@ -955,8 +1104,6 @@ async function dispatchSyntheticClick(clickTarget: HTMLElement, x: number, y: nu
     isPrimary: true,
   }
 
-  // Exactly one click sequence. Do not also call invokeReactClick() or .click()
-  // afterward — that double-toggles profile/logout menus.
   clickTarget.dispatchEvent(new PointerEvent('pointerdown', pointerInit))
   clickTarget.dispatchEvent(new MouseEvent('mousedown', mouseInit))
   await sleep(40)
@@ -966,9 +1113,13 @@ async function dispatchSyntheticClick(clickTarget: HTMLElement, x: number, y: nu
 }
 
 /**
- * DeepSeek / React often ignore synthetic clicks (isTrusted=false).
- * Strategy: hide guard → ONE trusted CDP click → synthetic fallback only if CDP fails.
- * Never stack multiple click strategies — that toggles menus open→close immediately.
+ * Universal click for buttons, links, menus, Next.js nav, DeepSeek, etc.
+ *
+ * Strategy (stop as soon as the page reacts — avoids open→close on toggles):
+ *  1) CDP trusted click at a hit-tested point
+ *  2) If no effect → MAIN-world pointer + .click()
+ *  3) If still no effect → isolated synthetic events
+ *  4) If still no effect → React props invoke OR native .click()
  */
 async function robustClick(el: HTMLElement): Promise<void> {
   const clickTarget = promoteToClickHost(el)
@@ -984,18 +1135,18 @@ async function robustClick(el: HTMLElement): Promise<void> {
 
   try {
     clickTarget.scrollIntoView({
-      block: 'center',
+      block: 'nearest',
       inline: 'nearest',
       behavior: 'instant' as ScrollBehavior,
     })
-    await sleep(160)
+    await sleep(120)
 
     const rect = clickTarget.getBoundingClientRect()
     if (rect.width < 2 || rect.height < 2) {
       throw new Error('Click target has no size — selector may point to a hidden node')
     }
-    const x = rect.left + rect.width / 2
-    const y = rect.top + rect.height / 2
+
+    const { x, y } = resolveClickPoint(clickTarget)
 
     try {
       clickTarget.focus({ preventScroll: true })
@@ -1003,14 +1154,43 @@ async function robustClick(el: HTMLElement): Promise<void> {
       /* ignore */
     }
 
-    // Primary: single trusted CDP click (isTrusted=true)
-    const trusted = await requestTrustedClick(x, y)
-    if (!trusted) {
-      // Fallback only when debugger/CDP path failed — still one click sequence
-      await dispatchSyntheticClick(clickTarget, x, y)
+    const before = snapshotClickState(clickTarget)
+
+    const waitForEffect = async (budgetMs: number): Promise<boolean> => {
+      const started = Date.now()
+      while (Date.now() - started < budgetMs) {
+        if (clickHadEffect(before, clickTarget)) return true
+        await sleep(40)
+      }
+      return clickHadEffect(before, clickTarget)
     }
 
-    await sleep(180)
+    // 1) Trusted CDP (isTrusted=true) — required by many modern apps
+    await requestTrustedClick(x, y, 'cdp')
+    if (await waitForEffect(320)) {
+      restorePageScrollIfStale()
+      return
+    }
+
+    // 2) MAIN world (page JS context) — Next.js / React Link & router.back()
+    await requestTrustedClick(x, y, 'main')
+    if (await waitForEffect(280)) {
+      restorePageScrollIfStale()
+      return
+    }
+
+    // 3) Isolated-world synthetic pointer sequence
+    await dispatchSyntheticClick(clickTarget, x, y)
+    if (await waitForEffect(200)) {
+      restorePageScrollIfStale()
+      return
+    }
+
+    // 4) Last resort: React fiber handler XOR native activation (not both)
+    if (!invokeReactClick(clickTarget, x, y)) {
+      activateElementNative(clickTarget)
+    }
+    await waitForEffect(200)
     restorePageScrollIfStale()
   } finally {
     if (guard) {

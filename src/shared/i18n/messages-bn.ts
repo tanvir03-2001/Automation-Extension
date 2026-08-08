@@ -192,6 +192,7 @@ export const bn: MessageDict = {
   'action.flow.next_plan_execute': 'নেক্সট প্ল্যান এক্সিকিউট',
   'action.flow.start': 'স্টার্ট',
   'action.flow.end': 'এন্ড',
+  'action.flow.connector': 'কানেক্টর',
   'action.flow.stop': 'স্টপ',
   'action.flow.pause': 'পজ',
   'action.flow.goto_step': 'স্টেপে যান',

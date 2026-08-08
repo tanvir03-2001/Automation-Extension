@@ -205,6 +205,10 @@ export async function executePlannerAction(args: {
         return { status: 'success' }
       }
 
+      case 'flow.connector':
+        // Visual / wiring marker only — no side effects
+        return { status: 'success' }
+
       case 'flow.return':
         return { status: 'success' }
 

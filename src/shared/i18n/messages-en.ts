@@ -190,6 +190,7 @@ export const en: MessageDict = {
   'action.flow.next_plan_execute': 'Next Plan Execute',
   'action.flow.start': 'Start',
   'action.flow.end': 'End',
+  'action.flow.connector': 'Connector',
   'action.flow.stop': 'Stop',
   'action.flow.pause': 'Pause',
   'action.flow.goto_step': 'Jump To Step',

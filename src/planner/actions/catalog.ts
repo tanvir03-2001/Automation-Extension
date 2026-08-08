@@ -1181,6 +1181,18 @@ const flowActions: ActionDefinition[] = [
     controlFlow: true,
   }),
   def({
+    id: 'flow.connector',
+    name: 'Connector',
+    category: 'flow',
+    description:
+      'Does nothing at runtime — a labeled pass-through used to organize and connect steps on the canvas',
+    tooltip:
+      'Visual connector only. Rename the big title in Properties (Label). Edges still flow through it.',
+    icon: 'Link',
+    controlFlow: true,
+    color: '#64748b',
+  }),
+  def({
     id: 'flow.stop',
     name: 'Stop',
     category: 'flow',

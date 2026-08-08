@@ -181,7 +181,12 @@ onRuntimeMessage(async (message, sender) => {
       return { ok: true, pong: true }
 
     case 'TRUSTED_CLICK': {
-      const payload = (message.payload ?? {}) as { x?: number; y?: number; tabId?: number }
+      const payload = (message.payload ?? {}) as {
+        x?: number
+        y?: number
+        tabId?: number
+        mode?: 'cdp' | 'main' | 'auto'
+      }
       const tabId = payload.tabId ?? sender.tab?.id
       if (tabId == null) return { ok: false, error: 'No tab for trusted click' }
       const x = Number(payload.x)
@@ -189,7 +194,11 @@ onRuntimeMessage(async (message, sender) => {
       if (!Number.isFinite(x) || !Number.isFinite(y)) {
         return { ok: false, error: 'Invalid click coordinates' }
       }
-      return trustedClickAt(tabId, x, y)
+      const mode =
+        payload.mode === 'cdp' || payload.mode === 'main' || payload.mode === 'auto'
+          ? payload.mode
+          : 'auto'
+      return trustedClickAt(tabId, x, y, { mode })
     }
 
     case 'WORKFLOW_START': {

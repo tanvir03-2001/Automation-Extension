@@ -139,7 +139,7 @@ export async function findDebuggableTabId(
   return web?.id
 }
 
-/** Click via page MAIN world (React props + .click) — no debugger bar. */
+/** Click via page MAIN world — used when CDP did not produce a page effect. */
 async function mainWorldClickAt(tabId: number, x: number, y: number): Promise<boolean> {
   try {
     const results = await chrome.scripting.executeScript({
@@ -152,7 +152,7 @@ async function mainWorldClickAt(tabId: number, x: number, y: number): Promise<bo
 
         const host =
           hit.closest<HTMLElement>(
-            'button, [role="button"], [role="menuitem"], [role="option"], .ds-button, [class*="ds-button"], a[href]',
+            'button, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], .ds-button, [class*="ds-button"], a[href], a[aria-label], [aria-label]',
           ) || (hit instanceof HTMLElement ? hit : hit.parentElement)
         if (!host) return false
 
@@ -190,6 +190,7 @@ async function mainWorldClickAt(tabId: number, x: number, y: number): Promise<bo
           }),
         )
         host.dispatchEvent(new MouseEvent('mouseup', { ...common, buttons: 0 }))
+        // One click only here — content script may still try native activate if no effect
         host.dispatchEvent(new MouseEvent('click', { ...common, buttons: 0 }))
         return true
       },
@@ -234,10 +235,22 @@ export async function trustedClickAt(
   tabId: number,
   x: number,
   y: number,
+  options?: { mode?: 'cdp' | 'main' | 'auto' },
 ): Promise<{ ok: boolean; error?: string }> {
+  const mode = options?.mode ?? 'auto'
   try {
-    // One click only. Stacking MAIN-world + CDP toggles menus open→close
-    // (profile / logout / dropdowns) and can leave body scroll locked.
+    if (mode === 'main') {
+      const ok = await mainWorldClickAt(tabId, x, y)
+      return ok ? { ok: true } : { ok: false, error: 'MAIN-world click missed target' }
+    }
+
+    if (mode === 'cdp') {
+      await cdpClickAt(tabId, x, y)
+      return { ok: true }
+    }
+
+    // auto: CDP first. Content script decides whether a MAIN fallback is needed
+    // (effect-aware) so menus are not double-toggled.
     try {
       await cdpClickAt(tabId, x, y)
       return { ok: true }
@@ -246,8 +259,7 @@ export async function trustedClickAt(
       if (ok) return { ok: true }
       return {
         ok: false,
-        error:
-          cdpError instanceof Error ? cdpError.message : String(cdpError),
+        error: cdpError instanceof Error ? cdpError.message : String(cdpError),
       }
     }
   } catch (error) {

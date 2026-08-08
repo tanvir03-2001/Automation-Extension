@@ -396,26 +396,47 @@ export function PropertyInspector() {
             </div>
           )}
 
-          <Field label="Label">
+          <Field
+            label={
+              selectedNode.data.actionId === 'flow.connector' ? 'Title (big label)' : 'Label'
+            }
+          >
             <Input
               value={selectedNode.data.label}
               onChange={(event) =>
                 updateNodeData(workflowId, selectedNode.id, { label: event.target.value })
               }
-            />
-          </Field>
-
-          <Field label="Timeout (ms)">
-            <Input
-              type="number"
-              value={selectedNode.data.timeoutMs}
-              onChange={(event) =>
-                updateNodeData(workflowId, selectedNode.id, {
-                  timeoutMs: Number(event.target.value) || 30000,
-                })
+              placeholder={
+                selectedNode.data.actionId === 'flow.connector'
+                  ? 'e.g. Login · Download · Cleanup'
+                  : undefined
+              }
+              className={
+                selectedNode.data.actionId === 'flow.connector'
+                  ? 'h-11 text-base font-semibold'
+                  : undefined
               }
             />
           </Field>
+
+          {selectedNode.data.actionId !== 'flow.connector' ? (
+            <Field label="Timeout (ms)">
+              <Input
+                type="number"
+                value={selectedNode.data.timeoutMs}
+                onChange={(event) =>
+                  updateNodeData(workflowId, selectedNode.id, {
+                    timeoutMs: Number(event.target.value) || 30000,
+                  })
+                }
+              />
+            </Field>
+          ) : (
+            <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              Connector does nothing at runtime — it only organizes the canvas. Wire steps through
+              it like a labeled junction.
+            </p>
+          )}
 
           {selectedNode.data.actionId === 'keyboard.type_text' ||
           selectedNode.data.actionId === 'keyboard.paste_text' ? (

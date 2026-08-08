@@ -119,6 +119,11 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Marks the end of the workflow.',
     'Connect the last action’s right green dot into End.',
   ],
+  'flow.connector': [
+    'Does not run any page action — it only sits on the canvas as a labeled connector.',
+    'Rename the Label in Properties to a big section title (e.g. “Login”, “Download”).',
+    'Wire steps through it so the graph stays readable.',
+  ],
 }
 
 const EXTRA_TOOLTIP: Record<string, string> = {
@@ -152,6 +157,8 @@ const EXTRA_TOOLTIP: Record<string, string> = {
   'element.wait_button': 'Wait until a button is ready (by label or pick).',
   'flow.start': 'Starting point of the workflow.',
   'flow.end': 'Finishes the workflow.',
+  'flow.connector':
+    'Visual connector only — rename the title; edges pass through with no side effects.',
 }
 
 export function getActionTooltip(action: ActionDefinition | string): string {

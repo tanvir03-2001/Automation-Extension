@@ -1,5 +1,11 @@
-import { memo } from 'react'
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
+import { memo, useEffect } from 'react'
+import {
+  Handle,
+  Position,
+  useUpdateNodeInternals,
+  type Node,
+  type NodeProps,
+} from '@xyflow/react'
 import { Loader2 } from 'lucide-react'
 import { getActionById } from '@/planner/actions/catalog'
 import { ActionIcon } from '@/planner/components/action-icons'
@@ -51,6 +57,7 @@ export const ActionFlowNode = memo(function ActionFlowNode({
 }: NodeProps<FlowActionNode>) {
   const t = useT()
   const locale = useLocale()
+  const updateNodeInternals = useUpdateNodeInternals()
   const action = localizeAction(data.actionId, locale) ?? getActionById(data.actionId)
   const displayLabel = displayNodeActionLabel(data.label, data.actionId, locale)
   const runVisual = useNodeRunVisual(id)
@@ -64,14 +71,24 @@ export const ActionFlowNode = memo(function ActionFlowNode({
   const switchBranches = [...switchCases, 'default']
   const isStart = data.actionId === 'flow.start'
   const isEnd = data.actionId === 'flow.end'
+  const isConnector = data.actionId === 'flow.connector'
   const accent = data.color ?? action?.color ?? '#0f766e'
   const isActive = runVisual === 'running' || runVisual === 'paused' || runVisual === 'waiting'
   const badge = runVisual === 'idle' ? null : RUN_BADGE[runVisual]
 
+  // Re-measure when connector title changes so handles track content size
+  useEffect(() => {
+    if (!isConnector) return
+    updateNodeInternals(id)
+  }, [displayLabel, id, isConnector, updateNodeInternals])
+
   return (
     <div
       className={cn(
-        'group relative w-[220px] rounded-2xl border bg-card text-card-foreground shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-all duration-200 dark:shadow-[0_8px_28px_rgba(0,0,0,0.35)]',
+        'group relative rounded-2xl border bg-card text-card-foreground shadow-[0_8px_28px_rgba(15,23,42,0.08)] transition-all duration-200 dark:shadow-[0_8px_28px_rgba(0,0,0,0.35)]',
+        isConnector
+          ? 'h-auto w-max min-w-[140px] max-w-[min(480px,70vw)]'
+          : 'w-[220px]',
         selected && !isActive
           ? 'border-transparent ring-2 ring-primary ring-offset-2 ring-offset-background'
           : 'border-border',
@@ -86,6 +103,7 @@ export const ActionFlowNode = memo(function ActionFlowNode({
         runVisual === 'failed' &&
           'border-rose-500/70 ring-2 ring-rose-500/50 ring-offset-2 ring-offset-background',
         !data.enabled && 'opacity-45 grayscale',
+        isConnector && 'border-dashed border-slate-400/70 bg-slate-50/80 dark:bg-slate-900/50',
       )}
     >
       <div
@@ -113,6 +131,24 @@ export const ActionFlowNode = memo(function ActionFlowNode({
         />
       )}
 
+      {isConnector ? (
+        <div className="flex w-max max-w-full items-center gap-3 px-4 pb-4 pt-5">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-primary-foreground shadow-sm"
+            style={{ background: accent }}
+          >
+            <ActionIcon name={action?.icon} className="h-5 w-5" />
+          </div>
+          <div className="w-max max-w-[min(400px,calc(70vw-4rem))]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              {t('cat.flow')} · connector
+            </p>
+            <p className="mt-0.5 whitespace-pre-wrap break-words text-xl font-bold leading-snug tracking-tight text-foreground">
+              {displayLabel || 'Connector'}
+            </p>
+          </div>
+        </div>
+      ) : (
       <div className="flex items-start gap-3 px-3.5 pb-3 pt-4">
         <div
           className={cn(
@@ -144,6 +180,7 @@ export const ActionFlowNode = memo(function ActionFlowNode({
           ) : null}
         </div>
       </div>
+      )}
 
       {isIfBranch ? (
         <>

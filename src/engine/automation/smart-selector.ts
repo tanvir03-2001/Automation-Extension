@@ -21,7 +21,7 @@ export interface SmartPickResult {
 }
 
 const INTERACTIVE_SELECTOR =
-  'button, a[href], [role="button"], [role="menuitem"], [role="option"], [role="tab"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
+  'button, a[href], a[aria-label], [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
 
 function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -137,16 +137,17 @@ function looksClickable(el: Element): boolean {
 export function promoteToClickHost(el: Element): HTMLElement {
   const host =
     el.closest<HTMLElement>(
-      'button, [role="button"], [role="menuitem"], [role="option"], [role="tab"], a[href], summary',
+      'button, [role="button"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], a[href], a[aria-label], summary',
     ) ||
     el.closest<HTMLElement>('.ds-button, [class*="ds-button"]') ||
+    el.closest<HTMLElement>('[aria-label]') ||
     el.closest<HTMLElement>(INTERACTIVE_SELECTOR)
 
   if (host) return host
 
   let cur: HTMLElement | null = el instanceof HTMLElement ? el : el.parentElement
   while (cur && cur !== document.body) {
-    if (looksClickable(cur) && shortLabel(cur)) return cur
+    if (looksClickable(cur) && (shortLabel(cur) || cur.getAttribute('aria-label'))) return cur
     cur = cur.parentElement
   }
   return el instanceof HTMLElement ? el : (el.parentElement as HTMLElement) || (el as HTMLElement)
@@ -203,10 +204,13 @@ function listButtonLike(): HTMLElement[] {
 
   // DeepSeek / similar: role=button.ds-button and short-label pills
   const nodes = document.querySelectorAll<HTMLElement>(
-    'button, a[href], [role="button"], .ds-button, [class*="ds-button"]',
+    'button, a[href], a[aria-label], [role="button"], [role="link"], .ds-button, [class*="ds-button"], [aria-label]',
   )
   for (const el of nodes) {
     if (!isVisible(el) || inIgnoredRegion(el)) continue
+    if (el.hasAttribute('aria-label') && !looksClickable(el) && el.tagName !== 'BUTTON' && el.tagName !== 'A') {
+      continue
+    }
     const host = promoteToClickHost(el)
     const label = shortLabel(host) || visibleLabel(host)
     if (!label || label.length > 48) continue
@@ -330,7 +334,15 @@ function scoreMatch(el: HTMLElement, parts: ReturnType<typeof parseAeSelector>):
   if (needle && label.toLowerCase() === needle.toLowerCase()) score += 100
   else if (needle && label.toLowerCase().includes(needle.toLowerCase())) score += 40
 
+  if (parts.aria) {
+    const aria = (el.getAttribute('aria-label') ?? '').toLowerCase()
+    const want = parts.aria.value.toLowerCase()
+    if (aria && aria === want) score += 90
+    else if (aria && aria.includes(want)) score += 40
+  }
+
   if (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button') score += 40
+  if (el.tagName === 'A' || el.getAttribute('role') === 'link') score += 35
   if (el.className.toString().includes('ds-button')) score += 25
   if (looksClickable(el)) score += 10
   // Penalize content-only nodes if any slip through
@@ -339,12 +351,25 @@ function scoreMatch(el: HTMLElement, parts: ReturnType<typeof parseAeSelector>):
   }
 
   const rect = el.getBoundingClientRect()
-  // Prefer elements lower on the page (latest message actions, e.g. Continue)
-  score += Math.min(50, rect.top / 40)
   // Prefer in viewport
   if (rect.top >= 0 && rect.bottom <= window.innerHeight) score += 20
-  // Prefer near bottom of viewport (chat action row)
-  if (rect.bottom > window.innerHeight * 0.45) score += 20
+
+  const ariaNeedle = (parts.aria?.value ?? needle).toLowerCase()
+  const isNavControl = /\b(back|close|menu|home|settings|profile|logout|account)\b/i.test(
+    ariaNeedle,
+  )
+
+  if (isNavControl) {
+    // Nav / aria controls are often top-left — do NOT prefer chat-bottom widgets
+    score += Math.max(0, 50 - rect.top / 16)
+    score += Math.max(0, 35 - rect.left / 24)
+    // Prefer compact controls
+    score += Math.max(0, 25 - (rect.width * rect.height) / 4000)
+  } else {
+    // Chat / generation actions: prefer lower in the viewport
+    score += Math.min(50, rect.top / 40)
+    if (rect.bottom > window.innerHeight * 0.45) score += 20
+  }
 
   return score
 }
