@@ -52,10 +52,10 @@ export function Sidebar() {
             <Network className="h-5 w-5" />
           </div>
           <div>
-            <p className="font-display text-lg font-semibold tracking-tight text-foreground">
+            <p className="font-display text-xl font-semibold tracking-tight text-foreground">
               {t('app.name')}
             </p>
-            <p className="text-[11px] text-muted-foreground">{t('app.tagline')}</p>
+            <p className="text-sm text-muted-foreground">{t('app.tagline')}</p>
           </div>
         </div>
       </div>
@@ -73,7 +73,7 @@ export function Sidebar() {
                 setView(id)
               }}
               className={cn(
-                'relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm transition-colors',
+                'relative flex items-center gap-2.5 rounded-xl px-3 py-3 text-[15px] transition-colors',
                 active
                   ? 'text-foreground'
                   : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground',
@@ -86,7 +86,7 @@ export function Sidebar() {
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                 />
               )}
-              <Icon className="relative z-10 h-4 w-4" />
+              <Icon className="relative z-10 h-[18px] w-[18px]" />
               <span className="relative z-10 font-medium">{t(itemKeys[id])}</span>
             </button>
           )
@@ -112,7 +112,7 @@ export function Sidebar() {
           <RotateCcw className="h-3.5 w-3.5" />
           {t('common.reload')}
         </Button>
-        <p className="text-center text-[11px] text-muted-foreground">{t('app.manifestNote')}</p>
+        <p className="text-center text-xs text-muted-foreground">{t('app.manifestNote')}</p>
       </div>
     </aside>
   )

@@ -1,8 +1,21 @@
 import { nanoid } from 'nanoid'
-import type { AutomationPlan, PlannerEdge, PlannerNode, VisualWorkflow } from '@/planner/types/plan'
+import type {
+  AutomationPlan,
+  PlanDataset,
+  PlanDatasetKind,
+  PlannerEdge,
+  PlannerNode,
+  VisualWorkflow,
+} from '@/planner/types/plan'
 import type { WorkflowDefinition } from '@/shared/types/workflow'
 
-export type ExportKind = 'workspace' | 'plan' | 'workflow' | 'snippet' | 'legacy-workflow'
+export type ExportKind =
+  | 'workspace'
+  | 'plan'
+  | 'workflow'
+  | 'snippet'
+  | 'legacy-workflow'
+  | 'dataset'
 
 export interface WorkspacePayload {
   kind: 'workspace'
@@ -47,12 +60,24 @@ export interface LegacyWorkflowPayload {
   workflow: WorkflowDefinition
 }
 
+/** Single dataset (variables JSON) scoped to a workflow. */
+export interface DatasetPayload {
+  kind: 'dataset'
+  version: 1
+  exportedAt: string
+  name: string
+  description?: string
+  data: unknown
+  datasetKind?: PlanDatasetKind
+}
+
 export type AnyExportPayload =
   | WorkspacePayload
   | PlanPayload
   | WorkflowPayload
   | SnippetPayload
   | LegacyWorkflowPayload
+  | DatasetPayload
 
 /**
  * Build a safe download filename from a display name.
@@ -165,6 +190,53 @@ export function buildLegacyWorkflowExport(workflow: WorkflowDefinition): LegacyW
   }
 }
 
+export function buildDatasetExport(dataset: PlanDataset): DatasetPayload {
+  return {
+    kind: 'dataset',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    name: dataset.name,
+    description: dataset.description,
+    data: dataset.data,
+    datasetKind: dataset.kind,
+  }
+}
+
+export function parseDatasetPayload(raw: unknown): DatasetPayload {
+  if (!raw || typeof raw !== 'object') throw new Error('Invalid dataset JSON')
+  const data = raw as Record<string, unknown>
+  if (data.kind === 'dataset' && typeof data.name === 'string') {
+    return {
+      kind: 'dataset',
+      version: 1,
+      exportedAt:
+        typeof data.exportedAt === 'string' ? data.exportedAt : new Date().toISOString(),
+      name: data.name,
+      description: typeof data.description === 'string' ? data.description : undefined,
+      data: data.data,
+      datasetKind:
+        data.datasetKind === 'textLibrary' ||
+        data.datasetKind === 'custom' ||
+        data.datasetKind === 'legacyCustomSection'
+          ? data.datasetKind
+          : 'custom',
+    }
+  }
+  // Bare JSON object → treat as custom dataset value
+  if (typeof data.name === 'string' && 'data' in data) {
+    return {
+      kind: 'dataset',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      name: data.name,
+      description: typeof data.description === 'string' ? data.description : undefined,
+      data: data.data,
+      datasetKind: 'custom',
+    }
+  }
+  throw new Error('Not a dataset export (need kind: "dataset" or { name, data })')
+}
+
 export function detectPayload(raw: unknown): AnyExportPayload {
   if (!raw || typeof raw !== 'object') throw new Error('Invalid JSON')
   const data = raw as Record<string, unknown>
@@ -174,7 +246,8 @@ export function detectPayload(raw: unknown): AnyExportPayload {
     data.kind === 'plan' ||
     data.kind === 'workflow' ||
     data.kind === 'snippet' ||
-    data.kind === 'legacy-workflow'
+    data.kind === 'legacy-workflow' ||
+    data.kind === 'dataset'
   ) {
     return data as unknown as AnyExportPayload
   }

@@ -164,14 +164,16 @@ export function createEmptyDataset(args: {
   name: string
   description?: string
   kind?: PlanDatasetKind
+  data?: unknown
 }): PlanDataset {
   const kind = args.kind ?? 'custom'
   const now = new Date().toISOString()
+  const fallback = kind === 'textLibrary' ? { items: [] } : {}
   return {
     id: `ds_${nanoid(8)}`,
     name: args.name.trim(),
     description: (args.description ?? '').trim() || undefined,
-    data: kind === 'textLibrary' ? { items: [] } : {},
+    data: args.data !== undefined ? args.data : fallback,
     kind,
     updatedAt: now,
   }

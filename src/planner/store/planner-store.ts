@@ -111,7 +111,7 @@ interface PlannerState {
   /** Dynamic Dataset manager */
   createDataset: (
     planId: string,
-    args: { name: string; description?: string; kind?: PlanDatasetKind },
+    args: { name: string; description?: string; kind?: PlanDatasetKind; data?: unknown },
   ) => string
   updateDatasetMeta: (
     planId: string,
@@ -601,6 +601,7 @@ export const usePlannerStore = create<PlannerState>()(
           name: args.name,
           description: args.description,
           kind: args.kind ?? 'custom',
+          data: args.data,
         })
         dataset.updatedAt = now
 
@@ -1068,6 +1069,18 @@ export const usePlannerStore = create<PlannerState>()(
           }))
           await get().persist()
           return `Snippet imported (${remapped.nodes.length} steps)`
+        }
+
+        if (payload.kind === 'dataset') {
+          const targetPlanId = get().selectedPlanId ?? get().plans[0]?.id
+          if (!targetPlanId) throw new Error('Select a workflow first, then import a dataset')
+          const id = get().createDataset(targetPlanId, {
+            name: payload.name,
+            description: payload.description,
+            kind: payload.datasetKind ?? 'custom',
+            data: payload.data ?? {},
+          })
+          return `Dataset imported: ${payload.name} (${id})`
         }
 
         if (payload.kind === 'legacy-workflow') {

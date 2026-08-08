@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Copy, Pencil, Plus, Trash2, Workflow } from 'lucide-react'
+import {
+  Download,
+  Pencil,
+  Plus,
+  Settings2,
+  Trash2,
+  Upload,
+  Workflow,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -14,8 +21,15 @@ import { ImportExportMenu } from '@/planner/components/import-export-menu'
 import { DatasetManagerPanel } from '@/planner/components/dataset-manager-panel'
 import { RunLogPanel } from '@/planner/components/run-log-panel'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
-import { ACTION_LIBRARY } from '@/planner/actions/catalog'
+import {
+  downloadJson,
+  pickJsonFile,
+  readJsonFile,
+  safeDownloadName,
+} from '@/planner/io/export-import'
 import { useT } from '@/shared/i18n/use-t'
+import { cn } from '@/shared/utils/cn'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 export function PlannerView() {
   const t = useT()
@@ -32,26 +46,27 @@ export function PlannerView() {
   const createWorkflow = usePlannerStore((s) => s.createWorkflow)
   const updateWorkflowMeta = usePlannerStore((s) => s.updateWorkflowMeta)
   const deleteWorkflow = usePlannerStore((s) => s.deleteWorkflow)
-  const duplicateWorkflow = usePlannerStore((s) => s.duplicateWorkflow)
   const builderOpen = usePlannerStore((s) => s.builderOpen)
   const setBuilderOpen = usePlannerStore((s) => s.setBuilderOpen)
   const setCheckpoint = usePlannerStore((s) => s.setCheckpoint)
   const checkpoint = usePlannerStore((s) => s.checkpoint)
-  const theme = usePlannerStore((s) => s.theme)
-  const setTheme = usePlannerStore((s) => s.setTheme)
+  const exportWorkflowPayload = usePlannerStore((s) => s.exportWorkflowPayload)
+  const importPayload = usePlannerStore((s) => s.importPayload)
+
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [showCreateWorkflow, setShowCreateWorkflow] = useState(false)
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [editingPlanName, setEditingPlanName] = useState('')
   const [editingPlanDescription, setEditingPlanDescription] = useState('')
   const [editingWorkflowId, setEditingWorkflowId] = useState<string | null>(null)
   const [editingWorkflowName, setEditingWorkflowName] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
     void hydrate()
   }, [hydrate])
 
-  // Keep hub/builder selection on the Plan that is currently executing (Next Plan Execute).
   useEffect(() => {
     if (!checkpoint?.workflowId) return
     if (
@@ -86,7 +101,6 @@ export function PlannerView() {
 
     pull()
 
-    // Instant updates when the background runner writes the checkpoint
     const onStorage: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
       changes,
       area,
@@ -98,7 +112,6 @@ export function PlannerView() {
     }
     chrome.storage.onChanged.addListener(onStorage)
 
-    // Fast poll while running; slower when idle
     let timer = window.setInterval(pull, 400)
     const pace = window.setInterval(() => {
       const status = usePlannerStore.getState().checkpoint?.status
@@ -115,7 +128,39 @@ export function PlannerView() {
     }
   }, [setCheckpoint])
 
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 3200)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
   const planWorkflows = workflows.filter((wf) => wf.planId === selectedPlanId)
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null
+
+  async function exportPlan(workflowId: string, planName: string) {
+    try {
+      downloadJson(safeDownloadName(planName, 'plan'), exportWorkflowPayload(workflowId))
+      setToast(t('planner.exportOk'))
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function importPlanIntoWorkflow() {
+    if (!selectedPlanId) {
+      setToast(t('planner.selectLeft'))
+      return
+    }
+    try {
+      const file = await pickJsonFile()
+      if (!file) return
+      const raw = await readJsonFile(file)
+      const result = await importPayload(raw, 'merge')
+      setToast(result)
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   if (builderOpen) {
     return (
@@ -135,111 +180,111 @@ export function PlannerView() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
             {t('planner.title')}
           </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('planner.subtitle')}</p>
+          <p className="truncate text-sm text-muted-foreground">{t('planner.subtitleShort')}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ImportExportMenu />
-          <Button
-            variant="outline"
-            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-          >
-            {t(theme === 'light' ? 'theme.dark' : 'theme.light')}
-          </Button>
-          <Button onClick={() => setBuilderOpen(true)} disabled={!selectedWorkflowId}>
-            {t('common.openBuilder')}
-          </Button>
-        </div>
+        <ImportExportMenu compact />
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-panel"
-        >
-          <div className="space-y-3">
-            <p className="text-xs font-medium">{t('planner.createWorkflow')}</p>
-            <label className="block space-y-1">
-              <span className="text-[11px] text-muted-foreground">{t('planner.name')}</span>
-              <Input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder={t('planner.namePlaceholder')}
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="text-[11px] text-muted-foreground">{t('planner.description')}</span>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder={t('planner.descPlaceholder')}
-                rows={3}
-                className="min-h-[72px] w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
-              />
-            </label>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(260px,0.95fr)_minmax(320px,1.35fr)]">
+        {/* ── Left: Workflows ── */}
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3.5 py-3">
+            <div>
+              <p className="text-base font-semibold text-foreground">{t('planner.workflows')}</p>
+              <p className="text-sm text-muted-foreground">{t('planner.workflowsHint')}</p>
+            </div>
             <Button
-              className="w-full sm:w-auto"
-              disabled={!name.trim()}
-              onClick={() => {
-                const trimmedName = name.trim()
-                if (!trimmedName) return
-                void createPlan(trimmedName, description).then(() => {
-                  setName('')
-                  setDescription('')
-                })
-              }}
+              size="sm"
+              className="h-9 shrink-0 rounded-lg px-3 text-sm"
+              onClick={() => setShowCreateWorkflow((v) => !v)}
             >
               <Plus className="h-4 w-4" />
               {t('planner.createWorkflow')}
             </Button>
           </div>
 
-          <div className="mt-5 space-y-2">
-            {plans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`w-full rounded-xl border px-4 py-3 text-left transition ${
-                  selectedPlanId === plan.id
-                    ? 'border-primary/50 bg-primary/15 text-foreground'
-                    : 'border-border bg-secondary/40 text-foreground hover:bg-accent'
-                }`}
-              >
-                <button
-                  type="button"
+          {showCreateWorkflow ? (
+            <div className="shrink-0 space-y-2 border-b border-border bg-muted/25 px-3 py-3">
+              <label className="block space-y-1">
+                <span className="text-sm text-muted-foreground">{t('planner.name')}</span>
+                <Input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder={t('planner.namePlaceholder')}
+                  className="h-9"
+                  autoFocus
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-sm text-muted-foreground">{t('planner.description')}</span>
+                <textarea
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder={t('planner.descPlaceholder')}
+                  rows={2}
+                  className="min-h-[56px] w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-[15px] text-foreground outline-none ring-ring focus:ring-2"
+                />
+              </label>
+              <div className="flex gap-1.5">
+                <Button
+                  size="sm"
+                  className="h-9 rounded-lg px-3 text-sm"
+                  disabled={!name.trim()}
                   onClick={() => {
-                    selectPlan(plan.id)
-                    const first = workflows.find((wf) => wf.planId === plan.id)
-                    selectWorkflow(first?.id ?? null)
+                    const trimmedName = name.trim()
+                    if (!trimmedName) return
+                    void createPlan(trimmedName, description).then(() => {
+                      setName('')
+                      setDescription('')
+                      setShowCreateWorkflow(false)
+                    })
                   }}
-                  className="w-full text-left"
                 >
-                  <div className="flex items-center justify-between gap-2">
+                  {t('common.save')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-9 rounded-lg px-3 text-sm"
+                  onClick={() => {
+                    setShowCreateWorkflow(false)
+                    setName('')
+                    setDescription('')
+                  }}
+                >
+                  {t('common.cancel')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-2 p-3">
+              {plans.map((plan) => {
+                const active = selectedPlanId === plan.id
+                return (
+                  <div
+                    key={plan.id}
+                    className={cn(
+                      'rounded-lg border px-3 py-2.5 transition',
+                      active
+                        ? 'border-primary/45 bg-primary/10'
+                        : 'border-border/70 bg-background/50 hover:bg-accent/50',
+                    )}
+                  >
                     {editingPlanId === plan.id ? (
-                      <div
-                        className="min-w-0 flex-1 space-y-2"
-                        onClick={(event) => event.stopPropagation()}
-                      >
+                      <div className="space-y-1.5">
                         <Input
                           value={editingPlanName}
                           autoFocus
                           onChange={(event) => setEditingPlanName(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void updatePlan(plan.id, {
-                                name: editingPlanName,
-                                description: editingPlanDescription,
-                              }).then(() => setEditingPlanId(null))
-                            }
-                            if (event.key === 'Escape') setEditingPlanId(null)
-                          }}
-                          className="h-8"
+                          className="h-9 text-[15px]"
                           placeholder={t('planner.name')}
                         />
                         <textarea
@@ -247,12 +292,12 @@ export function PlannerView() {
                           onChange={(event) => setEditingPlanDescription(event.target.value)}
                           rows={2}
                           placeholder={t('planner.description')}
-                          className="min-h-[56px] w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-xs text-foreground outline-none ring-ring focus:ring-2"
+                          className="min-h-[52px] w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none ring-ring focus:ring-2"
                         />
-                        <div className="flex gap-1.5">
+                        <div className="flex gap-1">
                           <Button
                             size="sm"
-                            className="h-7 px-2 text-xs"
+                            className="h-8 px-2.5 text-sm"
                             onClick={() => {
                               void updatePlan(plan.id, {
                                 name: editingPlanName,
@@ -265,7 +310,7 @@ export function PlannerView() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 px-2 text-xs"
+                            className="h-8 px-2.5 text-sm"
                             onClick={() => setEditingPlanId(null)}
                           >
                             {t('common.cancel')}
@@ -273,267 +318,225 @@ export function PlannerView() {
                         </div>
                       </div>
                     ) : (
-                      <p className="font-medium text-foreground">
-                        {t('planner.workflowPrefix', { name: plan.name })}
-                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          selectPlan(plan.id)
+                          const first = workflows.find((wf) => wf.planId === plan.id)
+                          selectWorkflow(first?.id ?? null)
+                        }}
+                        className="w-full text-left"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-[15px] font-medium text-foreground">{plan.name}</p>
+                          <Badge variant="outline" className="shrink-0 text-xs">
+                            {plan.workflowIds.length}{' '}
+                            {plan.workflowIds.length === 1 ? t('common.plan') : t('common.plans')}
+                          </Badge>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">
+                          {plan.description || t('common.noDescription')}
+                        </p>
+                      </button>
                     )}
-                    <Badge variant="outline">
-                      {plan.workflowIds.length}{' '}
-                      {plan.workflowIds.length === 1 ? t('common.plan') : t('common.plans')}
-                    </Badge>
+                    {editingPlanId !== plan.id ? (
+                      <div className="mt-1.5 flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-sm"
+                          onClick={() => {
+                            setEditingPlanId(plan.id)
+                            setEditingPlanName(plan.name)
+                            setEditingPlanDescription(plan.description ?? '')
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          {t('common.edit')}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-sm text-destructive hover:text-destructive"
+                          onClick={() => void deletePlan(plan.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {t('common.delete')}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
-                  {editingPlanId !== plan.id ? (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {plan.description || t('common.noDescription')}
-                    </p>
-                  ) : null}
-                </button>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setEditingPlanId(plan.id)
-                      setEditingPlanName(plan.name)
-                      setEditingPlanDescription(plan.description ?? '')
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                    {t('common.edit')}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void deletePlan(plan.id)
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                    {t('common.delete')}
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {plans.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('planner.noWorkflowsYet')}</p>
-            ) : null}
-          </div>
-        </motion.div>
+                )
+              })}
+              {plans.length === 0 ? (
+                <p className="px-1 py-6 text-center text-[15px] text-muted-foreground">
+                  {t('planner.noWorkflowsYet')}
+                </p>
+              ) : null}
+            </div>
+          </ScrollArea>
+        </section>
 
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="space-y-4"
-        >
-          <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="font-display text-lg font-semibold">{t('planner.plans')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {selectedPlanId
-                    ? t('planner.insideWorkflow', {
-                        name: plans.find((p) => p.id === selectedPlanId)?.name ?? '—',
-                      })
+        {/* ── Right: Plans (top half) + Datasets (bottom half) ── */}
+        <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-3">
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-foreground">{t('planner.plans')}</p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {selectedPlan
+                    ? t('planner.insideWorkflow', { name: selectedPlan.name })
                     : t('planner.selectWorkflowPlans')}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1">
                 <Button
                   size="sm"
                   variant="outline"
+                  className="h-9 rounded-lg px-2.5 text-sm"
+                  disabled={!selectedPlanId}
+                  onClick={() => void importPlanIntoWorkflow()}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {t('common.import')}
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-9 rounded-lg px-2.5 text-sm"
                   disabled={!selectedPlanId}
                   onClick={() => {
                     if (!selectedPlanId) return
-                    void createWorkflow(selectedPlanId).then(() => setBuilderOpen(true))
+                    void createWorkflow(selectedPlanId)
                   }}
                 >
                   <Plus className="h-3.5 w-3.5" />
                   {t('planner.createPlan')}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!selectedWorkflowId}
-                  onClick={() => selectedWorkflowId && duplicateWorkflow(selectedWorkflowId)}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {t('common.duplicate')}
-                </Button>
               </div>
             </div>
-            <div className="mt-3 space-y-2">
-              {planWorkflows.map((wf) => (
-                <div
-                  key={wf.id}
-                  className={`rounded-xl border px-3 py-2 ${
-                    selectedWorkflowId === wf.id
-                      ? 'border-primary/40 bg-primary/5'
-                      : 'border-border/70'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => selectWorkflow(wf.id)}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
-                      <Workflow className="h-4 w-4 shrink-0 text-primary" />
-                      {editingWorkflowId === wf.id ? (
-                        <Input
-                          value={editingWorkflowName}
-                          autoFocus
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => setEditingWorkflowName(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault()
-                              void updateWorkflowMeta(wf.id, { name: editingWorkflowName }).then(
-                                () => setEditingWorkflowId(null),
-                              )
-                            }
-                            if (event.key === 'Escape') setEditingWorkflowId(null)
-                          }}
-                          onBlur={() => {
-                            void updateWorkflowMeta(wf.id, { name: editingWorkflowName }).then(() =>
-                              setEditingWorkflowId(null),
-                            )
-                          }}
-                          className="h-7"
-                        />
-                      ) : (
-                        <span className="truncate">{wf.name}</span>
-                      )}
-                    </span>
-                    <Badge variant="secondary">
-                      {wf.nodes.length} {t('common.steps')}
-                    </Badge>
-                  </button>
-                  <div className="mt-1.5 flex flex-wrap gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs"
-                      onClick={() => {
-                        selectWorkflow(wf.id)
-                        setEditingWorkflowId(wf.id)
-                        setEditingWorkflowName(wf.name)
-                      }}
-                    >
-                      <Pencil className="h-3 w-3" />
-                      {t('common.rename')}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-                      onClick={() => void deleteWorkflow(wf.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      {t('common.delete')}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {planWorkflows.length === 0 && selectedPlanId ? (
-              <p className="mt-3 text-sm text-muted-foreground">{t('planner.noPlansYet')}</p>
-            ) : null}
-            {!selectedPlanId ? (
-              <p className="mt-3 text-sm text-muted-foreground">{t('planner.selectLeft')}</p>
-            ) : null}
-            <Button className="mt-4 w-full" onClick={() => setBuilderOpen(true)} disabled={!selectedWorkflowId}>
-              {t('planner.editBuilder')}
-            </Button>
-          </div>
 
-          <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
-            <p className="font-display text-lg font-semibold">{t('planner.executionMonitor')}</p>
-            {checkpoint ? (
-              <div className="mt-3 space-y-2 text-sm">
-                <p>
-                  {t('planner.status')}{' '}
-                  <Badge
-                    variant={
-                      checkpoint.status === 'failed'
-                        ? 'destructive'
-                        : checkpoint.status === 'running'
-                          ? 'default'
-                          : 'secondary'
-                    }
-                  >
-                    {checkpoint.status}
-                  </Badge>
-                </p>
-                {(() => {
-                  const activePlan = workflows.find((wf) => wf.id === checkpoint.workflowId)
-                  const activeWorkflow = plans.find((plan) => plan.id === checkpoint.planId)
-                  return (
-                    <>
-                      <p className="text-sm">
-                        {t('planner.workflowLabel')}{' '}
-                        <span className="font-medium">
-                          {activeWorkflow?.name ?? checkpoint.planId}
-                        </span>
-                      </p>
-                      <p className="text-sm">
-                        {t('planner.currentPlan')}{' '}
-                        <span className="font-medium">
-                          {activePlan?.name ?? checkpoint.workflowId}
-                        </span>
-                      </p>
-                    </>
-                  )
-                })()}
-                <p className="font-mono text-xs text-muted-foreground">
-                  {t('planner.node')} {checkpoint.currentNodeId ?? '—'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('planner.historyEntries', { count: checkpoint.history.length })}
-                </p>
-                {(() => {
-                  const lastFail = [...checkpoint.history]
-                    .reverse()
-                    .find((item) => item.error || item.status === 'failed' || item.status === 'timeout')
-                  if (!lastFail) return null
-                  return (
-                    <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-foreground">
-                      <p className="font-semibold text-destructive">{t('planner.lastError')}</p>
-                      <p className="mt-1 break-words">{lastFail.error ?? lastFail.status}</p>
-                      <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                        {lastFail.nodeId}
-                      </p>
-                    </div>
-                  )
-                })()}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void sendRuntimeMessage({ type: 'PLANNER_RESUME' })}
-                >
-                  {t('planner.resumeCheckpoint')}
-                </Button>
-                <p className="text-[11px] text-muted-foreground">{t('planner.fullLogs')}</p>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-2 p-3">
+                {!selectedPlanId ? (
+                  <p className="px-1 py-8 text-center text-[15px] text-muted-foreground">
+                    {t('planner.selectLeft')}
+                  </p>
+                ) : planWorkflows.length === 0 ? (
+                  <p className="px-1 py-8 text-center text-[15px] text-muted-foreground">
+                    {t('planner.noPlanAvailable')}
+                  </p>
+                ) : (
+                  planWorkflows.map((wf) => {
+                    const active = selectedWorkflowId === wf.id
+                    return (
+                      <div
+                        key={wf.id}
+                        className={cn(
+                          'rounded-lg border px-3 py-2.5 transition',
+                          active
+                            ? 'border-primary/45 bg-primary/10'
+                            : 'border-border/70 bg-background/50 hover:bg-accent/50',
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => selectWorkflow(wf.id)}
+                          className="flex w-full items-center justify-between gap-2 text-left"
+                        >
+                          <span className="flex min-w-0 items-center gap-2 text-[15px] font-medium">
+                            <Workflow className="h-4 w-4 shrink-0 text-primary" />
+                            {editingWorkflowId === wf.id ? (
+                              <Input
+                                value={editingWorkflowName}
+                                autoFocus
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => setEditingWorkflowName(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') {
+                                    event.preventDefault()
+                                    void updateWorkflowMeta(wf.id, {
+                                      name: editingWorkflowName,
+                                    }).then(() => setEditingWorkflowId(null))
+                                  }
+                                  if (event.key === 'Escape') setEditingWorkflowId(null)
+                                }}
+                                onBlur={() => {
+                                  void updateWorkflowMeta(wf.id, {
+                                    name: editingWorkflowName,
+                                  }).then(() => setEditingWorkflowId(null))
+                                }}
+                                className="h-9"
+                              />
+                            ) : (
+                              <span className="truncate">{wf.name}</span>
+                            )}
+                          </span>
+                          <Badge variant="secondary" className="shrink-0 text-xs">
+                            {wf.nodes.length} {t('common.steps')}
+                          </Badge>
+                        </button>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          <Button
+                            size="sm"
+                            className="h-9 rounded-md px-2.5 text-sm"
+                            onClick={() => {
+                              selectWorkflow(wf.id)
+                              setBuilderOpen(true)
+                            }}
+                          >
+                            <Settings2 className="h-3.5 w-3.5" />
+                            {t('planner.configurePlan')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2 text-sm"
+                            onClick={() => {
+                              setEditingWorkflowId(wf.id)
+                              setEditingWorkflowName(wf.name)
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            {t('common.edit')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2 text-sm"
+                            onClick={() => void exportPlan(wf.id, wf.name)}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {t('common.export')}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 px-2 text-sm text-destructive hover:text-destructive"
+                            onClick={() => void deleteWorkflow(wf.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {t('common.delete')}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
               </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">{t('planner.noActiveRun')}</p>
-            )}
+            </ScrollArea>
           </div>
 
-          <DatasetManagerPanel planId={selectedPlanId} />
-
-          <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
-            <p className="font-display text-lg font-semibold">{t('planner.actionLibrary')}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t('planner.actionLibraryHelp', { count: ACTION_LIBRARY.length })}
-            </p>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <DatasetManagerPanel planId={selectedPlanId} compact />
           </div>
-        </motion.div>
-      </section>
+        </section>
+      </div>
+
+      {toast ? (
+        <p className="fixed bottom-4 right-4 z-[99999] max-w-sm rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground shadow-2xl">
+          {toast}
+        </p>
+      ) : null}
     </div>
   )
 }

@@ -183,7 +183,7 @@ export function ActivityView() {
                   <Badge variant={levelVariant[log.level]}>{log.level}</Badge>
                   <span className="text-sm font-medium">{log.source}</span>
                 </div>
-                <span className="font-mono text-[11px] text-muted-foreground">
+                <span className="font-mono text-sm text-muted-foreground">
                   {new Date(log.timestamp).toLocaleString()}
                 </span>
               </div>

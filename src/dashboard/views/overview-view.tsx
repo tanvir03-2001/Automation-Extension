@@ -280,7 +280,7 @@ export function OverviewView() {
                         </Badge>
                       ) : null}
                     </div>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    <p className="mt-0.5 text-sm text-muted-foreground">
                       {planCount} {planCount === 1 ? t('common.plan') : t('common.plans')}
                     </p>
                   </div>
@@ -305,7 +305,7 @@ export function OverviewView() {
         >
           <div className="flex shrink-0 items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">
                 {t('overview.activeRun')}
               </p>
               <h2
@@ -321,7 +321,7 @@ export function OverviewView() {
                 <p
                   className={cn(
                     'mt-0.5 truncate text-muted-foreground',
-                    liveExpanded ? 'text-[10px]' : 'text-xs',
+                    liveExpanded ? 'text-xs' : 'text-xs',
                   )}
                   title={displayPlan.name}
                 >
@@ -330,7 +330,7 @@ export function OverviewView() {
                     : t('overview.currentPlan', { name: displayPlan.name })}
                 </p>
               ) : (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <p className="mt-0.5 text-sm text-muted-foreground">
                   {t('overview.selectWorkflowWithPlan')}
                 </p>
               )}
@@ -341,7 +341,7 @@ export function OverviewView() {
           </div>
 
           <div className={cn('shrink-0 space-y-1.5', liveExpanded ? 'mt-2.5' : 'mt-4')}>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
               <span>{t('common.progress')}</span>
               <span className="font-mono">{progress}%</span>
             </div>
@@ -402,14 +402,14 @@ export function OverviewView() {
           </div>
 
           {plannerCheckpoint?.status === 'failed' ? (
-            <p className="mt-2 shrink-0 rounded-lg bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+            <p className="mt-2 shrink-0 rounded-lg bg-destructive/10 px-2 py-1.5 text-sm text-destructive">
               {[...plannerCheckpoint.history].reverse().find((item) => item.error)?.error ??
                 t('overview.runFailed')}
             </p>
           ) : null}
 
           {!selectedIsRunning && plannerBusy ? (
-            <p className="mt-2 shrink-0 rounded-lg border border-border/70 bg-muted/40 px-2 py-1.5 text-[11px] text-muted-foreground">
+            <p className="mt-2 shrink-0 rounded-lg border border-border/70 bg-muted/40 px-2 py-1.5 text-sm text-muted-foreground">
               {t('overview.anotherRun')}
             </p>
           ) : null}
@@ -444,7 +444,7 @@ export function OverviewView() {
                   >
                     <div className="min-w-0">
                       <p className="truncate text-xs font-medium md:text-sm">{plan.name}</p>
-                      <p className="font-mono text-[10px] text-muted-foreground">
+                      <p className="font-mono text-xs text-muted-foreground">
                         {nodeCount} {t('common.steps')}
                       </p>
                     </div>

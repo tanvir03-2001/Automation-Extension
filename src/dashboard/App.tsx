@@ -45,8 +45,8 @@ export default function App() {
   const hydrateTheme = usePlannerStore((s) => s.hydrate)
   const theme = usePlannerStore((s) => s.theme)
   const fullBleed = view === 'planner' && builderOpen
-  // Overview sections stretch to the viewport; planner builder is edge-to-edge.
-  const fillHeight = fullBleed || view === 'overview'
+  // Overview + planner hub stretch to the viewport; planner builder is edge-to-edge.
+  const fillHeight = fullBleed || view === 'overview' || view === 'planner'
 
   // Ensure dark/light tokens apply on every dashboard surface (not only Planner).
   useEffect(() => {
