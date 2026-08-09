@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -21,6 +17,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { Layers, Loader2, Trash2 } from 'lucide-react'
 import { EdgeRouteProvider } from '@/planner/components/edges/edge-route-context'
+import { PlannerFlowChrome } from '@/planner/components/planner-flow-chrome'
 import {
   applyRunEdgeStyles,
   defaultPlannerEdgeOptions,
@@ -545,15 +542,7 @@ function CanvasInner() {
         panOnDrag
         proOptions={{ hideAttribution: true }}
       >
-        <Background id="dots" variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#c5ceda" />
-        <MiniMap
-          pannable
-          zoomable
-          className="!overflow-hidden !rounded-2xl !border !border-[hsl(var(--border))] !bg-[hsl(var(--card))] !shadow-lg"
-          maskColor="rgba(15, 23, 42, 0.08)"
-          nodeColor={() => '#0f766e'}
-        />
-        <Controls className="!overflow-hidden !rounded-2xl !border !border-[hsl(var(--border))] !bg-[hsl(var(--card))] !shadow-lg" />
+        <PlannerFlowChrome />
       </ReactFlow>
     </div>
   )

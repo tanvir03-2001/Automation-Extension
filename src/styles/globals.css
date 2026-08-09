@@ -235,22 +235,6 @@ html[data-locale='bn'] .text-xs {
   background: hsl(222 24% 14%) !important;
 }
 
-/* Overview Live Activity: compact minimap with clear event dots */
-.ae-preview-canvas .ae-preview-minimap.react-flow__minimap,
-.ae-preview-canvas .react-flow__panel.ae-preview-minimap {
-  width: 88px !important;
-  height: 68px !important;
-}
-
-.ae-preview-canvas .react-flow__minimap svg {
-  width: 88px !important;
-  height: 68px !important;
-}
-
-.dark .ae-preview-canvas .ae-preview-minimap.react-flow__minimap {
-  background: hsl(222 24% 14%) !important;
-}
-
 .dark body {
   background-image:
     radial-gradient(ellipse 80% 50% at 10% -10%, rgba(34, 160, 120, 0.12), transparent 55%),

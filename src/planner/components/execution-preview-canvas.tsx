@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Background,
-  BackgroundVariant,
-  Controls,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
   type Edge,
-  type MiniMapNodeProps,
   type Node,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -22,6 +17,7 @@ import {
   toFlowEdges,
   toFlowNodes,
 } from '@/planner/components/flow-graph-shared'
+import { PlannerFlowChrome } from '@/planner/components/planner-flow-chrome'
 import { RunVisualWorkflowProvider } from '@/planner/hooks/run-visual-workflow-context'
 import { useActiveRunLabel } from '@/planner/hooks/use-node-run-visual'
 import { usePlannerStore } from '@/planner/store/planner-store'
@@ -36,21 +32,6 @@ function resolveFocusNodeId(checkpoint: ExecutionCheckpoint): string | null {
     if (checkpoint.history[i]?.nodeId) return checkpoint.history[i].nodeId
   }
   return null
-}
-
-/** Small dots so event positions are clear on the compact minimap. */
-function PreviewMiniMapDot({ x, y, width, height, color, strokeColor }: MiniMapNodeProps) {
-  const r = 2.4
-  return (
-    <circle
-      cx={x + width / 2}
-      cy={y + height / 2}
-      r={r}
-      fill={color ?? '#0f766e'}
-      stroke={strokeColor ?? '#0f766e'}
-      strokeWidth={0.6}
-    />
-  )
 }
 
 function PreviewInner({ workflowId }: { workflowId: string | null }) {
@@ -239,7 +220,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
   return (
     <div
       ref={containerRef}
-      className="ae-canvas ae-preview-canvas relative h-full min-h-0 overflow-hidden rounded-xl border border-border bg-[hsl(var(--background))]"
+      className="ae-canvas relative h-full min-h-0 overflow-hidden rounded-xl border border-border"
     >
       <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-3">
         {runHud.active && runHud.status ? (
@@ -300,24 +281,10 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
         minZoom={0.25}
         maxZoom={1.75}
       >
-        <Background id="preview-dots" variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#c5ceda" />
-        <MiniMap
-          pannable
-          zoomable
-          position="bottom-right"
-          nodeComponent={PreviewMiniMapDot}
-          nodeColor={() => '#0f766e'}
-          nodeStrokeColor={() => '#0f766e'}
-          maskColor="rgba(15, 23, 42, 0.1)"
-          maskStrokeColor="#0f766e"
-          maskStrokeWidth={1.25}
-          offsetScale={8}
-          ariaLabel="Live execution mini map"
-          className="ae-preview-minimap !m-2 !overflow-hidden !rounded-xl !border !border-[hsl(var(--border))] !bg-[hsl(var(--card))] !shadow-md"
-        />
-        <Controls
+        <PlannerFlowChrome
+          backgroundId="preview-dots"
           showInteractive={false}
-          className="!m-2 !overflow-hidden !rounded-xl !border !border-[hsl(var(--border))] !bg-[hsl(var(--card))] !shadow-md"
+          minimapProps={{ ariaLabel: 'Plan preview mini map' }}
         />
       </ReactFlow>
     </div>
