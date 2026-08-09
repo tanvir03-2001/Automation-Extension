@@ -1,7 +1,9 @@
-import { MarkerType, type Edge, type Node } from '@xyflow/react'
+import { MarkerType, type Edge, type EdgeTypes, type Node } from '@xyflow/react'
+import { getActionById } from '@/planner/actions/catalog'
 import { ActionFlowNode } from '@/planner/components/action-node'
+import { SmartOrthogonalEdge } from '@/planner/components/edges/smart-orthogonal-edge'
 import { latestHistoryStatusMap } from '@/planner/hooks/use-node-run-visual'
-import type { ExecutionCheckpoint, PlannerEdge, PlannerNode } from '@/planner/types/plan'
+import type { ExecutionCheckpoint, PlannerEdge, PlannerNode, PlannerNodeData } from '@/planner/types/plan'
 
 export const plannerNodeTypes = {
   action: ActionFlowNode,
@@ -9,20 +11,55 @@ export const plannerNodeTypes = {
   end: ActionFlowNode,
 }
 
+export const plannerEdgeTypes = {
+  smartOrthogonal: SmartOrthogonalEdge,
+} satisfies EdgeTypes
+
+const FLOW_ACCENT = '#334155'
+const FALLBACK_ACCENT = '#0f766e'
+
+/** Match ActionFlowNode accent: data.color → action.color → flow defaults. */
+export function resolveNodeAccentColor(
+  node: { type?: string | null; data?: unknown } | undefined | null,
+): string {
+  if (!node) return FALLBACK_ACCENT
+  const data = (node.data ?? {}) as Partial<PlannerNodeData>
+  if (typeof data.color === 'string' && data.color.trim()) return data.color
+  if (typeof data.actionId === 'string' && data.actionId) {
+    const action = getActionById(data.actionId)
+    if (action?.color) return action.color
+  }
+  if (node.type === 'start' || node.type === 'end') return FLOW_ACCENT
+  return FALLBACK_ACCENT
+}
+
+function edgeMarkers(color: string) {
+  return {
+    markerStart: undefined,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 16,
+      height: 16,
+      color,
+    },
+  }
+}
+
+export function edgeStyleForColor(color: string, strokeWidth = 3.5): Partial<Edge> {
+  return {
+    style: { stroke: color, strokeWidth },
+    ...edgeMarkers(color),
+  }
+}
+
 export const defaultPlannerEdgeOptions: Partial<Edge> = {
-  type: 'smoothstep',
+  type: 'smartOrthogonal',
   animated: true,
   selectable: true,
   focusable: true,
   reconnectable: true,
   interactionWidth: 28,
-  style: { stroke: '#94a3b8', strokeWidth: 2.5 },
-  markerEnd: {
-    type: MarkerType.ArrowClosed,
-    width: 16,
-    height: 16,
-    color: '#94a3b8',
-  },
+  ...edgeStyleForColor('#94a3b8'),
 }
 
 export function toFlowNodes(nodes: PlannerNode[]): Node[] {
@@ -34,7 +71,8 @@ export function toFlowNodes(nodes: PlannerNode[]): Node[] {
   }))
 }
 
-export function toFlowEdges(edges: PlannerEdge[]): Edge[] {
+export function toFlowEdges(edges: PlannerEdge[], nodes: PlannerNode[] = []): Edge[] {
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
   const seen = new Set<string>()
   const unique: PlannerEdge[] = []
   for (const edge of edges) {
@@ -44,16 +82,20 @@ export function toFlowEdges(edges: PlannerEdge[]): Edge[] {
     unique.push(edge)
   }
 
-  return unique.map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    sourceHandle: edge.sourceHandle ?? 'out',
-    targetHandle: edge.targetHandle ?? undefined,
-    ...defaultPlannerEdgeOptions,
-    label: edge.label,
-    selected: false,
-  }))
+  return unique.map((edge) => {
+    const color = resolveNodeAccentColor(nodeById.get(edge.source))
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle ?? 'out',
+      targetHandle: edge.targetHandle ?? undefined,
+      ...defaultPlannerEdgeOptions,
+      ...edgeStyleForColor(color),
+      label: edge.label,
+      selected: false,
+    }
+  })
 }
 
 export function applyRunEdgeStyles(
@@ -62,9 +104,11 @@ export function applyRunEdgeStyles(
     workflowId: string | null
     checkpoint: ExecutionCheckpoint | null
     selectedEdgeId?: string | null
+    nodes?: Array<{ id: string; type?: string | null; data?: unknown }>
   },
 ): Edge[] {
-  const { workflowId, checkpoint, selectedEdgeId = null } = args
+  const { workflowId, checkpoint, selectedEdgeId = null, nodes = [] } = args
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
   const live =
     Boolean(checkpoint) &&
     Boolean(workflowId) &&
@@ -80,20 +124,16 @@ export function applyRunEdgeStyles(
   const previousId = live ? checkpoint?.previousNodeId : null
 
   return edges.map((edge) => {
+    const accent = resolveNodeAccentColor(nodeById.get(edge.source))
     const selected = selectedEdgeId ? edge.id === selectedEdgeId : Boolean(edge.selected)
     if (selected) {
       return {
         ...edge,
+        type: 'smartOrthogonal',
         selected: true,
         animated: false,
         className: 'ae-edge-selected',
-        style: { stroke: '#0f766e', strokeWidth: 3.5 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 16,
-          height: 16,
-          color: '#0f766e',
-        },
+        ...edgeStyleForColor(accent, 4.5),
       }
     }
 
@@ -108,41 +148,37 @@ export function applyRunEdgeStyles(
     if (intoCurrent || fromPrevious) {
       return {
         ...edge,
+        type: 'smartOrthogonal',
         selected: false,
         animated: true,
         className: 'ae-edge-active',
-        style: { stroke: '#10b981', strokeWidth: 3.5 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 16,
-          height: 16,
-          color: '#10b981',
-        },
+        ...edgeStyleForColor(accent, 4.5),
       }
     }
 
     if (traversed) {
       return {
         ...edge,
+        type: 'smartOrthogonal',
         selected: false,
         animated: false,
         className: 'ae-edge-done',
-        style: { stroke: '#34d399', strokeWidth: 2.5 },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          width: 16,
-          height: 16,
-          color: '#34d399',
-        },
+        ...edgeStyleForColor(accent, 3.5),
       }
     }
 
     return {
       ...edge,
-      ...defaultPlannerEdgeOptions,
+      type: 'smartOrthogonal',
+      animated: defaultPlannerEdgeOptions.animated,
+      selectable: true,
+      focusable: true,
+      reconnectable: true,
+      interactionWidth: 28,
       selected: false,
       className: undefined,
       label: edge.label,
+      ...edgeStyleForColor(accent),
     }
   })
 }

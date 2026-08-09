@@ -13,9 +13,11 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Loader2 } from 'lucide-react'
+import { EdgeRouteProvider } from '@/planner/components/edges/edge-route-context'
 import {
   applyRunEdgeStyles,
   defaultPlannerEdgeOptions,
+  plannerEdgeTypes,
   plannerNodeTypes,
   toFlowEdges,
   toFlowNodes,
@@ -98,10 +100,11 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
       selectable: false,
       selected: false,
     }))
-    const nextEdges = applyRunEdgeStyles(toFlowEdges(workflow.edges), {
+    const nextEdges = applyRunEdgeStyles(toFlowEdges(workflow.edges, workflow.nodes), {
       workflowId,
       checkpoint: usePlannerStore.getState().checkpoint,
       selectedEdgeId: null,
+      nodes: workflow.nodes,
     }).map((edge) => ({
       ...edge,
       selectable: false,
@@ -129,6 +132,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
         workflowId,
         checkpoint,
         selectedEdgeId: null,
+        nodes: workflow?.nodes ?? [],
       }).map((edge) => ({
         ...edge,
         selectable: false,
@@ -155,6 +159,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
     checkpoint?.status,
     checkpoint?.history.length,
     workflowId,
+    workflow?.nodes,
   ])
 
   // Center on the active (or last active) event - including after stop/complete.
@@ -276,6 +281,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
         nodes={nodes}
         edges={edges}
         nodeTypes={plannerNodeTypes}
+        edgeTypes={plannerEdgeTypes}
         defaultEdgeOptions={defaultPlannerEdgeOptions}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -322,7 +328,9 @@ export function ExecutionPreviewCanvas({ workflowId }: { workflowId: string | nu
   return (
     <RunVisualWorkflowProvider workflowId={workflowId}>
       <ReactFlowProvider>
-        <PreviewInner workflowId={workflowId} />
+        <EdgeRouteProvider>
+          <PreviewInner workflowId={workflowId} />
+        </EdgeRouteProvider>
       </ReactFlowProvider>
     </RunVisualWorkflowProvider>
   )

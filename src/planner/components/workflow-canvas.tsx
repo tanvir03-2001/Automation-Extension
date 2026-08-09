@@ -20,10 +20,14 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Layers, Loader2, Trash2 } from 'lucide-react'
+import { EdgeRouteProvider } from '@/planner/components/edges/edge-route-context'
 import {
   applyRunEdgeStyles,
   defaultPlannerEdgeOptions,
+  edgeStyleForColor,
+  plannerEdgeTypes,
   plannerNodeTypes,
+  resolveNodeAccentColor,
   toFlowEdges,
   toFlowNodes,
 } from '@/planner/components/flow-graph-shared'
@@ -117,10 +121,11 @@ function CanvasInner() {
       })),
     )
     setEdges(
-      applyRunEdgeStyles(toFlowEdges(workflow.edges), {
+      applyRunEdgeStyles(toFlowEdges(workflow.edges, workflow.nodes), {
         workflowId,
         checkpoint: usePlannerStore.getState().checkpoint,
         selectedEdgeId: keepLocalPositions ? selectedEdgeId : null,
+        nodes: workflow.nodes,
       }),
     )
     loadedWorkflowId.current = workflowId
@@ -149,7 +154,30 @@ function CanvasInner() {
       if (changed) nodesRef.current = next
       return changed ? next : current
     })
-  }, [workflow])
+    // Recolor routes when event accent/icon color changes.
+    setEdges((current) => {
+      const next = applyRunEdgeStyles(current, {
+        workflowId,
+        checkpoint: usePlannerStore.getState().checkpoint,
+        selectedEdgeId,
+        nodes: workflow.nodes,
+      })
+      const same =
+        current.length === next.length &&
+        current.every((edge, index) => {
+          const other = next[index]
+          return (
+            edge.id === other?.id &&
+            edge.style?.stroke === other?.style?.stroke &&
+            edge.style?.strokeWidth === other?.style?.strokeWidth &&
+            Boolean(edge.selected) === Boolean(other?.selected)
+          )
+        })
+      if (same) return current
+      edgesRef.current = next
+      return next
+    })
+  }, [workflow, workflowId, selectedEdgeId])
 
   useEffect(() => {
     setEdges((current) => {
@@ -157,6 +185,7 @@ function CanvasInner() {
         workflowId,
         checkpoint,
         selectedEdgeId,
+        nodes: nodesRef.current,
       })
       // Bail out if nothing visible changed - prevents selection thrash / update loops.
       const same =
@@ -221,6 +250,7 @@ function CanvasInner() {
           workflowId,
           checkpoint: usePlannerStore.getState().checkpoint,
           selectedEdgeId: nextSelected,
+          nodes: nodesRef.current,
         })
         edgesRef.current = next
         return next
@@ -247,6 +277,9 @@ function CanvasInner() {
         )
         if (duplicate) return current
 
+        const accent = resolveNodeAccentColor(
+          nodesRef.current.find((node) => node.id === connection.source),
+        )
         const next = addEdge(
           {
             ...connection,
@@ -254,6 +287,7 @@ function CanvasInner() {
             sourceHandle: connection.sourceHandle ?? 'out',
             targetHandle: connection.targetHandle ?? undefined,
             ...defaultPlannerEdgeOptions,
+            ...edgeStyleForColor(accent),
           },
           current,
         )
@@ -268,11 +302,17 @@ function CanvasInner() {
   const onReconnect = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
       setEdges((current) => {
-        const next = reconnectEdge(oldEdge, newConnection, current).map((edge) => ({
-          ...edge,
-          ...defaultPlannerEdgeOptions,
-          sourceHandle: edge.sourceHandle ?? 'out',
-        }))
+        const next = reconnectEdge(oldEdge, newConnection, current).map((edge) => {
+          const accent = resolveNodeAccentColor(
+            nodesRef.current.find((node) => node.id === edge.source),
+          )
+          return {
+            ...edge,
+            ...defaultPlannerEdgeOptions,
+            ...edgeStyleForColor(accent),
+            sourceHandle: edge.sourceHandle ?? 'out',
+          }
+        })
         edgesRef.current = next
         return next
       })
@@ -458,6 +498,7 @@ function CanvasInner() {
         nodes={nodes}
         edges={edges}
         nodeTypes={plannerNodeTypes}
+        edgeTypes={plannerEdgeTypes}
         defaultEdgeOptions={defaultPlannerEdgeOptions}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -521,7 +562,9 @@ function CanvasInner() {
 export function WorkflowCanvas() {
   return (
     <ReactFlowProvider>
-      <CanvasInner />
+      <EdgeRouteProvider>
+        <CanvasInner />
+      </EdgeRouteProvider>
     </ReactFlowProvider>
   )
 }

@@ -169,12 +169,12 @@ html[data-locale='bn'] .text-xs {
 
 .ae-canvas .react-flow__edge.ae-edge-active .react-flow__edge-path {
   stroke: #10b981 !important;
-  stroke-width: 3.5 !important;
+  stroke-width: 4.5 !important;
 }
 
 .ae-canvas .react-flow__edge.ae-edge-done .react-flow__edge-path {
   stroke: #34d399 !important;
-  stroke-width: 2.5 !important;
+  stroke-width: 3.5 !important;
   opacity: 0.9;
 }
 
@@ -190,6 +190,20 @@ html[data-locale='bn'] .text-xs {
 
 .ae-canvas .react-flow__edge-path {
   stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* Longer dashes than RF default (5) */
+.ae-canvas .react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 16 14;
+  animation: ae-edge-dash 0.85s linear infinite;
+}
+
+@keyframes ae-edge-dash {
+  from {
+    stroke-dashoffset: 30;
+  }
 }
 
 .ae-canvas .react-flow__edge {
@@ -197,9 +211,22 @@ html[data-locale='bn'] .text-xs {
 }
 
 .ae-canvas .react-flow__edge.selected .react-flow__edge-path,
+.ae-canvas .react-flow__edge.ae-edge-selected .react-flow__edge-path,
 .ae-canvas .react-flow__edge:focus .react-flow__edge-path {
   stroke: #0f766e !important;
-  stroke-width: 3.5 !important;
+  stroke-width: 4.5 !important;
+}
+
+/* Jump zone: ±30px colored band on the crossing (upper) route */
+.ae-canvas .ae-edge-bridge-highlight {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.95;
+}
+
+.ae-canvas .ae-edge-endpoint {
+  pointer-events: none;
 }
 
 .ae-canvas .react-flow__edgeupdater {
