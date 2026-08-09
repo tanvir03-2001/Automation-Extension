@@ -1,5 +1,6 @@
 import {
-  buildSmartPick,
+  buildSmartPickExact,
+  deepElementFromPoint,
   resolveInteractiveTarget,
   type SmartPickResult,
 } from '@/engine/automation/smart-selector'
@@ -14,6 +15,10 @@ function isPickerUi(el: Element | null): boolean {
       el.id === 'ae-element-picker-highlight' ||
       el.id === 'ae-element-picker-banner',
   )
+}
+
+function resolvePickTarget(raw: Element, snapToHost: boolean): Element {
+  return snapToHost ? resolveInteractiveTarget(raw) : raw
 }
 
 export function startElementPicker(): Promise<PickedElement> {
@@ -40,7 +45,7 @@ export function startElementPicker(): Promise<PickedElement> {
     const banner = document.createElement('div')
     banner.id = 'ae-element-picker-banner'
     banner.textContent =
-      'Automation Engine · Hover button/icon · Click to select (text/SVG tracked) · Esc cancel'
+      'Automation Engine · Hover any element · Click to select · Hold Shift = snap to button · Esc cancel'
     Object.assign(banner.style, {
       position: 'fixed',
       top: '12px',
@@ -81,23 +86,24 @@ export function startElementPicker(): Promise<PickedElement> {
     }
 
     const onMouseMove = (event: MouseEvent) => {
-      const raw = document.elementFromPoint(event.clientX, event.clientY)
+      const raw = deepElementFromPoint(event.clientX, event.clientY)
       if (!raw || isPickerUi(raw)) return
-      const target = resolveInteractiveTarget(raw)
+      const target = resolvePickTarget(raw, event.shiftKey)
       if (target === lastTarget) return
       lastTarget = target
       paintHighlight(target)
     }
 
     const onClick = (event: MouseEvent) => {
-      const raw = document.elementFromPoint(event.clientX, event.clientY)
+      const raw = deepElementFromPoint(event.clientX, event.clientY)
       if (!raw || isPickerUi(raw)) return
 
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
 
-      const picked = buildSmartPick(raw)
+      const target = resolvePickTarget(raw, event.shiftKey)
+      const picked = buildSmartPickExact(target)
       cleanup()
       resolve(picked)
     }

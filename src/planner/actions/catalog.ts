@@ -11,7 +11,7 @@ const selectorField: ActionField = {
   type: 'selector',
   required: true,
   placeholder: 'CSS / ARIA / text selector',
-  help: 'Use Selector Lab to pick from the page',
+  help: 'Prefer Pick with mouse on the active tab — hover any element (Shift = snap to button)',
 }
 
 function def(
@@ -60,7 +60,7 @@ const browserActions: ActionDefinition[] = [
     description: 'Open a website in a new or existing tab',
     icon: 'Globe',
     fields: [
-      { key: 'url', label: 'URL', type: 'url', required: true, defaultValue: 'https://chatgpt.com/' },
+      { key: 'url', label: 'URL', type: 'url', required: true, placeholder: 'https://example.com' },
       { key: 'active', label: 'Focus tab', type: 'boolean', defaultValue: true },
       {
         key: 'reuseExisting',

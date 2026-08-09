@@ -7,27 +7,27 @@ import type { EventGuideOverride } from '@/dashboard/guide/types'
 export const EVENT_GUIDE_OVERRIDES: Record<string, EventGuideOverride> = {
   'mouse.click': {
     whenWhy: {
-      en: 'Use Click whenever a real user would press a button, tab, icon, checkbox, or link. It is the main way to drive UI after Open URL / Wait For Page - e.g. New chat, Send, Continue, Download.',
-      bn: 'যখন আসল ইউজার বাটন, ট্যাব, আইকন, চেকবক্স বা লিঙ্কে চাপ দেয় - তখনই Click ব্যবহার করুন। Open URL / Wait For Page-এর পর UI চালানোর মূল উপায় - যেমন New chat, Send, Continue, Download।',
+      en: 'Use Click on any website whenever a real user would press a button, tab, icon, checkbox, or link. After Open URL in a full Run, clicks stay on that page; Pick/Test use the active tab.',
+      bn: 'যেকোনো ওয়েবসাইটে বাটন, ট্যাব, আইকন, চেকবক্স বা লিঙ্কে ক্লিক করতে Click ব্যবহার করুন। পুরো Run-এ Open URL-এর পেজেই ক্লিক হয়; Pick/Test বর্তমান অ্যাকটিভ ট্যাবে কাজ করে।',
     },
     example: {
-      en: 'Start → Open URL (chatgpt.com) → Wait For Page → Click (pick “New chat”) → Type Text → Click Send. Dependencies: only if variable sessionReady exists. Interaction: Scroll into view + Wait until enabled.',
-      bn: 'Start → Open URL (chatgpt.com) → Wait For Page → Click (“New chat” পিক) → Type Text → Click Send। Dependencies: sessionReady ভেরিয়েবল থাকলেই। Interaction: Scroll into view + Wait until enabled।',
+      en: 'Start → Open URL (your site) → Wait For Page → Click (pick the real button on the active tab) → next step. Interaction: Scroll into view + Wait until enabled.',
+      bn: 'Start → Open URL (আপনার সাইট) → Wait For Page → Click (অ্যাকটিভ ট্যাবে আসল বাটন পিক) → পরের স্টেপ। Interaction: Scroll into view + Wait until enabled।',
     },
     howto: {
       en: [
         'Drag Click from the Mouse category onto the canvas.',
-        'Select the step → Properties → Pick with mouse → click the real control (e.g. New chat).',
+        'Focus the target website tab → Properties → Pick with mouse → hover any element and click (Hold Shift = snap to button).',
         'Review Dependencies if this click should only run when a variable/dataset rule passes.',
         'In Execution: set Timeout, On failure (usually stop), Pre-wait if the page is slow, and Interaction checkboxes.',
-        'Expand Test → Run test. When OK, connect Start/previous → Click → next step with the green dots.',
+        'Expand Test → focus the same website tab → Run test. For full Run, place Open URL first so the plan uses that tab.',
       ],
       bn: [
         'Mouse ক্যাটাগরি থেকে Click ক্যানভাসে টেনে আনুন।',
-        'স্টেপ সিলেক্ট → Properties → Pick with mouse → আসল কন্ট্রোলে ক্লিক (যেমন New chat)।',
+        'টার্গেট ওয়েবসাইট ট্যাব ফোকাস → Properties → Pick with mouse → যেকোনো এলিমেন্টে হোভার করে ক্লিক (Shift = বাটনে স্ন্যাপ)।',
         'ক্লিক শুধু নির্দিষ্ট ভেরিয়েবল/ডেটাসেট রুল মিললে চলবে হলে Dependencies সেট করুন।',
         'Execution-এ Timeout, On failure (সাধারণত stop), ধীর পেজে Pre-wait, আর Interaction চেকবক্স দেখুন।',
-        'Test এক্সপ্যান্ড → Run test। OK হলে সবুজ ডট দিয়ে Start/আগের স্টেপ → Click → পরের স্টেপ কানেক্ট করুন।',
+        'Test এক্সপ্যান্ড → একই ওয়েবসাইট ট্যাব ফোকাস → Run test। পুরো Run-এ আগে Open URL রাখুন যাতে সেই ট্যাবেই চলে।',
       ],
     },
     features: [
@@ -35,20 +35,20 @@ export const EVENT_GUIDE_OVERRIDES: Record<string, EventGuideOverride> = {
         id: 'pick',
         title: { en: 'Pick with mouse', bn: 'মাউস দিয়ে পিক' },
         what: {
-          en: 'Points at the live page element and fills a reliable selector into Properties.',
-          bn: 'লাইভ পেজের এলিমেন্টে পয়েন্ট করে Properties-এ নির্ভরযোগ্য সিলেক্টর ভরে দেয়।',
+          en: 'Highlights and selects any visible DOM element under the cursor on the active tab (exact node). Hold Shift to snap to a button/link host.',
+          bn: 'অ্যাকটিভ ট্যাবে কার্সারের নিচে যেকোনো দৃশ্যমান DOM এলিমেন্ট হাইলাইট ও সিলেক্ট করে (এক্সহ্যাক্ট নোড)। বাটন/লিঙ্কে স্ন্যাপ করতে Shift ধরুন।',
         },
         why: {
-          en: 'Hand-written CSS breaks when sites redesign. Pick captures what the engine actually needs.',
-          bn: 'সাইট বদলালে হাতে লেখা CSS ভেঙে যায়। পিক ইঞ্জিনের দরকারি টার্গেট ধরে রাখে।',
+          en: 'Modern sites use nested divs/SVGs—not only buttons. Exact pick lets you target composers, icons, labels, and containers.',
+          bn: 'আধুনিক সাইটে শুধু বাটন নয়—নেস্টেড div/SVGও থাকে। এক্সহ্যাক্ট পিকে কম্পোজার, আইকন, লেবেল, কন্টেইনার টার্গেট করা যায়।',
         },
         how: {
-          en: 'Select the Click step → Properties → Pick with mouse → click the real control on the page → confirm.',
-          bn: 'Click স্টেপ সিলেক্ট → Properties → Pick with mouse → পেজের আসল কন্ট্রোলে ক্লিক → কনফার্ম।',
+          en: 'Focus the site tab → Pick with mouse → hover the exact element → click. Use Shift when you want the outer button instead of the inner SVG.',
+          bn: 'সাইট ট্যাব ফোকাস → Pick with mouse → এক্সহ্যাক্ট এলিমেন্টে হোভার → ক্লিক। ভিতরের SVG-র বদলে বাইরের বাটন চাইলে Shift ব্যবহার করুন।',
         },
         example: {
-          en: 'Pick the green “New chat” control so the step label shows that target.',
-          bn: 'সবুজ “New chat” কন্ট্রোল পিক করুন যাতে স্টেপ লেবেলে সেই টার্গেট দেখায়।',
+          en: 'Pick a message box, a paperclip icon, or a sidebar row—each becomes its own selector + fallbacks.',
+          bn: 'মেসেজ বক্স, পেপারক্লিপ আইকন, বা সাইডবার রো—প্রতিটার আলাদা সিলেক্টর + ফলব্যাক সেভ হবে।',
         },
       },
       {
@@ -239,12 +239,12 @@ export const EVENT_GUIDE_OVERRIDES: Record<string, EventGuideOverride> = {
 
   'browser.open_url': {
     whenWhy: {
-      en: 'First navigation step - open or reuse a tab for the site you will automate.',
-      bn: 'প্রথম ন্যাভিগেশন স্টেপ - যে সাইট অটোমেট করবেন সেটার ট্যাব খুলুন বা রিইউজ করুন।',
+      en: 'First navigation for a full plan/workflow Run—opens or reuses a tab for any website. Later steps use that tab only. (Event Test / Pick ignore this and use the active tab.)',
+      bn: 'পুরো প্ল্যান/ওয়ার্কফ্লো Run-এর প্রথম ন্যাভিগেশন—যেকোনো ওয়েবসাইটের ট্যাব খোলে বা রিইউজ করে। পরের স্টেপ শুধু সেই ট্যাবে চলে। (Event Test / Pick এটা উপেক্ষা করে অ্যাকটিভ ট্যাব ব্যবহার করে।)',
     },
     example: {
-      en: 'Start → Open URL https://chatgpt.com/ (Reuse existing tab on) → Wait For Page.',
-      bn: 'Start → Open URL https://chatgpt.com/ (Reuse existing tab চালু) → Wait For Page।',
+      en: 'Start → Open URL https://example.com (Reuse existing tab on) → Wait For Page → Click / Type on that page.',
+      bn: 'Start → Open URL https://example.com (Reuse existing tab চালু) → Wait For Page → সেই পেজে Click / Type।',
     },
   },
 

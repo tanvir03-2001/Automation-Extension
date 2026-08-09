@@ -271,7 +271,7 @@ export const en: MessageDict = {
   'inspector.noStepHelp': 'Click a node on the canvas to edit labels, selectors, and options - no coding required.',
   'inspector.quickTest': 'Quick test',
   'inspector.quickTestHelp':
-    'Runs this full step now (same engine as a real run) - click, type, wait, copy, open URL, and more. No need to start the whole plan.',
+    'Runs this step on the currently active website tab (any http/https site). Focus that tab first. Full plan Run still uses the Open URL tab.',
   'inspector.quickTestOk': 'OK - {{name}} executed',
   'inspector.quickTestOkSaved': 'OK - saved as {{name}}',
   'inspector.quickTestFail': 'Fail - {{name}}',
@@ -279,6 +279,8 @@ export const en: MessageDict = {
   'inspector.enable': 'Enable',
   'inspector.deleteStep': 'Delete step',
   'inspector.pickMouse': 'Pick with mouse',
+  'inspector.pickMouseHelp':
+    'Focus the target website tab first. Hover any element and click to select it (exact DOM node). Hold Shift to snap to the nearest button/link. Saves selector + fallbacks.',
   'inspector.chooseStep': 'Choose a step…',
   'inspector.choosePlan': 'Choose a plan…',
   'inspector.noOtherPlans': 'No other plans available in this workflow',
@@ -323,7 +325,8 @@ export const en: MessageDict = {
   'exec.addRule': 'Add rule',
   'exec.testTitle': 'Test event',
   'exec.testShort': 'Test',
-  'exec.testHelp': 'Runs this single event in a real browser with the production engine.',
+  'exec.testHelp':
+    'Runs this single event on the currently active website tab (any http/https site). Focus that tab first. Full plan Run uses the Open URL tab.',
   'exec.runTest': 'Run test',
   'exec.testing': 'Testing…',
   'exec.showDetails': 'Details',

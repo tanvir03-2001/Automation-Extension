@@ -142,34 +142,75 @@ function looksClickable(el: Element): boolean {
   return false
 }
 
+/** Text inputs / editors — never promote these to a nearby paperclip/send button. */
+export function isFormFieldTarget(el: Element | null): boolean {
+  if (!(el instanceof HTMLElement)) return false
+  const tag = el.tagName.toLowerCase()
+  if (tag === 'textarea' || tag === 'select') return true
+  if (tag === 'input') {
+    const type = (el.getAttribute('type') || 'text').toLowerCase()
+    return !['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'hidden'].includes(
+      type,
+    )
+  }
+  if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') return true
+  return false
+}
+
 /**
  * Climb to the real click host.
  * DeepSeek Continue: div[role=button].ds-button > span.ds-button__content
  * Radix Select: div[data-slot=tooltip-trigger] > button[role=combobox]
- * Never return tooltip/focus wrappers when an inner control exists.
+ * Never steal a textarea/composer pick to a sibling attach/send button.
  */
 export function promoteToClickHost(el: Element): HTMLElement {
   const start = el instanceof HTMLElement ? el : el.parentElement
   if (!start) return el as HTMLElement
 
+  // Form fields are the target themselves
+  if (isFormFieldTarget(start)) return start
+  const enclosingEditable = start.closest('textarea, select, [contenteditable="true"]')
+  if (enclosingEditable instanceof HTMLElement && isFormFieldTarget(enclosingEditable)) {
+    return enclosingEditable
+  }
+  const enclosingInput = start.closest('input')
+  if (enclosingInput instanceof HTMLElement && isFormFieldTarget(enclosingInput)) {
+    return enclosingInput
+  }
+
   // 1) Self or ancestor is the real control (SVG/span → button/combobox)
   const ancestorHost = start.closest<HTMLElement>(CLICK_HOST_SELECTOR)
   if (ancestorHost) return ancestorHost
 
-  // 2) Wrapper case: tooltip-trigger / tabindex shell around the real control
-  //    closest() cannot see descendants - must query inside.
+  // 2) Wrapper case: only accept a nested button if the click started inside it
   let cur: HTMLElement | null = start
   for (let depth = 0; cur && depth < 5; depth += 1) {
+    if (depth > 0) {
+      // Composer shells contain both the textarea and attach/send — stop climbing
+      const siblingField = cur.querySelector(
+        'textarea, select, [contenteditable="true"], input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"])',
+      )
+      if (
+        siblingField &&
+        isFormFieldTarget(siblingField) &&
+        !start.contains(siblingField) &&
+        !siblingField.contains(start)
+      ) {
+        break
+      }
+    }
     const nested = cur.querySelector<HTMLElement>(CLICK_HOST_SELECTOR)
-    if (nested && isVisible(nested)) return nested
+    if (nested && isVisible(nested) && (nested === start || nested.contains(start))) {
+      return nested
+    }
     cur = cur.parentElement
   }
 
   const ariaHost = start.closest<HTMLElement>('[aria-label]')
-  if (ariaHost) {
+  if (ariaHost && !isFormFieldTarget(ariaHost)) {
     const nested = ariaHost.querySelector<HTMLElement>(CLICK_HOST_SELECTOR)
-    if (nested && isVisible(nested)) return nested
-    return ariaHost
+    if (nested && isVisible(nested) && nested.contains(start)) return nested
+    if (looksClickable(ariaHost)) return ariaHost
   }
 
   const interactive = start.closest<HTMLElement>(INTERACTIVE_SELECTOR)
@@ -177,7 +218,6 @@ export function promoteToClickHost(el: Element): HTMLElement {
 
   cur = start
   while (cur && cur !== document.body) {
-    // Do not treat bare tabindex wrappers as the host when empty of semantics
     if (
       looksClickable(cur) &&
       (shortLabel(cur) || cur.getAttribute('aria-label')) &&
@@ -193,6 +233,46 @@ export function promoteToClickHost(el: Element): HTMLElement {
 /** Prefer the clickable host when user clicks an icon / SVG / span inside a button. */
 export function resolveInteractiveTarget(el: Element): Element {
   return promoteToClickHost(el)
+}
+
+function isPickerChrome(el: Element | null): boolean {
+  if (!el) return false
+  return Boolean(
+    el.closest('#ae-element-picker-root') ||
+      el.id === 'ae-element-picker-root' ||
+      el.id === 'ae-element-picker-highlight' ||
+      el.id === 'ae-element-picker-banner',
+  )
+}
+
+/**
+ * Deepest element under the cursor, piercing open shadow roots.
+ * Skips Automation Engine picker chrome.
+ */
+export function deepElementFromPoint(x: number, y: number): Element | null {
+  const dig = (root: Document | ShadowRoot): Element | null => {
+    const stack =
+      typeof root.elementsFromPoint === 'function'
+        ? root.elementsFromPoint(x, y)
+        : (() => {
+            const one =
+              typeof root.elementFromPoint === 'function' ? root.elementFromPoint(x, y) : null
+            return one ? [one] : []
+          })()
+
+    for (const candidate of stack) {
+      if (!(candidate instanceof Element) || isPickerChrome(candidate)) continue
+      const sr = (candidate as HTMLElement).shadowRoot
+      if (sr) {
+        const nested = dig(sr)
+        if (nested) return nested
+      }
+      return candidate
+    }
+    return null
+  }
+
+  return dig(document)
 }
 
 function buildCssPath(el: Element): string {
@@ -442,6 +522,8 @@ export function querySmart(selector: string): Element | null {
     const matches = pool
       .map((el) => promoteToClickHost(el))
       .filter((el, index, arr) => arr.indexOf(el) === index)
+      // ae:btn / button text must never resolve to a textarea/composer
+      .filter((el) => !(parts.btn && isFormFieldTarget(el)))
       .filter((el) => matchSemantic(el, parts))
     return pickBest(matches, parts)
   }
@@ -474,11 +556,18 @@ export function querySmartWithFallbacks(
     seen.add(key)
 
     // Skip fragile CSS path fallbacks unless they still show the same label
+    // (form-field selectors are exact picks — always allow them)
+    const isFormFieldSel = /^(textarea|input|select)\b/i.test(key) || /contenteditable/i.test(key)
     const isCssPath = !key.startsWith('ae:') && key.includes('>')
-    if (isCssPath && expectedText) {
+    if (isCssPath && expectedText && !isFormFieldSel) {
       try {
         const el = document.querySelector(key)
         if (!el || !isVisible(el)) continue
+        if (isFormFieldTarget(el)) {
+          const label = shortLabel(el) || visibleLabel(el)
+          if (labelMatches(label, expectedText, 'contains')) return el
+          continue
+        }
         const label = shortLabel(el) || visibleLabel(el)
         if (!labelMatches(label, expectedText, 'contains')) continue
         return el
@@ -488,13 +577,21 @@ export function querySmartWithFallbacks(
     }
 
     const el = querySmart(key)
-    if (el) return el
+    if (el) {
+      // Do not accept a button-host resolve when fallback explicitly targets a form field
+      if (isFormFieldSel && !isFormFieldTarget(el)) continue
+      return el
+    }
   }
   return null
 }
 
-export function buildSmartPick(el: Element): SmartPickResult {
-  const target = resolveInteractiveTarget(el)
+/**
+ * Build pick payload for the exact element (no click-host promotion).
+ * When a different interactive host exists, append its CSS path as a fallback.
+ */
+export function buildSmartPickExact(el: Element): SmartPickResult {
+  const target = el instanceof Element ? el : (el as unknown as Element)
   const tagName = target.tagName.toLowerCase()
   const text = shortLabel(target) || visibleLabel(target)
   const attrs = collectAttributes(target)
@@ -502,12 +599,66 @@ export function buildSmartPick(el: Element): SmartPickResult {
   const fallbacks: string[] = []
   let primary = ''
   let strategy: SmartPickResult['strategy'] = 'css'
+  const isField = isFormFieldTarget(target)
 
   const testId = target.getAttribute('data-testid')
   if (testId) {
     primary = `[data-testid="${cssEscape(testId)}"]`
     fallbacks.push(`ae:testid=${quote(testId)}`)
     strategy = 'css'
+  }
+
+  // Form fields: placeholder / name first — never ae:btn (that clicks nearby buttons)
+  if (isField) {
+    const placeholder = target.getAttribute('placeholder')
+    if (placeholder) {
+      const phSel = `${tagName}[placeholder="${cssEscape(placeholder)}"]`
+      if (!primary) {
+        primary = phSel
+        strategy = 'css'
+      }
+      fallbacks.push(phSel)
+    }
+    const name = target.getAttribute('name')
+    if (name) {
+      const nameSel = `${tagName}[name="${cssEscape(name)}"]`
+      if (!primary) primary = nameSel
+      fallbacks.push(nameSel, `ae:name=${quote(name)}`)
+    }
+    const aria = target.getAttribute('aria-label')
+    if (aria) {
+      const ariaSel = `${tagName}[aria-label="${cssEscape(aria)}"]`
+      if (!primary) {
+        primary = ariaSel
+        strategy = 'aria'
+      }
+      fallbacks.push(ariaSel, `ae:aria=${quote(aria)}`)
+    }
+    if (target.id && !/[:.]/.test(target.id) && !/\d{5,}/.test(target.id)) {
+      const idSel = `#${cssEscape(target.id)}`
+      if (!primary) primary = idSel
+      fallbacks.push(idSel)
+    }
+    const cssPath = buildCssPath(target)
+    if (!primary) {
+      primary = cssPath
+      strategy = 'css'
+    } else {
+      fallbacks.push(cssPath)
+    }
+
+    const uniqueFallbacks = Array.from(
+      new Set(fallbacks.map((s) => s.trim()).filter(Boolean)),
+    ).filter((s) => s !== primary)
+
+    return {
+      selector: primary,
+      fallbacks: uniqueFallbacks.slice(0, 8),
+      strategy,
+      tagName,
+      text: text.slice(0, 120),
+      attributes: attrs,
+    }
   }
 
   const aria = target.getAttribute('aria-label')
@@ -521,7 +672,12 @@ export function buildSmartPick(el: Element): SmartPickResult {
     fallbacks.push(ariaSel, aeAria)
   }
 
-  if (text && text.length <= 60) {
+  // ae:btn only for real button-like hosts — not textareas/inputs
+  const isButtonLike =
+    target.matches(CLICK_HOST_SELECTOR) ||
+    (looksClickable(target) && !isFormFieldTarget(target))
+
+  if (isButtonLike && text && text.length <= 60) {
     const aeBtn = `ae:btn~=${quote(text)}`
     const aeExact = `ae:btn=${quote(text)}`
     if (!primary) {
@@ -553,13 +709,32 @@ export function buildSmartPick(el: Element): SmartPickResult {
     fallbacks.push(idSel)
   }
 
-  // CSS path last - and only as weak fallback
+  const placeholder = target.getAttribute('placeholder')
+  if (placeholder) {
+    const phSel = `${tagName}[placeholder="${cssEscape(placeholder)}"]`
+    if (!primary) primary = phSel
+    fallbacks.push(phSel)
+  }
+
   const cssPath = buildCssPath(target)
   if (!primary) {
     primary = cssPath
     strategy = 'css'
   } else {
     fallbacks.push(cssPath)
+  }
+
+  // Resilience: button host CSS only when pick was an icon inside a button
+  const host = promoteToClickHost(target)
+  if (host !== target && host.contains(target)) {
+    const hostPath = buildCssPath(host)
+    if (hostPath && hostPath !== primary) fallbacks.push(hostPath)
+    const hostAria = host.getAttribute('aria-label')
+    if (hostAria) fallbacks.push(`ae:aria=${quote(hostAria)}`)
+    const hostLabel = shortLabel(host)
+    if (hostLabel && hostLabel.length <= 60 && host.matches(CLICK_HOST_SELECTOR)) {
+      fallbacks.push(`ae:btn=${quote(hostLabel)}`)
+    }
   }
 
   const uniqueFallbacks = Array.from(new Set(fallbacks.map((s) => s.trim()).filter(Boolean))).filter(
@@ -574,4 +749,9 @@ export function buildSmartPick(el: Element): SmartPickResult {
     text: text.slice(0, 120),
     attributes: attrs,
   }
+}
+
+/** Promote to click host first, then build pick payload (legacy / Shift mode). */
+export function buildSmartPick(el: Element): SmartPickResult {
+  return buildSmartPickExact(resolveInteractiveTarget(el))
 }

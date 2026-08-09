@@ -1,5 +1,4 @@
 import { sleep } from '@/engine/retry/retry-policy'
-import { tabController } from '@/engine/automation/tab-controller'
 import { ensureContentScript } from '@/background/ensure-content-script'
 import { sendTabMessage } from '@/shared/messaging/bus'
 import type { PreWait } from '@/planner/types/plan'
@@ -18,6 +17,22 @@ async function runDom(
 ): Promise<{ ok: boolean; data?: unknown; error?: string }> {
   await ensureContentScript(tabId)
   return sendTabMessage(tabId, { type: 'AUTOMATION_COMMAND', payload: command })
+}
+
+async function requireWorkingTab(activeTabId: number | undefined, label: string): Promise<number> {
+  if (activeTabId != null) {
+    try {
+      await chrome.tabs.get(activeTabId)
+      return activeTabId
+    } catch {
+      throw new Error(
+        `${label}: working tab is gone. Re-run Open URL, or for Event Test focus the target website tab.`,
+      )
+    }
+  }
+  throw new Error(
+    `${label}: no working tab. In a full Run, place Open URL first. For Event Test, focus a normal website tab.`,
+  )
 }
 
 /**
@@ -69,21 +84,18 @@ export async function runPreWait(args: {
       break
     }
     case 'url': {
+      activeTabId = await requireWorkingTab(activeTabId, 'preWait.url')
       const needle = pre.urlContains ?? ''
       const deadline = Date.now() + timeoutMs
       while (Date.now() < deadline) {
-        const tab = activeTabId
-          ? await chrome.tabs.get(activeTabId).catch(() => null)
-          : await tabController.getActiveTab()
-        if (tab?.id) activeTabId = tab.id
+        const tab = await chrome.tabs.get(activeTabId).catch(() => null)
         if (tab?.url && (!needle || tab.url.includes(needle))) break
         await sleep(200)
       }
       break
     }
     case 'element': {
-      if (!activeTabId) activeTabId = (await tabController.getActiveTab())?.id
-      if (!activeTabId) throw new Error('preWait.element: no active tab')
+      activeTabId = await requireWorkingTab(activeTabId, 'preWait.element')
       const res = await runDom(activeTabId, {
         action: 'waitForElementVisible',
         selector: pre.selector || 'body',
@@ -93,8 +105,7 @@ export async function runPreWait(args: {
       break
     }
     case 'text': {
-      if (!activeTabId) activeTabId = (await tabController.getActiveTab())?.id
-      if (!activeTabId) throw new Error('preWait.text: no active tab')
+      activeTabId = await requireWorkingTab(activeTabId, 'preWait.text')
       const res = await runDom(activeTabId, {
         action: 'waitForText',
         text: pre.text || '',
@@ -105,8 +116,7 @@ export async function runPreWait(args: {
       break
     }
     case 'network_idle': {
-      if (!activeTabId) activeTabId = (await tabController.getActiveTab())?.id
-      if (!activeTabId) throw new Error('preWait.network_idle: no active tab')
+      activeTabId = await requireWorkingTab(activeTabId, 'preWait.network_idle')
       const res = await runDom(activeTabId, {
         action: 'waitNetworkIdle',
         timeoutMs,
@@ -116,8 +126,7 @@ export async function runPreWait(args: {
       break
     }
     case 'dom_stable': {
-      if (!activeTabId) activeTabId = (await tabController.getActiveTab())?.id
-      if (!activeTabId) throw new Error('preWait.dom_stable: no active tab')
+      activeTabId = await requireWorkingTab(activeTabId, 'preWait.dom_stable')
       const res = await runDom(activeTabId, {
         action: 'waitDomStable',
         timeoutMs,

@@ -116,18 +116,21 @@ export class TabController {
   }
 
   async getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
-    // Prefer a normal web tab over the extension dashboard window
+    const isNormalWeb = (url?: string) =>
+      Boolean(url?.startsWith('http://') || url?.startsWith('https://'))
+
+    // Prefer a normal web tab over the extension dashboard / chrome:// pages
     const [activeInWindow] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
-    if (
-      activeInWindow?.id &&
-      activeInWindow.url &&
-      !activeInWindow.url.startsWith('chrome-extension://')
-    ) {
+    if (activeInWindow?.id && isNormalWeb(activeInWindow.url)) {
       return activeInWindow
     }
 
     const tabs = await chrome.tabs.query({ active: true })
-    return tabs.find((tab) => tab.url && !tab.url.startsWith('chrome-extension://')) ?? tabs[0]
+    return (
+      tabs.find((tab) => isNormalWeb(tab.url)) ??
+      tabs.find((tab) => tab.url && !tab.url.startsWith('chrome-extension://')) ??
+      tabs[0]
+    )
   }
 
   async waitForComplete(tabId: number, timeoutMs = 60_000): Promise<void> {

@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
-import type { VisualWorkflow } from '@/planner/types/plan'
 
 export interface PickedElement {
   selector: string
@@ -11,22 +10,14 @@ export interface PickedElement {
   attributes: Record<string, string>
 }
 
-function resolveUrlHint(workflow?: VisualWorkflow | null): string {
-  if (!workflow) return 'https://chatgpt.com/'
+const ACTIVE_TAB_HINT =
+  'Focus a normal website tab first (not chrome:// or the extension page), then pick again.'
 
-  for (const node of workflow.nodes) {
-    const url = node.data.params.url
-    if (typeof url === 'string' && url.startsWith('http')) return url
-    if (node.data.actionId.includes('chatgpt')) return 'https://chatgpt.com/'
-    if (node.data.actionId.includes('claude')) return 'https://claude.ai'
-    if (node.data.actionId.includes('gemini')) return 'https://gemini.google.com'
-    if (node.data.actionId.includes('grok')) return 'https://grok.com'
-  }
-
-  return 'https://chatgpt.com/'
-}
-
-export function useElementPicker(workflow?: VisualWorkflow | null) {
+/**
+ * Pick an element on the currently active browser tab.
+ * Does not open ChatGPT or any workflow URL hint.
+ */
+export function useElementPicker(_workflow?: unknown) {
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastPicked, setLastPicked] = useState<PickedElement | null>(null)
@@ -34,27 +25,30 @@ export function useElementPicker(workflow?: VisualWorkflow | null) {
   const pickElement = useCallback(async (): Promise<PickedElement | null> => {
     setError(null)
     setPicking(true)
-    const urlHint = resolveUrlHint(workflow)
 
     try {
-      const opened = await sendRuntimeMessage<{ ok: boolean; tabId?: number; error?: string }>({
-        type: 'OPEN_URL',
-        payload: { url: urlHint },
-      })
-
-      const tabId = opened.tabId
-
       const response = await sendRuntimeMessage<{
         ok: boolean
         picked?: PickedElement
         error?: string
       }>({
         type: 'PICK_ELEMENT_START',
-        payload: { urlHint, tabId },
+        payload: {},
       })
 
       if (!response.ok || !response.picked) {
-        throw new Error(response.error ?? 'Element pick failed')
+        const raw = response.error ?? 'Element pick failed'
+        const lower = raw.toLowerCase()
+        if (
+          lower.includes('chrome://') ||
+          lower.includes('extension') ||
+          lower.includes('cannot access') ||
+          lower.includes('no tab') ||
+          lower.includes('content script')
+        ) {
+          throw new Error(`${raw} — ${ACTIVE_TAB_HINT}`)
+        }
+        throw new Error(raw)
       }
 
       setLastPicked(response.picked)
@@ -66,7 +60,7 @@ export function useElementPicker(workflow?: VisualWorkflow | null) {
     } finally {
       setPicking(false)
     }
-  }, [workflow])
+  }, [])
 
   return { picking, error, lastPicked, pickElement, clearError: () => setError(null) }
 }

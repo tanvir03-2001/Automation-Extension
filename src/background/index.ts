@@ -143,8 +143,10 @@ async function bootstrap(): Promise<void> {
     runGuardController.start()
     void runGuardController
       .beginTrustedDebug(checkpoint.browserState.activeTabId)
-      .then((tabId) => {
-        if (tabId != null) checkpoint.browserState.activeTabId = tabId
+      .then(async () => {
+        if (checkpoint.browserState.activeTabId != null) {
+          await runGuardController.lockTab(checkpoint.browserState.activeTabId)
+        }
       })
     void plannerRunner.resumeFromCheckpoint()
   }
@@ -354,22 +356,37 @@ onRuntimeMessage(async (message, sender) => {
       const payload = (message.payload ?? {}) as { tabId?: number; urlHint?: string }
       let tabId = payload.tabId
 
+      // Prefer an explicit tabId. urlHint is optional legacy; do not open ChatGPT by default.
       if (!tabId && payload.urlHint) {
         const found = await tabController.findTabByUrl(payload.urlHint)
         tabId = found?.id
-        if (!tabId) {
-          const opened = await tabController.openUrl(payload.urlHint, true)
-          tabId = opened.id
-        }
       }
 
       if (!tabId) {
         const active = await tabController.getActiveTab()
         tabId = active?.id
+        const url = active?.url ?? ''
+        if (
+          !tabId ||
+          url.startsWith('chrome://') ||
+          url.startsWith('chrome-extension://') ||
+          url.startsWith('edge://') ||
+          url.startsWith('about:')
+        ) {
+          return {
+            ok: false,
+            error:
+              'No normal website tab is active. Focus the target http/https page, then pick again.',
+          }
+        }
       }
 
       if (!tabId) {
-        return { ok: false, error: 'No tab available for element picking' }
+        return {
+          ok: false,
+          error:
+            'No tab available for element picking. Focus a normal website tab and try again.',
+        }
       }
 
       await tabController.switchToTab(tabId)
@@ -605,6 +622,22 @@ onRuntimeMessage(async (message, sender) => {
           },
         )
 
+        const activeTab = await tabController.getActiveTab()
+        const activeUrl = activeTab?.url ?? ''
+        if (
+          !activeTab?.id ||
+          activeUrl.startsWith('chrome://') ||
+          activeUrl.startsWith('chrome-extension://') ||
+          activeUrl.startsWith('edge://') ||
+          activeUrl.startsWith('about:')
+        ) {
+          return {
+            ok: false,
+            error:
+              'Event Test needs a normal website tab focused. Activate the target http/https page, then Run test.',
+          }
+        }
+
         const step = await runEventStep({
           nodeData,
           variables,
@@ -616,7 +649,7 @@ onRuntimeMessage(async (message, sender) => {
           history: checkpoint?.history ?? [],
           workflow,
           plan,
-          activeTabId: checkpoint?.browserState.activeTabId,
+          activeTabId: activeTab.id,
           workflowId: payload.workflowId,
           planId: payload.planId ?? plan?.id,
           nodeId: payload.nodeId,

@@ -144,13 +144,9 @@ export class PlannerRunner {
     }
 
     runGuardController.start()
-    // Debugger bar ON immediately with Run / Flow Start - don't wait for Open URL.
-    const debugTabId = await runGuardController.beginTrustedDebug(
-      this.checkpoint.browserState.activeTabId,
-    )
-    if (debugTabId != null) {
-      this.checkpoint.browserState.activeTabId = debugTabId
-    }
+    // Debugger bar ON for Run UX, but do NOT seed working activeTabId from a random/seed tab.
+    // Open URL (or New Tab / AI open) owns checkpoint.browserState.activeTabId.
+    await runGuardController.beginTrustedDebug(this.checkpoint.browserState.activeTabId)
     await this.persist()
     await activityLog.append('info', 'PlannerRunner', `Started visual workflow: ${workflow.name}`)
     void this.loop()
@@ -774,9 +770,13 @@ export class PlannerRunner {
       // Page lock stays; CDP debugger is opened at Run/Start and closed by End/Stop.
       runGuardController.start()
       if (cp.status === 'running' && !runGuardController.isTrustedDebugActive()) {
-        // SW wake mid-run: restore debugger without needing Start again
-        const tabId = await runGuardController.beginTrustedDebug(cp.browserState.activeTabId)
-        if (tabId != null) cp.browserState.activeTabId = tabId
+        // SW wake mid-run: restore debugger without needing Start again.
+        // Never overwrite Open URL's working tab with a seed/unrelated focused tab.
+        const preferred = cp.browserState.activeTabId
+        await runGuardController.beginTrustedDebug(preferred)
+        if (preferred != null) {
+          await runGuardController.lockTab(preferred)
+        }
       } else if (cp.browserState.activeTabId != null) {
         await runGuardController.lockTab(cp.browserState.activeTabId)
       }

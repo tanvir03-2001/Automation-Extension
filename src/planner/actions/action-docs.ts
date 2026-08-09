@@ -42,9 +42,9 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   ],
   'browser.open_url': [
     'Drag Open URL onto the canvas.',
-    'Enter the website address (example: https://chatgpt.com/).',
-    'Connect Start → Open URL with the green dots.',
-    'If “Reuse existing tab” is on, an already-open tab is focused instead of opening another.',
+    'Enter any website address (example: https://example.com).',
+    'Connect Start → Open URL with the green dots. Full plan Run uses this tab for later steps.',
+    'If “Reuse existing tab” is on, an already-open tab for that site is focused instead of opening another.',
   ],
   'browser.go_back': [
     'Same as the browser Back button for the automation tab.',
@@ -65,9 +65,9 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Place it after Open URL / Open ChatGPT so the next click is reliable.',
   ],
   'mouse.click': [
-    'Clicks a button or link on the page.',
-    'Select the step → use “Pick with mouse” to choose the real button (example: New chat).',
-    'Connect it before Type Text when you need a fresh chat.',
+    'Clicks a button or link on any website.',
+    'Focus the target tab → Pick with mouse → hover any element and click (Shift = snap to button).',
+    'Full plan Run clicks on the Open URL tab; Event Test / Pick use the active tab.',
   ],
   'mouse.click_exact': [
     'Clicks the element whose visible text matches exactly (e.g. Continue).',
@@ -221,10 +221,11 @@ const EXTRA_HOWTO: Record<string, string[]> = {
 }
 
 const EXTRA_TOOLTIP: Record<string, string> = {
-  'browser.open_url': 'Opens a website. Reuses the tab if that site is already open.',
+  'browser.open_url': 'Opens any website. Full plan Run uses this tab for later steps.',
   'ai.open_chatgpt': 'Opens ChatGPT, or focuses the existing ChatGPT tab.',
   'browser.wait_for_page': 'Waits until the page is fully loaded.',
-  'mouse.click': 'Clicks a page element. Pick the target with your mouse.',
+  'mouse.click':
+    'Clicks a page element on any site. Pick on the active tab; full Run uses the Open URL tab.',
   'mouse.click_exact':
     'Clicks by exact text/label match. Pick with mouse or type the full label.',
   'mouse.click_text': 'Find text on the page and click it (contains or exact).',

@@ -40,10 +40,19 @@ async function sendDom(
 }
 
 async function ensureTab(activeTabId?: number): Promise<number> {
-  if (activeTabId) return activeTabId
-  const active = await tabController.getActiveTab()
-  if (!active?.id) throw new Error('No active tab')
-  return active.id
+  if (activeTabId != null) {
+    try {
+      await chrome.tabs.get(activeTabId)
+      return activeTabId
+    } catch {
+      throw new Error(
+        `Working tab is gone. In a full Run, re-run Open URL. For Event Test, focus the target website tab and try again.`,
+      )
+    }
+  }
+  throw new Error(
+    'No working tab. In a full Run, place Open URL (or New Tab / Open ChatGPT) before this step. For Event Test, focus a normal website tab first.',
+  )
 }
 
 function evaluateCondition(
@@ -234,9 +243,13 @@ export async function executePlannerAction(args: {
   try {
     switch (actionId) {
       case 'flow.start': {
-        // Debugger bar ON from Start → stays until End
-        const tabId = await runGuardController.beginTrustedDebug(args.activeTabId)
-        return { status: 'success', activeTabId: tabId ?? args.activeTabId }
+        // Debugger bar ON from Start → stays until End.
+        // Do not bind the working tab here — Open URL / New Tab / AI open set activeTabId.
+        await runGuardController.beginTrustedDebug(args.activeTabId)
+        return {
+          status: 'success',
+          ...(args.activeTabId != null ? { activeTabId: args.activeTabId } : {}),
+        }
       }
 
       case 'flow.end': {
@@ -286,12 +299,42 @@ export async function executePlannerAction(args: {
       }
 
       case 'browser.open_url':
-      case 'browser.new_tab':
+      case 'browser.new_tab': {
+        const url = String(params.url ?? '').trim()
+        if (!url) {
+          throw new Error('Open URL needs a website address (any http/https page).')
+        }
+        const reuse = params.reuseExisting !== false
+        const tab = reuse
+          ? await tabController.openUrlOrFocus(url, {
+              active: Boolean(params.active ?? true),
+              focusWindow: Boolean(params.focusWindow ?? false),
+            })
+          : await tabController.openUrl(url, Boolean(params.active ?? true))
+        if (tab.id != null && runGuardController.isEnabled()) {
+          if (!runGuardController.isTrustedDebugActive()) {
+            await runGuardController.beginTrustedDebug(tab.id)
+          } else {
+            await runGuardController.lockTab(tab.id)
+          }
+        }
+        return { status: 'success', activeTabId: tab.id, output: { tabId: tab.id, url } }
+      }
+
       case 'ai.open_chatgpt':
       case 'ai.open_claude':
       case 'ai.open_gemini':
       case 'ai.open_grok': {
-        const url = String(params.url ?? 'https://chatgpt.com/')
+        const aiDefaults: Record<string, string> = {
+          'ai.open_chatgpt': 'https://chatgpt.com/',
+          'ai.open_claude': 'https://claude.ai',
+          'ai.open_gemini': 'https://gemini.google.com',
+          'ai.open_grok': 'https://grok.com',
+        }
+        const url = String(params.url ?? aiDefaults[actionId] ?? '').trim()
+        if (!url) {
+          throw new Error('Open AI site needs a URL.')
+        }
         const reuse = params.reuseExisting !== false
         // Never force the OS window forward - flow keeps working if Chrome is minimized.
         const tab = reuse

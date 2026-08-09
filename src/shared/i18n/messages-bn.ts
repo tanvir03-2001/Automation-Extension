@@ -274,7 +274,7 @@ export const bn: MessageDict = {
   'inspector.noStepHelp': 'ক্যানভাসে একটা নোড ক্লিক করে লেবেল, সিলেক্টর ও অপশন এডিট করুন।',
   'inspector.quickTest': 'কুইক টেস্ট',
   'inspector.quickTestHelp':
-    'এই স্টেপের পুরো ইভেন্ট এখনই চালায় (আসল রানের মতো ইঞ্জিন) - ক্লিক, টাইপ, ওয়েট, কপি, URL খোলা ইত্যাদি। পুরো প্ল্যান স্টার্ট লাগে না।',
+    'এই স্টেপ বর্তমানে অ্যাকটিভ ওয়েবসাইট ট্যাবে চালায় (যেকোনো http/https)। আগে সেই ট্যাব ফোকাস করুন। পুরো প্ল্যান Run Open URL-এর ট্যাব ব্যবহার করে।',
   'inspector.quickTestOk': 'OK - {{name}} চলেছে',
   'inspector.quickTestOkSaved': 'OK - সেভ হয়েছে {{name}}',
   'inspector.quickTestFail': 'Fail - {{name}}',
@@ -282,6 +282,8 @@ export const bn: MessageDict = {
   'inspector.enable': 'চালু',
   'inspector.deleteStep': 'স্টেপ ডিলিট',
   'inspector.pickMouse': 'মাউস দিয়ে পিক',
+  'inspector.pickMouseHelp':
+    'আগে টার্গেট ওয়েবসাইট ট্যাব ফোকাস করুন। যেকোনো এলিমেন্টের উপর হোভার করে ক্লিক করলে সেই নোডই সিলেক্ট হয়। বাটন/লিঙ্কে স্ন্যাপ করতে Shift ধরে রাখুন। সিলেক্টর + ফলব্যাক সেভ হয়।',
   'inspector.chooseStep': 'স্টেপ বেছে নিন…',
   'inspector.choosePlan': 'প্ল্যান বেছে নিন…',
   'inspector.noOtherPlans': 'এই ওয়ার্কফ্লোতে অন্য প্ল্যান নেই',
@@ -326,7 +328,8 @@ export const bn: MessageDict = {
   'exec.addRule': 'রুল যোগ',
   'exec.testTitle': 'ইভেন্ট টেস্ট',
   'exec.testShort': 'টেস্ট',
-  'exec.testHelp': 'প্রোডাকশন ইঞ্জিন দিয়ে এই একক ইভেন্ট রিয়েল ব্রাউজারে চালায়।',
+  'exec.testHelp':
+    'এই একক ইভেন্ট বর্তমান অ্যাকটিভ ওয়েবসাইট ট্যাবে চালায় (যেকোনো http/https)। আগে সেই ট্যাব ফোকাস করুন। পুরো প্ল্যান Run Open URL-এর ট্যাব ব্যবহার করে।',
   'exec.runTest': 'টেস্ট চালাও',
   'exec.testing': 'টেস্ট হচ্ছে…',
   'exec.showDetails': 'ডিটেইলস',

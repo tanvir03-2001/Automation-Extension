@@ -617,7 +617,10 @@ export function PropertyInspector() {
           {action?.supportsSelector &&
           selectedNode.data.actionId !== 'conditions.if' &&
           selectedNode.data.actionId !== 'conditions.switch' ? (
-            <Field label="Primary selector" help="Mouse দিয়ে পেজ থেকে সিলেক্ট করুন">
+            <Field
+              label="Primary selector"
+              help={t('inspector.pickMouseHelp')}
+            >
               <div className="space-y-2">
                 <Input
                   value={

@@ -6,20 +6,20 @@ export const SHARED_FEATURES: Record<SharedFeatureId, FeatureGuide> = {
     id: 'test',
     title: { en: 'Test event', bn: 'টেস্ট ইভেন্ট' },
     what: {
-      en: 'Runs only this one event in a real browser with the production engine - not the whole workflow.',
-      bn: 'পুরো ওয়ার্কফ্লো না চালিয়ে শুধু এই একটি ইভেন্ট আসল ব্রাউজারে প্রোডাকশন ইঞ্জিন দিয়ে চালায়।',
+      en: 'Runs only this one event on the currently active website tab (any http/https site)—not the whole workflow, and not locked to ChatGPT.',
+      bn: 'পুরো ওয়ার্কফ্লো না চালিয়ে শুধু এই ইভেন্ট চালায়—বর্তমানে যে ওয়েবসাইট ট্যাব অ্যাকটিভ আছে (যেকোনো http/https) সেখানে; ChatGPT-তে আটকে নয়।',
     },
     why: {
-      en: 'Use it while building: confirm the click/type/wait works before wiring a long chain.',
-      bn: 'বিল্ড করার সময় ব্যবহার করুন - লম্বা চেইন বানানোর আগে ক্লিক/টাইপ/ওয়েট ঠিকমতো কাজ করে কিনা দেখুন।',
+      en: 'Use it while building: focus the target page, then confirm click/type/wait before wiring a long chain.',
+      bn: 'বিল্ড করার সময়: টার্গেট পেজ ফোকাস করে ক্লিক/টাইপ/ওয়েট ঠিকমতো কাজ করে কিনা দেখুন।',
     },
     how: {
-      en: 'Select the step → open Properties → expand Test → press Run test. Watch Activity for OK / Fail.',
-      bn: 'স্টেপ সিলেক্ট করুন → Properties খুলুন → Test এক্সপ্যান্ড করুন → Run test চাপুন। Activity-তে OK / Fail দেখুন।',
+      en: 'Focus the website tab → select the step → Properties → Test → Run test. Full plan Run still uses the tab from Open URL.',
+      bn: 'ওয়েবসাইট ট্যাব ফোকাস → স্টেপ সিলেক্ট → Properties → Test → Run test। পুরো প্ল্যান Run হলে Open URL যে ট্যাব খোলে সেটাতেই চলবে।',
     },
     example: {
-      en: 'After picking “New chat”, run Test once. If it fails, fix the selector before adding Type Text.',
-      bn: '“New chat” পিক করার পর একবার Test চালান। ফেইল হলে Type Text যোগ করার আগে সিলেক্টর ঠিক করুন।',
+      en: 'Open any site → focus that tab → Pick a button → Run test on Click. Fix the selector if it fails.',
+      bn: 'যেকোনো সাইট খুলুন → ট্যাব ফোকাস → বাটন পিক → Click-এ Run test। ফেইল হলে সিলেক্টর ঠিক করুন।',
     },
   },
   dependencies: {

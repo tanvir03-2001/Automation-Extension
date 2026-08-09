@@ -7,13 +7,14 @@ import { sendRuntimeMessage } from '@/shared/messaging/bus'
 
 interface PickedElement {
   selector: string
+  fallbacks?: string[]
   tagName: string
   text: string
   attributes: Record<string, string>
 }
 
 export function SelectorLabView() {
-  const [url, setUrl] = useState('https://chatgpt.com/')
+  const [url, setUrl] = useState('https://example.com')
   const [picking, setPicking] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [picked, setPicked] = useState<PickedElement | null>(null)
@@ -21,33 +22,37 @@ export function SelectorLabView() {
 
   async function openTargetSite() {
     setError(null)
+    const trimmed = url.trim()
+    if (!trimmed) {
+      setError('Enter a website URL first, or focus a tab and pick on the active page.')
+      return
+    }
     await sendRuntimeMessage({
       type: 'OPEN_URL',
-      payload: { url },
+      payload: { url: trimmed },
     })
   }
 
+  /** Pick on the currently active website tab (does not force-open a URL). */
   async function pickElement() {
     setError(null)
     setPicking(true)
     setCopied(false)
     try {
-      const opened = await sendRuntimeMessage<{ ok: boolean; tabId?: number }>({
-        type: 'OPEN_URL',
-        payload: { url },
-      })
-
       const response = await sendRuntimeMessage<{
         ok: boolean
         picked?: PickedElement
         error?: string
       }>({
         type: 'PICK_ELEMENT_START',
-        payload: { urlHint: url, tabId: opened.tabId },
+        payload: {},
       })
 
       if (!response.ok || !response.picked) {
-        throw new Error(response.error ?? 'Pick failed')
+        throw new Error(
+          response.error ??
+            'Pick failed. Focus a normal website tab, then try again.',
+        )
       }
 
       setPicked(response.picked)
@@ -69,8 +74,8 @@ export function SelectorLabView() {
       <header>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Selector Lab</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          প্রথমে সাইট খুলুন, তারপর পেজের বাটনে ক্লিক করে সঠিক CSS selector নিন। সেই selector
-          workflow step-এর <span className="font-mono">params.selector</span> ফিল্ডে বসান।
+          Works on any website. Optionally open a URL, then pick on the{' '}
+          <strong>active</strong> tab. Use the selector in a planner step&apos;s Properties.
         </p>
       </header>
 
@@ -80,8 +85,12 @@ export function SelectorLabView() {
         className="space-y-4 rounded-2xl border border-border/80 bg-card p-5 shadow-panel"
       >
         <div className="space-y-2">
-          <label className="text-sm font-medium">Target URL</label>
-          <Input value={url} onChange={(event) => setUrl(event.target.value)} />
+          <label className="text-sm font-medium">Optional: open URL</label>
+          <Input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://example.com"
+          />
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -96,14 +105,15 @@ export function SelectorLabView() {
             onClick={() => void pickElement()}
           >
             <Crosshair className="h-4 w-4" />
-            {picking ? 'Click an element on the page…' : '2. Pick button / input'}
+            {picking ? 'Click an element on the page…' : '2. Pick on active tab'}
           </Button>
         </div>
 
         <div className="rounded-xl border border-dashed border-border bg-background/70 p-4 text-sm text-muted-foreground">
           <p className="flex items-start gap-2">
             <MousePointerClick className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            ChatGPT-এ Send বাটন বা prompt box-এ ক্লিক করলে selector এখানে আসবে। Esc চাপলে cancel।
+            Focus the target site tab, then pick. Esc cancels. Primary selector and fallbacks are
+            captured for reliable targeting.
           </p>
         </div>
 
@@ -123,6 +133,19 @@ export function SelectorLabView() {
             <code className="block break-all rounded-lg bg-background px-3 py-2 font-mono text-xs">
               {picked.selector}
             </code>
+            {(picked.fallbacks?.length ?? 0) > 0 ? (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-foreground">Fallbacks</p>
+                {picked.fallbacks!.map((item) => (
+                  <code
+                    key={item}
+                    className="block break-all rounded-lg bg-background px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
+                  >
+                    {item}
+                  </code>
+                ))}
+              </div>
+            ) : null}
             <div className="grid gap-1 text-xs text-muted-foreground">
               <p>
                 Tag: <span className="font-mono text-foreground">{picked.tagName}</span>
@@ -139,30 +162,11 @@ export function SelectorLabView() {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              এখন Workflows → ChatGPT step-এর <span className="font-mono">params.selector</span>{' '}
-              হিসেবে এটা ব্যবহার করুন।
+              Paste into a planner step Properties → selector (or use Pick with mouse there).
             </p>
           </div>
         ) : null}
       </motion.section>
-
-      <section className="rounded-2xl border border-border/80 bg-card p-5">
-        <h2 className="font-display text-lg font-semibold">ChatGPT ডিফল্ট selectors</h2>
-        <div className="mt-3 space-y-2 font-mono text-xs">
-          <p>
-            Prompt:{' '}
-            <span className="text-muted-foreground">
-              #prompt-textarea, div[contenteditable=&quot;true&quot;]
-            </span>
-          </p>
-          <p>
-            Send button:{' '}
-            <span className="text-muted-foreground">
-              button[data-testid=&quot;send-button&quot;], button[aria-label*=&quot;Send&quot;]
-            </span>
-          </p>
-        </div>
-      </section>
     </div>
   )
 }

@@ -81,7 +81,7 @@ export async function ensureContentScript(tabId: number): Promise<void> {
   const tab = await chrome.tabs.get(tabId)
   if (isRestrictedUrl(tab.url)) {
     throw new Error(
-      'Cannot run on this page. Open a normal website (e.g. ChatGPT) and try again.',
+      'Cannot run on this page. Focus a normal http/https website tab and try again.',
     )
   }
 
