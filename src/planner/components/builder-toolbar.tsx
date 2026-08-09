@@ -1,12 +1,12 @@
 import {
   ArrowLeft,
   History,
+  OctagonX,
   Pause,
   Play,
   Redo2,
   RotateCcw,
   Save,
-  Square,
   Undo2,
 } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
@@ -144,14 +144,15 @@ export function BuilderToolbar() {
         <IconBtn
           destructive
           onClick={() =>
-            void sendRuntimeMessage({ type: 'PLANNER_CANCEL' }).then((res) => {
-              const data = res as { checkpoint?: typeof checkpoint }
-              if (data.checkpoint) setCheckpoint(data.checkpoint)
+            void sendRuntimeMessage({ type: 'ENGINE_FORCE_STOP' }).then((res) => {
+              const data = res as { checkpoint?: typeof checkpoint | null }
+              if (data.checkpoint !== undefined) setCheckpoint(data.checkpoint)
+              else setCheckpoint(null)
             })
           }
-          title={t('common.cancel')}
+          title={t('engine.forceStopHint')}
         >
-          <Square className="h-3.5 w-3.5" />
+          <OctagonX className="h-3.5 w-3.5" />
         </IconBtn>
       </ToolGroup>
 

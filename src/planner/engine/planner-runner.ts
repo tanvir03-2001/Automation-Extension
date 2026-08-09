@@ -181,9 +181,26 @@ export class PlannerRunner {
       this.checkpoint.status = 'cancelled'
       this.checkpoint.updatedAt = new Date().toISOString()
       void this.persist()
-    } else {
-      void runGuardController.stop()
     }
+    // Always release page lock / debugger — even if a step is mid-wait
+    void runGuardController.stop()
+    this.emit()
+  }
+
+  /**
+   * Hard stop: cancel flags + unlock page + mark checkpoint cancelled.
+   * Safe to call from any UI surface (sidebar, builder, overview).
+   */
+  async forceStop(): Promise<void> {
+    this.cancelRequested = true
+    this.pauseRequested = false
+    if (this.checkpoint) {
+      this.checkpoint.status = 'cancelled'
+      this.checkpoint.updatedAt = new Date().toISOString()
+      await this.persist()
+    }
+    await runGuardController.stop()
+    this.emit()
   }
 
   /** Wipe run checkpoint + history (used by Clear log). */

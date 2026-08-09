@@ -460,6 +460,18 @@ onRuntimeMessage(async (message, sender) => {
       plannerRunner.cancel()
       return { ok: true, checkpoint: plannerRunner.getCheckpoint() }
 
+    case 'ENGINE_FORCE_STOP': {
+      // Master kill-switch: planner + legacy workflow runner + page lock
+      workflowRunner.cancel()
+      await plannerRunner.forceStop()
+      await activityLog.append('warn', 'Engine', 'Force stop — all runs cancelled')
+      return {
+        ok: true,
+        checkpoint: plannerRunner.getCheckpoint(),
+        run: workflowRunner.getState(),
+      }
+    }
+
     case 'PLANNER_STATE':
       return { ok: true, checkpoint: plannerRunner.getCheckpoint() }
 

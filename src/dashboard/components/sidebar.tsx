@@ -12,6 +12,7 @@ import { cn } from '@/shared/utils/cn'
 import { useDashboardStore, type DashboardView } from '@/stores/dashboard-store'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { reloadExtension } from '@/dashboard/api/extension-api'
+import { EngineKillSwitch } from '@/dashboard/components/engine-kill-switch'
 import { Button } from '@/components/ui/button'
 import { useT } from '@/shared/i18n/use-t'
 
@@ -94,6 +95,15 @@ export function Sidebar() {
       </nav>
 
       <div className="space-y-2 border-t border-border px-4 py-4">
+        <div className="space-y-1.5">
+          <p className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('engine.masterControls')}
+          </p>
+          <EngineKillSwitch className="w-full justify-stretch [&>button]:flex-1" />
+          <p className="px-0.5 text-[11px] leading-relaxed text-muted-foreground">
+            {t('engine.masterHint')}
+          </p>
+        </div>
         <Button
           size="sm"
           variant="outline"

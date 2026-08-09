@@ -323,7 +323,7 @@ export const usePlannerStore = create<PlannerState>()(
           (checkpoint.status === 'running' || checkpoint.status === 'paused' || checkpoint.status === 'waiting')
         ) {
           window.alert(
-            'Cannot delete this workflow while a plan is running or paused. Pause/Cancel first.',
+            'Cannot delete this workflow while a plan is running or paused. Use Force Stop (top-right / sidebar Engine), then delete.',
           )
           return false
         }
@@ -456,13 +456,15 @@ export const usePlannerStore = create<PlannerState>()(
           checkpoint.workflowId === workflowId &&
           (checkpoint.status === 'running' || checkpoint.status === 'paused' || checkpoint.status === 'waiting')
         ) {
-          window.alert('Cannot delete a running or paused plan. Cancel or finish it first.')
+          window.alert(
+            'Cannot delete a running or paused plan. Use Force Stop (top-right / sidebar Engine), then delete.',
+          )
           return false
         }
         const siblings = get().workflows.filter((wf) => wf.planId === workflow.planId)
         if (siblings.length <= 1) {
           window.alert(
-            'A workflow needs at least one plan. Delete the workflow instead, or create another plan first.',
+            'This is the only plan in the workflow — it cannot be deleted alone. Delete the whole workflow on the left, or create another plan first.',
           )
           return false
         }

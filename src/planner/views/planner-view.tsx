@@ -19,6 +19,7 @@ import { ActionDocsDrawer } from '@/planner/components/action-docs-drawer'
 import { BuilderToolbar } from '@/planner/components/builder-toolbar'
 import { ImportExportMenu } from '@/planner/components/import-export-menu'
 import { DatasetManagerPanel } from '@/planner/components/dataset-manager-panel'
+import { PlannerHubLayout } from '@/planner/components/planner-hub-layout'
 import { RunLogPanel } from '@/planner/components/run-log-panel'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import {
@@ -191,9 +192,9 @@ export function PlannerView() {
         <ImportExportMenu compact />
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(260px,0.95fr)_minmax(320px,1.35fr)]">
-        {/* ── Left: Workflows ── */}
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+      <PlannerHubLayout
+        workflows={
+        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3.5 py-3">
             <div>
               <p className="text-base font-semibold text-foreground">{t('planner.workflows')}</p>
@@ -376,10 +377,9 @@ export function PlannerView() {
             </div>
           </ScrollArea>
         </section>
-
-        {/* ── Right: Plans (top half) + Datasets (bottom half) ── */}
-        <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+        }
+        plans={
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-3">
               <div className="min-w-0">
                 <p className="text-base font-semibold text-foreground">{t('planner.plans')}</p>
@@ -525,12 +525,13 @@ export function PlannerView() {
               </div>
             </ScrollArea>
           </div>
-
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        }
+        datasets={
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <DatasetManagerPanel planId={selectedPlanId} compact />
           </div>
-        </section>
-      </div>
+        }
+      />
 
       {toast ? (
         <p className="fixed bottom-4 right-4 z-[99999] max-w-sm rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground shadow-2xl">
