@@ -194,18 +194,6 @@ html[data-locale='bn'] .text-xs {
   fill: none;
 }
 
-/* Longer dashes than RF default (5) */
-.ae-canvas .react-flow__edge.animated .react-flow__edge-path {
-  stroke-dasharray: 16 14;
-  animation: ae-edge-dash 0.85s linear infinite;
-}
-
-@keyframes ae-edge-dash {
-  from {
-    stroke-dashoffset: 30;
-  }
-}
-
 .ae-canvas .react-flow__edge {
   cursor: pointer;
 }
