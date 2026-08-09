@@ -1,9 +1,7 @@
-import { detectCrossings } from '@/planner/routing/crossings'
 import {
   listFallbackCandidates,
   pathAvoidsObstacles,
   pathClearsWithPortStubs,
-  pathLength,
   portClearanceStub,
   routeFallbackOrthogonal,
   routeOrthogonal,
@@ -12,13 +10,11 @@ import {
 import { changedNodeIds, edgeIdsChanged, edgesIncidentToNodes } from '@/planner/routing/invalidate'
 import { assignLaneOffsets, buildOverlapSoftCost } from '@/planner/routing/lane-offsets'
 import { buildObstacles, nodeToPaddedRect } from '@/planner/routing/obstacles'
-import {
-  bridgeHighlightPaths,
-  pointsToSimplePath,
-  pointsToSvgPath,
-} from '@/planner/routing/path-svg'
+import { pointsToSimplePath, pointsToSvgPath } from '@/planner/routing/path-svg'
+import { cleanOrthogonalPath, scoreRouteCandidate } from '@/planner/routing/simplify-path'
 import {
   GRID_CELL,
+  MIN_LANE_GAP,
   type ComputedRoute,
   type EdgeRouteInput,
   type NodeBounds,
@@ -47,6 +43,47 @@ function mergePath(prefix: Point[], middle: Point[], suffix: Point[]): Point[] {
 
 function segmentCount(poly: Point[]): number {
   return Math.max(0, poly.length - 1)
+}
+
+function estimateStubSegCounts(
+  edge: EdgeRouteInput,
+  nodes: NodeBounds[],
+): { headSegs: number; tailSegs: number } {
+  const obstacles = buildObstacles(nodes)
+  const sourceNode = nodes.find((n) => n.id === edge.source)
+  const targetNode = nodes.find((n) => n.id === edge.target)
+  const sourceRect = sourceNode ? nodeToPaddedRect(sourceNode) : undefined
+  const targetRect = targetNode ? nodeToPaddedRect(targetNode) : undefined
+  const { stub: head } = portClearanceStub(
+    { x: edge.sourceX, y: edge.sourceY },
+    edge.sourcePosition ?? 'right',
+    sourceRect,
+    obstacles,
+  )
+  const { stub: tailOut } = portClearanceStub(
+    { x: edge.targetX, y: edge.targetY },
+    edge.targetPosition ?? 'left',
+    targetRect,
+    obstacles,
+  )
+  return {
+    headSegs: segmentCount(head),
+    tailSegs: segmentCount([...tailOut].reverse()),
+  }
+}
+
+/** Stable geometric order: top-to-bottom, then left-to-right, then shorter first. */
+function compareEdgesGeometric(a: EdgeRouteInput, b: EdgeRouteInput): number {
+  const ay = (a.sourceY + a.targetY) / 2
+  const by = (b.sourceY + b.targetY) / 2
+  if (Math.abs(ay - by) > 1) return ay - by
+  const ax = (a.sourceX + a.targetX) / 2
+  const bx = (b.sourceX + b.targetX) / 2
+  if (Math.abs(ax - bx) > 1) return ax - bx
+  const alen = Math.abs(a.targetX - a.sourceX) + Math.abs(a.targetY - a.sourceY)
+  const blen = Math.abs(b.targetX - b.sourceX) + Math.abs(b.targetY - b.sourceY)
+  if (Math.abs(alen - blen) > 1) return alen - blen
+  return a.id.localeCompare(b.id)
 }
 
 function routeOneEdge(
@@ -84,7 +121,6 @@ function routeOneEdge(
 
   const middleCandidates: Point[][] = []
 
-  // Prefer pure shortest A* (no soft overlap cost), then soft-cost variant
   const softCost = buildOverlapSoftCost(existingPolylines, GRID_CELL)
   const astarShort = routeOrthogonal(freeStart, freeEnd, obstacles, {
     maxExpand: 24_000,
@@ -101,16 +137,15 @@ function routeOneEdge(
     middleCandidates.push(astarSoft)
   }
 
-  // Local short wraps (not full-canvas perimeter)
   for (const fb of listFallbackCandidates(freeStart, freeEnd, obstacles)) {
     middleCandidates.push(fb)
   }
 
   let best: Point[] | null = null
-  let bestLen = Infinity
+  let bestScore = Infinity
 
   for (const middle of middleCandidates) {
-    const merged = mergePath(head, middle, tailIn)
+    const merged = cleanOrthogonalPath(mergePath(head, middle, tailIn), obstacles)
     if (
       !pathClearsWithPortStubs(
         merged,
@@ -118,26 +153,29 @@ function routeOneEdge(
         edge.source,
         edge.target,
         headSegs,
-        tailSegs,
+        Math.max(tailSegs, 1),
       )
     ) {
       continue
     }
-    const len = pathLength(merged)
-    if (len < bestLen) {
-      bestLen = len
+    const score = scoreRouteCandidate(merged, existingPolylines, MIN_LANE_GAP)
+    if (score < bestScore) {
+      bestScore = score
       best = merged
     }
   }
 
   if (best) return best
 
-  return mergePath(head, routeFallbackOrthogonal(freeStart, freeEnd, obstacles), tailIn)
+  return cleanOrthogonalPath(
+    mergePath(head, routeFallbackOrthogonal(freeStart, freeEnd, obstacles), tailIn),
+    obstacles,
+  )
 }
 
 /**
  * After lane offsets, keep pre-offset path if spaced route clips any padded box
- * outside dedicated source/target port stubs (estimate 2 segs each end).
+ * outside dedicated source/target port stubs.
  */
 function applyLaneOffsetsSafely(
   polylines: Map<string, Point[]>,
@@ -150,16 +188,18 @@ function applyLaneOffsetsSafely(
 
   for (const edge of edges) {
     const original = polylines.get(edge.id)
-    const candidate = spaced.get(edge.id) ?? original
-    if (!original || !candidate) continue
+    const candidateRaw = spaced.get(edge.id) ?? original
+    if (!original || !candidateRaw) continue
 
+    const { headSegs, tailSegs } = estimateStubSegCounts(edge, nodes)
+    const candidate = cleanOrthogonalPath(candidateRaw, obstacles)
     const ok = pathClearsWithPortStubs(
       candidate,
       obstacles,
       edge.source,
       edge.target,
-      2,
-      2,
+      Math.max(headSegs, 1),
+      Math.max(tailSegs, 1),
     )
     result.set(edge.id, ok ? candidate : original)
   }
@@ -192,7 +232,7 @@ export function computeRoutes(
       ? edges
       : edges.filter((e) => dirtyIds.has(e.id) || !polylines.has(e.id))
 
-  const ordered = [...edges].sort((a, b) => a.id.localeCompare(b.id))
+  const ordered = [...edges].sort(compareEdgesGeometric)
   const routedExisting: Point[][] = []
 
   for (const edge of ordered) {
@@ -210,8 +250,6 @@ export function computeRoutes(
   }
 
   const spaced = applyLaneOffsetsSafely(polylines, edges, nodes)
-  const orderedIds = ordered.map((e) => e.id)
-  const bridgesMap = detectCrossings(spaced, orderedIds)
 
   const routes = new Map<string, ComputedRoute>()
   for (const edge of edges) {
@@ -219,15 +257,14 @@ export function computeRoutes(
       { x: edge.sourceX, y: edge.sourceY },
       { x: edge.targetX, y: edge.targetY },
     ]
-    const bridges = bridgesMap.get(edge.id) ?? []
-    const svgPath = pointsToSvgPath(points, bridges)
-    const highlightPaths = bridgeHighlightPaths(points, bridges)
+    // Continuous polyline only — no bridge jump arcs or highlight bands at crossings.
+    const svgPath = pointsToSvgPath(points)
     routes.set(edge.id, {
       edgeId: edge.id,
       points,
-      bridges,
+      bridges: [],
       svgPath: svgPath || pointsToSimplePath(points),
-      highlightPaths,
+      highlightPaths: [],
     })
   }
 

@@ -54,7 +54,7 @@ export type NodeBounds = {
 
 export const ROUTING_PADDING = 32
 export const GRID_CELL = 18
-export const MIN_LANE_GAP = 9
+export const MIN_LANE_GAP = 16
 export const BRIDGE_RADIUS = 6
 export const BRIDGE_HIGHLIGHT_PX = 30
 export const CORNER_RADIUS = 6

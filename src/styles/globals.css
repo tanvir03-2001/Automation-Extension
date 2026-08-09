@@ -169,12 +169,12 @@ html[data-locale='bn'] .text-xs {
 
 .ae-canvas .react-flow__edge.ae-edge-active .react-flow__edge-path {
   stroke: #10b981 !important;
-  stroke-width: 4.5 !important;
+  stroke-width: 3.25 !important;
 }
 
 .ae-canvas .react-flow__edge.ae-edge-done .react-flow__edge-path {
   stroke: #34d399 !important;
-  stroke-width: 3.5 !important;
+  stroke-width: 2.5 !important;
   opacity: 0.9;
 }
 
@@ -202,7 +202,7 @@ html[data-locale='bn'] .text-xs {
 .ae-canvas .react-flow__edge.ae-edge-selected .react-flow__edge-path,
 .ae-canvas .react-flow__edge:focus .react-flow__edge-path {
   stroke: #0f766e !important;
-  stroke-width: 4.5 !important;
+  stroke-width: 3.25 !important;
 }
 
 /* Jump zone: ±30px colored band on the crossing (upper) route */

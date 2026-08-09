@@ -185,16 +185,47 @@ export function routeOrthogonal(
 
   const originX = minX
   const originY = minY
-  const sg = toGrid(start.x, start.y, originX, originY, cell)
-  const eg = toGrid(end.x, end.y, originX, originY, cell)
 
-  const blocked = (gx: number, gy: number): boolean => {
-    if ((gx === sg.gx && gy === sg.gy) || (gx === eg.gx && gy === eg.gy)) return false
+  const cellBlocked = (gx: number, gy: number): boolean => {
     const p = fromGrid(gx, gy, originX, originY, cell)
     if (p.x < minX - cell || p.x > maxX + cell || p.y < minY - cell || p.y > maxY + cell) {
       return true
     }
     return obstacles.some((o) => pointInRect(p.x, p.y, o))
+  }
+
+  /** Nearest free grid cell; prefers cells aligned on an axis with `from`. */
+  const snapFreeGrid = (from: Point): { gx: number; gy: number; p: Point } => {
+    const base = toGrid(from.x, from.y, originX, originY, cell)
+    for (let r = 0; r <= 12; r += 1) {
+      for (let dx = -r; dx <= r; dx += 1) {
+        const rest = r - Math.abs(dx)
+        for (const dy of rest === 0 ? [0] : [rest, -rest]) {
+          const gx = base.gx + dx
+          const gy = base.gy + dy
+          if (cellBlocked(gx, gy)) continue
+          const p = fromGrid(gx, gy, originX, originY, cell)
+          // Prefer snap that stays orthogonal via a single L from `from`
+          const viaH = [from, { x: p.x, y: from.y }, p]
+          const viaV = [from, { x: from.x, y: p.y }, p]
+          if (pathAvoidsObstacles(viaH, obstacles) || pathAvoidsObstacles(viaV, obstacles)) {
+            return { gx, gy, p }
+          }
+        }
+      }
+    }
+    const p = fromGrid(base.gx, base.gy, originX, originY, cell)
+    return { gx: base.gx, gy: base.gy, p }
+  }
+
+  const sgSnap = snapFreeGrid(start)
+  const egSnap = snapFreeGrid(end)
+  const sg = { gx: sgSnap.gx, gy: sgSnap.gy }
+  const eg = { gx: egSnap.gx, gy: egSnap.gy }
+
+  const blocked = (gx: number, gy: number): boolean => {
+    if ((gx === sg.gx && gy === sg.gy) || (gx === eg.gx && gy === eg.gy)) return false
+    return cellBlocked(gx, gy)
   }
 
   type Rec = { g: number; f: number; px: number; py: number; dir: number }
@@ -251,7 +282,7 @@ export function routeOrthogonal(
       }
       if (hits) continue
 
-      const bendPenalty = crec.dir !== 0 && crec.dir !== d.dir ? 1.8 : 0
+      const bendPenalty = crec.dir !== 0 && crec.dir !== d.dir ? 5.5 : 0
       const soft = softCost ? softCost(nx, ny, b.x, b.y) : 0
       const g = crec.g + 1 + bendPenalty + soft
       const f = g + heuristic(nx, ny, eg.gx, eg.gy)
@@ -279,18 +310,42 @@ export function routeOrthogonal(
   }
   gridPath.reverse()
 
-  const points: Point[] = [start]
+  // Grid-to-grid core, then orthogonal stubs from real start/end onto snapped cells.
+  const gridPoints: Point[] = []
   for (const g of gridPath) {
     const p = fromGrid(g.gx, g.gy, originX, originY, cell)
+    const last = gridPoints[gridPoints.length - 1]
+    if (last && Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) continue
+    gridPoints.push(p)
+  }
+
+  const joinOrtho = (from: Point, to: Point): Point[] => {
+    if (Math.abs(from.x - to.x) < 0.5 && Math.abs(from.y - to.y) < 0.5) return [from]
+    if (Math.abs(from.x - to.x) < 0.5 || Math.abs(from.y - to.y) < 0.5) return [from, to]
+    const viaH = [from, { x: to.x, y: from.y }, to]
+    if (pathAvoidsObstacles(viaH, obstacles)) return viaH
+    const viaV = [from, { x: from.x, y: to.y }, to]
+    if (pathAvoidsObstacles(viaV, obstacles)) return viaV
+    return viaH
+  }
+
+  const head = joinOrtho(start, sgSnap.p)
+  const tail = joinOrtho(egSnap.p, end)
+  const points: Point[] = []
+  for (const p of head) {
     const last = points[points.length - 1]
-    if (Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) continue
+    if (last && Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) continue
     points.push(p)
   }
-  const last = points[points.length - 1]
-  if (Math.abs(last.x - end.x) > 0.5 || Math.abs(last.y - end.y) > 0.5) {
-    points.push(end)
-  } else {
-    points[points.length - 1] = end
+  for (const p of gridPoints) {
+    const last = points[points.length - 1]
+    if (last && Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) continue
+    points.push(p)
+  }
+  for (const p of tail) {
+    const last = points[points.length - 1]
+    if (last && Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) continue
+    points.push(p)
   }
 
   return simplifyOrthogonal(points)

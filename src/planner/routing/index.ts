@@ -16,3 +16,8 @@ export {
 export { computeRoutes, computeDirtySet } from '@/planner/routing/compute-routes'
 export { buildObstacles } from '@/planner/routing/obstacles'
 export { pointsToSvgPath, pointsToSimplePath, bridgeHighlightPaths } from '@/planner/routing/path-svg'
+export {
+  cleanOrthogonalPath,
+  countBends,
+  scoreRouteCandidate,
+} from '@/planner/routing/simplify-path'

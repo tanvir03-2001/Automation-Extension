@@ -45,7 +45,7 @@ function edgeMarkers(color: string) {
   }
 }
 
-export function edgeStyleForColor(color: string, strokeWidth = 3.5): Partial<Edge> {
+export function edgeStyleForColor(color: string, strokeWidth = 2.5): Partial<Edge> {
   return {
     style: { stroke: color, strokeWidth },
     ...edgeMarkers(color),
@@ -124,7 +124,16 @@ export function applyRunEdgeStyles(
   const previousId = live ? checkpoint?.previousNodeId : null
 
   return edges.map((edge) => {
-    const accent = resolveNodeAccentColor(nodeById.get(edge.source))
+    const sourceNode = nodeById.get(edge.source)
+    // When nodes aren't ready yet (first paint), keep the edge's existing stroke
+    // instead of painting every route with the fallback teal.
+    const existingStroke =
+      typeof edge.style?.stroke === 'string' && edge.style.stroke.trim()
+        ? edge.style.stroke
+        : null
+    const accent = sourceNode
+      ? resolveNodeAccentColor(sourceNode)
+      : (existingStroke ?? FALLBACK_ACCENT)
     const selected = selectedEdgeId ? edge.id === selectedEdgeId : Boolean(edge.selected)
     if (selected) {
       return {
@@ -133,7 +142,7 @@ export function applyRunEdgeStyles(
         selected: true,
         animated: false,
         className: 'ae-edge-selected',
-        ...edgeStyleForColor(accent, 4.5),
+        ...edgeStyleForColor(accent, 3.25),
       }
     }
 
@@ -152,7 +161,7 @@ export function applyRunEdgeStyles(
         selected: false,
         animated: true,
         className: 'ae-edge-active',
-        ...edgeStyleForColor(accent, 4.5),
+        ...edgeStyleForColor(accent, 3.25),
       }
     }
 
@@ -163,7 +172,7 @@ export function applyRunEdgeStyles(
         selected: false,
         animated: false,
         className: 'ae-edge-done',
-        ...edgeStyleForColor(accent, 3.5),
+        ...edgeStyleForColor(accent, 2.5),
       }
     }
 

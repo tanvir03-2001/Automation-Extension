@@ -177,12 +177,14 @@ function CanvasInner() {
   }, [workflow, workflowId, selectedEdgeId])
 
   useEffect(() => {
+    // Prefer store nodes — nodesRef is still [] on the first effect flush after open.
+    const colorNodes = workflow?.nodes?.length ? workflow.nodes : nodesRef.current
     setEdges((current) => {
       const next = applyRunEdgeStyles(current, {
         workflowId,
         checkpoint,
         selectedEdgeId,
-        nodes: nodesRef.current,
+        nodes: colorNodes,
       })
       // Bail out if nothing visible changed - prevents selection thrash / update loops.
       const same =
@@ -209,6 +211,7 @@ function CanvasInner() {
     checkpoint?.workflowId,
     selectedEdgeId,
     workflowId,
+    workflow?.nodes,
   ])
 
   const onNodesChange = useCallback(

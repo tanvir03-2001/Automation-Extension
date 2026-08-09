@@ -99,10 +99,14 @@ export function SmartOrthogonalEdge({
       ? route.points[route.points.length - 1]
       : { x: targetX, y: targetY }
 
-  const stroke =
-    typeof style?.stroke === 'string' && style.stroke !== '#94a3b8' ? style.stroke : accent
+  // Prefer live source-node accent as soon as RF has the node (fixes first-open gray/teal).
+  const stroke = sourceNode
+    ? accent
+    : typeof style?.stroke === 'string' && style.stroke.trim()
+      ? style.stroke
+      : accent
   const strokeWidth =
-    typeof style?.strokeWidth === 'number' ? style.strokeWidth : 3.5
+    typeof style?.strokeWidth === 'number' ? style.strokeWidth : 2.5
 
   return (
     <>
@@ -118,38 +122,23 @@ export function SmartOrthogonalEdge({
       <circle
         cx={startPt.x}
         cy={startPt.y}
-        r={5}
+        r={3.5}
         className="ae-edge-endpoint"
         fill={stroke}
         stroke="hsl(var(--card))"
-        strokeWidth={1.5}
+        strokeWidth={1.25}
         style={{ pointerEvents: 'none' }}
       />
       <circle
         cx={endPt.x}
         cy={endPt.y}
-        r={5}
+        r={3.5}
         className="ae-edge-endpoint"
         fill={stroke}
         stroke="hsl(var(--card))"
-        strokeWidth={1.5}
+        strokeWidth={1.25}
         style={{ pointerEvents: 'none' }}
       />
-
-      {/* Bridge jump uses the same event accent (no separate overlap palette) */}
-      {route?.highlightPaths?.map((d, i) => (
-        <path
-          key={`${id}-bridge-hl-${i}`}
-          d={d}
-          fill="none"
-          className="ae-edge-bridge-highlight"
-          stroke={stroke}
-          strokeWidth={strokeWidth + 0.75}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ pointerEvents: 'none' }}
-        />
-      ))}
     </>
   )
 }
