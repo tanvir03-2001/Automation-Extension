@@ -5,7 +5,7 @@ import { activityLog } from '@/engine/activity/activity-log'
 
 /**
  * Site-specific automation rules for ChatGPT.
- * The extension does not generate content — it only drives the UI per workflow params.
+ * The extension does not generate content - it only drives the UI per workflow params.
  */
 export interface ChatGptModuleConfig {
   url: string

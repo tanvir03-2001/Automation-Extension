@@ -60,7 +60,7 @@ export function KeyPressFields({ value, onChange, allowChord = true }: KeyPressF
       commit([...selected.filter((k) => MODIFIER_KEYS.has(k)), keyValue])
       return
     }
-    // Only one non-modifier "main" key — swap if adding another letter/special
+    // Only one non-modifier "main" key - swap if adding another letter/special
     if (!MODIFIER_KEYS.has(keyValue)) {
       const mods = selected.filter((k) => MODIFIER_KEYS.has(k))
       commit([...mods, keyValue])

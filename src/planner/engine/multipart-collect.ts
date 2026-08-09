@@ -30,17 +30,17 @@ STRICT RULES for the parts you will send next:
 2. Later I will ask for Part 1, Part 2, … Part N.
 3. Each part must be RAW text only (no \`\`\` fences, no commentary, no "Part X" labels).
 4. When I concatenate Part1+Part2+…+PartN with ZERO edits/spaces added/removed at the joins, the result MUST be one complete valid JSON document.
-5. Do not restart the JSON in later parts — continue exactly from the previous cut.
+5. Do not restart the JSON in later parts - continue exactly from the previous cut.
 6. Prefer cutting between JSON properties/array items when possible.`
 
 export function buildPartPrompt(partIndex: number, partCount: number): string {
   return `Give me Part ${partIndex} of ${partCount} now.
 
 STRICT RULES:
-1. Output ONLY the raw text for this part — no markdown code fences, no commentary, no labels like "Part ${partIndex}".
+1. Output ONLY the raw text for this part - no markdown code fences, no commentary, no labels like "Part ${partIndex}".
 2. When I join Part1+Part2+…+Part${partCount} with ZERO changes, the result must be one complete valid JSON document.
 3. Do not repeat content from earlier parts.
-4. Do not restart from the beginning — continue exactly where Part ${Math.max(1, partIndex - 1)} ended.
+4. Do not restart from the beginning - continue exactly where Part ${Math.max(1, partIndex - 1)} ended.
 5. Never explain anything. Never ask questions.`
 }
 
@@ -240,7 +240,7 @@ export async function collectJsonParts(args: {
   }
 
   if (!isOutputLimitResponse(first)) {
-    // Not a limit error — still save whatever we got
+    // Not a limit error - still save whatever we got
     const finalJson = stripCodeFences(first)
     let downloadId: number | undefined
     if (autoDownload) {
@@ -265,7 +265,7 @@ export async function collectJsonParts(args: {
   await activityLog.append(
     'info',
     'MultipartCollect',
-    'OUTPUT_LIMIT_REACHED detected — asking ChatGPT for partCount…',
+    'OUTPUT_LIMIT_REACHED detected - asking ChatGPT for partCount…',
   )
 
   await pasteSendWait(tabId, PART_COUNT_PROMPT, timeoutMs)
@@ -308,7 +308,7 @@ export async function collectJsonParts(args: {
     await activityLog.append(
       'warn',
       'MultipartCollect',
-      'Joined parts are not valid JSON yet — file still saved for manual fix',
+      'Joined parts are not valid JSON yet - file still saved for manual fix',
     )
   } else {
     await activityLog.append('success', 'MultipartCollect', 'Joined parts form valid JSON')

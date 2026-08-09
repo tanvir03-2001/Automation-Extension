@@ -1,6 +1,6 @@
 import type { MessageDict } from '@/shared/i18n/types'
 
-/** সহজ বাংলা — সহজে বোঝা যায় এমন শব্দ */
+/** সহজ বাংলা - সহজে বোঝা যায় এমন শব্দ */
 export const bn: MessageDict = {
   'app.name': 'অটোমেশন',
   'app.tagline': 'ওয়ার্কফ্লো ইঞ্জিন',
@@ -11,6 +11,30 @@ export const bn: MessageDict = {
   'nav.planner': 'ওয়ার্কফ্লো প্ল্যানার',
   'nav.activity': 'অ্যাকটিভিটি',
   'nav.settings': 'সেটিংস',
+  'nav.eventGuide': 'ইভেন্ট গাইড',
+
+  'guide.title': 'ইভেন্ট গাইড',
+  'guide.subtitle':
+    'প্রতিটি ইভেন্টের সংক্ষিপ্ত ডকুমেন্টেশন: কী, কোথায় ব্যবহার, Properties-এর প্রতিটি ফিচার কীভাবে কাজ করে - উদাহরণসহ। ভাষা Settings অনুযায়ী।',
+  'guide.search': 'ইভেন্ট খুঁজুন…',
+  'guide.noResults': 'কোনো ইভেন্ট মেলেনি।',
+  'guide.pickEvent': 'তালিকা থেকে একটি ইভেন্ট বাছুন।',
+  'guide.propertiesLabel': 'প্রপার্টিজ',
+  'guide.whenWhy': 'কোথায় ও কেন ব্যবহার',
+  'guide.example': 'উদাহরণ',
+  'guide.eventFeatures': 'ইভেন্ট ফিচার (বিস্তারিত)',
+  'guide.fields': 'সেটিংস ফিল্ড',
+  'guide.sharedFeatures': 'শেয়ার্ড Properties প্যানেল',
+  'guide.sharedHelp':
+    'এই প্যানেলগুলো বেশিরভাগ ইভেন্টে থাকে (Click-এর মতোই): Test, Dependencies, Execution, Interaction।',
+  'guide.what': 'কী',
+  'guide.why': 'কেন',
+  'guide.how': 'কীভাবে',
+  'guide.kindShared': 'শেয়ার্ড',
+  'guide.kindField': 'ফিল্ড',
+  'guide.kindFeature': 'ফিচার',
+  'guide.tip':
+    'টিপ: Workflow Planner খুলে স্টেপ সিলেক্ট করলে একই প্যানেল লাইভ এডিট করতে পারবেন। এই গাইড পড়ার পর সেখানে Run test চালান।',
 
   'theme.dark': 'ডার্ক মোড',
   'theme.light': 'লাইট মোড',
@@ -21,7 +45,7 @@ export const bn: MessageDict = {
 
   'lang.section': 'ভাষা',
   'lang.help':
-    'পুরো এক্সটেনশনের জন্য ইংরেজি বা সহজ বাংলা বেছে নিন। বাংলায় Anek Bangla Google ফন্ট ব্যবহার হয়।',
+    'পুরো এক্সটেনশনের জন্য ইংরেজি বা সহজ বাংলা বেছে নিন। বাংলা UI-তে Noto Sans Bengali (শিরোনামে Anek Bangla)।',
   'lang.english': 'English',
   'lang.bangla': 'বাংলা',
 
@@ -34,7 +58,7 @@ export const bn: MessageDict = {
   'engine.masterHint': 'যেকোনো স্ক্রিন থেকে পজ বা ফোর্স-স্টপ করুন।',
   'engine.forceStop': 'ফোর্স স্টপ',
   'engine.stopShort': 'স্টপ',
-  'engine.forceStopHint': 'সব রান জোর করে বন্ধ করে পেজ আনলক করে — যেকোনো সময় কাজ করে।',
+  'engine.forceStopHint': 'সব রান জোর করে বন্ধ করে পেজ আনলক করে - যেকোনো সময় কাজ করে।',
   'engine.pauseHint': 'চলমান প্ল্যানার রান পজ করুন',
   'common.save': 'সেভ',
   'common.edit': 'এডিট',
@@ -79,7 +103,7 @@ export const bn: MessageDict = {
   'planner.title': 'ওয়ার্কফ্লো প্ল্যানার',
   'planner.subtitle':
     'আগে ওয়ার্কফ্লো তৈরি করুন, তারপর ভিতরে প্ল্যান যোগ করুন। ড্র্যাগ-ড্রপ দিয়ে অটোমেশন বানানো যায়।',
-  'planner.subtitleShort': 'ওয়ার্কফ্লো · প্ল্যান · ডেটাসেট — ভিজুয়াল এডিটরে কনফিগার করুন।',
+  'planner.subtitleShort': 'ওয়ার্কফ্লো · প্ল্যান · ডেটাসেট - ভিজুয়াল এডিটরে কনফিগার করুন।',
   'planner.workflows': 'ওয়ার্কফ্লো',
   'planner.workflowsHint': 'ওয়ার্কফ্লো তৈরি ও সিলেক্ট করুন',
   'planner.createWorkflow': 'ওয়ার্কফ্লো তৈরি',
@@ -110,7 +134,7 @@ export const bn: MessageDict = {
   'planner.noActiveRun': 'এখন কোনো প্ল্যানার রান চলছে না।',
   'planner.actionLibrary': 'অ্যাকশন লাইব্রেরি',
   'planner.actionLibraryHelp':
-    '{{count}}+ রেডি অ্যাকশন — ব্রাউজার, মাউস, কীবোর্ড, AI, লুপ, কন্ডিশন, ডাউনলোড ইত্যাদি।',
+    '{{count}}+ রেডি অ্যাকশন - ব্রাউজার, মাউস, কীবোর্ড, AI, লুপ, কন্ডিশন, ডাউনলোড ইত্যাদি।',
   'planner.workflowPrefix': 'ওয়ার্কফ্লো: {{name}}',
 
   'dataset.title': 'ডেটাসেট',
@@ -124,7 +148,7 @@ export const bn: MessageDict = {
   'dataset.nameRequired': 'নাম লাগবে',
   'dataset.nameExists': '“{{name}}” আগে থেকেই আছে',
   'dataset.nameOk': 'নাম ব্যবহার করা যাবে',
-  'dataset.invalidJson': 'ভুল JSON — ভ্যালু ফিল্ড ঠিক করুন',
+  'dataset.invalidJson': 'ভুল JSON - ভ্যালু ফিল্ড ঠিক করুন',
   'dataset.importOk': 'ডেটাসেট ইমপোর্ট: {{name}}',
   'dataset.exportOk': 'ডেটাসেট এক্সপোর্ট হয়েছে',
   'dataset.deleteConfirm':
@@ -137,11 +161,11 @@ export const bn: MessageDict = {
   'typeText.helpOutside':
     'ম্যানুয়াল লিখুন, অথবা Dataset থেকে ভিজুয়াল path picker দিয়ে leaf ফিল্ড বেঁধে দিন।',
   'typeText.helpPaste':
-    'TypeText-এর মতোই সোর্স — কিন্তু পুরো টেক্সট একবারে পেস্ট হবে (টাইপিং নয়)।',
+    'TypeText-এর মতোই সোর্স - কিন্তু পুরো টেক্সট একবারে পেস্ট হবে (টাইপিং নয়)।',
   'typeText.helpInsideLoop':
     'এই স্টেপ Map/For লুপ বডির ভিতরে। বর্তমান loop item-এর ফিল্ড বেঁধে দিন, অথবা ম্যানুয়াল লিখুন।',
-  'typeText.insideMap': 'Map-এর ভিতরে — item-এ বাঁধুন ({{name}})',
-  'typeText.onCompleted': 'Map completed পাথে ({{name}}) — datasets ব্যবহারযোগ্য।',
+  'typeText.insideMap': 'Map-এর ভিতরে - item-এ বাঁধুন ({{name}})',
+  'typeText.onCompleted': 'Map completed পাথে ({{name}}) - datasets ব্যবহারযোগ্য।',
   'typeText.source': 'সোর্স',
   'typeText.sourceManual': 'ম্যানুয়াল টেক্সট',
   'typeText.sourceDataset': 'Dataset (JSON path বাছুন)',
@@ -151,7 +175,7 @@ export const bn: MessageDict = {
   'typeText.placeholderType': 'কী টাইপ হবে…',
   'typeText.placeholderPaste': 'কী পেস্ট হবে…',
   'typeText.dataset': 'Dataset',
-  'typeText.chooseDataset': '— dataset বাছুন —',
+  'typeText.chooseDataset': '- dataset বাছুন -',
   'typeText.noDatasets':
     'এখনো কোনো dataset নেই। Workflow Planner → Datasets-এ তৈরি করে এখানে JSON path বাছুন।',
   'typeText.openDatasets': 'Workflow Planner datasets খুলুন',
@@ -163,7 +187,7 @@ export const bn: MessageDict = {
   'typeText.switchDataset': 'Dataset-এ যান',
   'typeText.switchLoopItem': 'Loop item-এ বাঁধুন',
   'typeText.insideLoopHint':
-    'এই স্টেপ Map বডির ভিতরে — পুরো dataset-এর বদলে বর্তমান loop item বাঁধা ভালো।',
+    'এই স্টেপ Map বডির ভিতরে - পুরো dataset-এর বদলে বর্তমান loop item বাঁধা ভালো।',
   'typeText.loopVariable': 'Loop item ভেরিয়েবল',
   'typeText.bindItem': '{{name}}-এর ফিল্ড বাঁধুন',
   'typeText.noSampleItem':
@@ -175,12 +199,12 @@ export const bn: MessageDict = {
   'typeText.speedHuman': 'মানুষের মতো',
   'typeText.speedSlow': 'ধীরে',
   'typeText.speedInstant': 'তাৎক্ষণিক',
-  'typeText.pasteModeNote': 'পেস্ট মোড: পুরো টেক্সট একবারে যাবে — কোনো টাইপিং ডিলে নেই।',
+  'typeText.pasteModeNote': 'পেস্ট মোড: পুরো টেক্সট একবারে যাবে - কোনো টাইপিং ডিলে নেই।',
   'typeText.pathRoot': 'রুট',
   'typeText.pathNoData': 'ব্রাউজ করার মতো JSON নেই।',
-  'typeText.pathLeafRoot': 'এটি ইতিমধ্যে leaf মান — বাঁধতে সিলেক্ট করুন।',
+  'typeText.pathLeafRoot': 'এটি ইতিমধ্যে leaf মান - বাঁধতে সিলেক্ট করুন।',
   'typeText.pathSelectValue': 'মান ব্যবহার করুন',
-  'typeText.pathEmptyArray': 'খালি অ্যারে — কিছু বাছা যাবে না।',
+  'typeText.pathEmptyArray': 'খালি অ্যারে - কিছু বাছা যাবে না।',
   'typeText.pathCurrentItem': 'বর্তমান item-এর ফিল্ড',
   'typeText.pathSelected': 'নির্বাচিত path',
   'typeText.pathBack': 'পিছনে',
@@ -188,7 +212,7 @@ export const bn: MessageDict = {
   'typeText.pathSelect': 'সিলেক্ট',
   'typeText.pathLabel': 'Path',
   'typeText.pathUseList': 'এই লিস্ট ব্যবহার করুন (কিউ)',
-  'typeText.pathQueueHint': '{{count}}টি মান — প্রতি রানে পরেরটি ব্যবহার হতে পারে',
+  'typeText.pathQueueHint': '{{count}}টি মান - প্রতি রানে পরেরটি ব্যবহার হতে পারে',
   'typeText.loopItemOutside':
     'Loop item বাঁধা শুধু Map/For বডির ভিতরে কাজ করে। Dataset-এ যান অথবা স্টেপটি লুপের ভিতরে নিন।',
 
@@ -250,10 +274,10 @@ export const bn: MessageDict = {
   'inspector.noStepHelp': 'ক্যানভাসে একটা নোড ক্লিক করে লেবেল, সিলেক্টর ও অপশন এডিট করুন।',
   'inspector.quickTest': 'কুইক টেস্ট',
   'inspector.quickTestHelp':
-    'এই স্টেপের পুরো ইভেন্ট এখনই চালায় (আসল রানের মতো ইঞ্জিন) — ক্লিক, টাইপ, ওয়েট, কপি, URL খোলা ইত্যাদি। পুরো প্ল্যান স্টার্ট লাগে না।',
-  'inspector.quickTestOk': 'OK — {{name}} চলেছে',
-  'inspector.quickTestOkSaved': 'OK — সেভ হয়েছে {{name}}',
-  'inspector.quickTestFail': 'Fail — {{name}}',
+    'এই স্টেপের পুরো ইভেন্ট এখনই চালায় (আসল রানের মতো ইঞ্জিন) - ক্লিক, টাইপ, ওয়েট, কপি, URL খোলা ইত্যাদি। পুরো প্ল্যান স্টার্ট লাগে না।',
+  'inspector.quickTestOk': 'OK - {{name}} চলেছে',
+  'inspector.quickTestOkSaved': 'OK - সেভ হয়েছে {{name}}',
+  'inspector.quickTestFail': 'Fail - {{name}}',
   'inspector.disable': 'বন্ধ',
   'inspector.enable': 'চালু',
   'inspector.deleteStep': 'স্টেপ ডিলিট',
@@ -291,7 +315,7 @@ export const bn: MessageDict = {
   'exec.dependenciesHelp': 'ভেরিয়েবল / ডেটাসেট / হিস্টরি রুল মিললেই এই ইভেন্ট চলবে।',
   'exec.logicAnd': 'সব রুল মিলবে (AND)',
   'exec.logicOr': 'যেকোনো একটা মিলবে (OR)',
-  'exec.noRules': 'কোনো রুল নেই — পৌঁছালেই চলবে।',
+  'exec.noRules': 'কোনো রুল নেই - পৌঁছালেই চলবে।',
   'exec.sourceVariable': 'ভেরিয়েবল',
   'exec.sourceDataset': 'ডেটাসেট',
   'exec.sourceHistory': 'হিস্টরি',
@@ -313,9 +337,9 @@ export const bn: MessageDict = {
   'exec.testInputs': 'টেস্ট ইনপুট (JSON ভেরিয়েবল ওভাররাইড)',
   'exec.testInputsInvalid': 'টেস্ট ইনপুট বৈধ JSON হতে হবে',
   'exec.persistVariables': 'ভেরিয়েবল পরিবর্তন অ্যাকটিভ রানে সেভ করো',
-  'exec.testOk': 'ঠিক আছে — {{name}}',
-  'exec.testFail': 'ফেইল — {{name}}',
-  'exec.testSkipped': 'স্কিপ — ডিপেন্ডেন্সি মেলেনি ({{name}})',
+  'exec.testOk': 'ঠিক আছে - {{name}}',
+  'exec.testFail': 'ফেইল - {{name}}',
+  'exec.testSkipped': 'স্কিপ - ডিপেন্ডেন্সি মেলেনি ({{name}})',
   'exec.tab.timeline': 'টাইমলাইন',
   'exec.tab.output': 'আউটপুট',
   'exec.tab.deps': 'ডিপস',

@@ -294,7 +294,7 @@ export function EventTestPanel({
                       {report.timeline.map((item, index) => (
                         <li key={index}>
                           <span className="text-muted-foreground">{item.phase}</span>
-                          {item.detail ? ` — ${item.detail}` : ''}
+                          {item.detail ? ` - ${item.detail}` : ''}
                           {item.ms != null ? ` (${item.ms}ms)` : ''}
                         </li>
                       ))}

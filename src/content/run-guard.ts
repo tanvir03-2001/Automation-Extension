@@ -4,7 +4,7 @@ const STYLE_ID = 'ae-run-guard-style'
 /**
  * Block real user key presses only.
  * Pointer blocking is handled by the full-screen overlay (hit-testing).
- * Status UI is a tiny top-right Live badge — not a large banner.
+ * Status UI is a tiny top-right Live badge - not a large banner.
  */
 const KEYBOARD_EVENTS = ['keydown', 'keyup', 'keypress'] as const
 
@@ -120,7 +120,7 @@ function ensureRoot(): HTMLElement {
     // Upgrade old banner UI if still present
     if (!root.querySelector('.ae-run-guard-badge')) {
       root.innerHTML = `
-        <div class="ae-run-guard-badge" role="status" aria-live="polite" title="Automation live — click to pause · Esc to unlock">
+        <div class="ae-run-guard-badge" role="status" aria-live="polite" title="Automation live - click to pause · Esc to unlock">
           <span class="ae-run-guard-dot" aria-hidden="true"></span>
           <span class="ae-run-guard-live">Live</span>
         </div>
@@ -134,7 +134,7 @@ function ensureRoot(): HTMLElement {
   root.id = ROOT_ID
   root.setAttribute('data-ae-run-guard', 'true')
   root.innerHTML = `
-    <div class="ae-run-guard-badge" role="status" aria-live="polite" title="Automation live — click to pause · Esc to unlock">
+    <div class="ae-run-guard-badge" role="status" aria-live="polite" title="Automation live - click to pause · Esc to unlock">
       <span class="ae-run-guard-dot" aria-hidden="true"></span>
       <span class="ae-run-guard-live">Live</span>
     </div>

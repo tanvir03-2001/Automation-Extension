@@ -217,7 +217,7 @@ export function TypeTextFields({
                 textTemplate:
                   textTemplate ||
                   (libraries[0]
-                    ? `writing a story about ${libraryPlaceholder(libraries[0].name)} — make it a long 20 minute story`
+                    ? `writing a story about ${libraryPlaceholder(libraries[0].name)} - make it a long 20 minute story`
                     : ''),
               })
             }
@@ -435,7 +435,7 @@ export function TypeTextFields({
         </div>
       ) : null}
 
-      {/* Inside loop but still on dataset/library — nudge */}
+      {/* Inside loop but still on dataset/library - nudge */}
       {insideLoop && (mode === 'dataset' || mode === 'library') ? (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-foreground">
           {t('typeText.insideLoopHint')}
@@ -473,13 +473,13 @@ export function TypeTextFields({
                   textItemIds: 'all',
                   ...(nextLib && !textTemplate.includes('{_')
                     ? {
-                        textTemplate: `writing a story about ${libraryPlaceholder(nextLib.name)} — make it a long 20 minute story`,
+                        textTemplate: `writing a story about ${libraryPlaceholder(nextLib.name)} - make it a long 20 minute story`,
                       }
                     : {}),
                 })
               }}
             >
-              <option value="">— choose library —</option>
+              <option value="">- choose library -</option>
               {libraries.map((library) => (
                 <option key={library.id} value={library.id}>
                   {library.name} ({library.items.length})

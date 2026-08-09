@@ -1,5 +1,5 @@
 /**
- * Extensible Map array sources — first dropdown = section, second = item in section.
+ * Extensible Map array sources - first dropdown = section, second = item in section.
  * Built-ins (Text libraries, Copy Store) stay for compatibility; Datasets are dynamic
  * and referenced by id (no data copy into the event).
  */
@@ -49,7 +49,7 @@ export type MapArraySourceContext = {
   variables: Record<string, unknown>
   textLibraries: PlanTextLibrary[]
   copyEntries: CopyStoreEntry[]
-  /** @deprecated Prefer datasets — kept for older Map nodes */
+  /** @deprecated Prefer datasets - kept for older Map nodes */
   customSections: PlanCustomSection[]
   datasets: PlanDataset[]
 }
@@ -87,7 +87,7 @@ export function listNestPathOptions(root: unknown): JsonArrayPathOption[] {
   return discoverJsonArrayPaths(root)
 }
 
-/** Hardcoded built-in sections — unchanged behavior */
+/** Hardcoded built-in sections - unchanged behavior */
 export const MAP_ARRAY_SOURCES: MapArraySourceDefinition[] = [
   {
     id: 'textLibrary',

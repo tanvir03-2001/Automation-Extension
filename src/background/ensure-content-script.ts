@@ -106,7 +106,7 @@ export async function ensureContentScript(tabId: number): Promise<void> {
     } catch (error) {
       lastError = error
       if (!isMissingFileError(error)) {
-        // Permission / CSP / tab closed — surface immediately
+        // Permission / CSP / tab closed - surface immediately
         throw error instanceof Error ? error : new Error(String(error))
       }
     }

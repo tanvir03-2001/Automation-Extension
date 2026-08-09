@@ -126,7 +126,7 @@ function CanvasInner() {
     loadedWorkflowId.current = workflowId
     loadedRevision.current = graphRevision
     if (workflowChanged) setSelectedEdgeId(null)
-    // Never auto fitView on drop/edit — keeps nodes where you placed them
+    // Never auto fitView on drop/edit - keeps nodes where you placed them
   }, [workflow, workflowId, graphRevision])
 
   useEffect(() => {
@@ -135,7 +135,7 @@ function CanvasInner() {
     }
   }, [])
 
-  // Sync label/params from store only — never touch `selected` here (avoids RF #185 loops).
+  // Sync label/params from store only - never touch `selected` here (avoids RF #185 loops).
   useEffect(() => {
     if (!workflow) return
     setNodes((current) => {
@@ -158,7 +158,7 @@ function CanvasInner() {
         checkpoint,
         selectedEdgeId,
       })
-      // Bail out if nothing visible changed — prevents selection thrash / update loops.
+      // Bail out if nothing visible changed - prevents selection thrash / update loops.
       const same =
         current.length === next.length &&
         current.every((edge, index) => {

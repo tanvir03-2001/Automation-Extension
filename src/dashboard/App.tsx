@@ -8,6 +8,7 @@ import { WorkflowsView } from '@/dashboard/views/workflows-view'
 import { QueueView } from '@/dashboard/views/queue-view'
 import { ActivityView } from '@/dashboard/views/activity-view'
 import { SettingsView } from '@/dashboard/views/settings-view'
+import { EventGuideView } from '@/dashboard/views/event-guide-view'
 import { SelectorLabView } from '@/dashboard/views/selector-lab-view'
 import { PlannerView } from '@/planner/views/planner-view'
 import { usePlannerStore } from '@/planner/store/planner-store'
@@ -32,6 +33,8 @@ function ViewRouter() {
       return <ActivityView />
     case 'settings':
       return <SettingsView />
+    case 'event-guide':
+      return <EventGuideView />
     default:
       return <OverviewView />
   }
@@ -46,7 +49,8 @@ export default function App() {
   const theme = usePlannerStore((s) => s.theme)
   const fullBleed = view === 'planner' && builderOpen
   // Overview + planner hub stretch to the viewport; planner builder is edge-to-edge.
-  const fillHeight = fullBleed || view === 'overview' || view === 'planner'
+  const fillHeight =
+    fullBleed || view === 'overview' || view === 'planner' || view === 'event-guide'
 
   // Ensure dark/light tokens apply on every dashboard surface (not only Planner).
   useEffect(() => {

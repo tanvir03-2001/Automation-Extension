@@ -3,7 +3,7 @@ import { attachTrustedDebugger } from '@/background/trusted-click'
 export type TabActivateOptions = {
   /** Make the tab selected inside its window (default true). */
   active?: boolean
-  /** Bring the Chrome window to the front (default false — safer for automation). */
+  /** Bring the Chrome window to the front (default false - safer for automation). */
   focusWindow?: boolean
 }
 
@@ -71,7 +71,7 @@ export class TabController {
       await chrome.tabs.update(tabId, { active: true })
     }
 
-    // Never require the OS window to be focused — automation keeps working minimized.
+    // Never require the OS window to be focused - automation keeps working minimized.
     if (focusWindow) {
       const tab = await chrome.tabs.get(tabId)
       if (tab.windowId !== undefined) {
@@ -143,14 +143,14 @@ export class TabController {
   }
 
   /**
-   * Browser back — CDP history when possible, then tabs API, then page history.back().
+   * Browser back - CDP history when possible, then tabs API, then page history.back().
    * Returns navigated:false when the tab has no previous entry (does not throw).
    */
   async goBack(tabId: number): Promise<{ navigated: boolean; message?: string }> {
     return this.navigateHistory(tabId, 'back')
   }
 
-  /** Browser forward — same fallback chain as goBack. */
+  /** Browser forward - same fallback chain as goBack. */
   async goForward(tabId: number): Promise<{ navigated: boolean; message?: string }> {
     return this.navigateHistory(tabId, 'forward')
   }
@@ -203,9 +203,9 @@ export class TabController {
 
   private noHistoryMessage(direction: 'back' | 'forward'): string {
     if (direction === 'back') {
-      return 'No previous page in this tab\'s history — skipped Go Back (already at first page).'
+      return 'No previous page in this tab\'s history - skipped Go Back (already at first page).'
     }
-    return 'No forward page in this tab\'s history — skipped Go Forward.'
+    return 'No forward page in this tab\'s history - skipped Go Forward.'
   }
 
   private async readHistoryIndex(tabId: number): Promise<number | undefined> {
@@ -295,7 +295,7 @@ export class TabController {
       }
       await sleep(150)
     }
-    // Same-URL SPA history entry — brief beat for the page to apply state
+    // Same-URL SPA history entry - brief beat for the page to apply state
     await sleep(300)
   }
 

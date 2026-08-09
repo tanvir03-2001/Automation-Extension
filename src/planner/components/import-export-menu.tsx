@@ -98,7 +98,7 @@ export function ImportExportMenu({
       if (scope === 'workspace') {
         downloadJson(safeDownloadName('full-workspace'), exportWorkspacePayload())
       } else if (scope === 'allWorkflows') {
-        // All AutomationPlans (+ their Plans) — same portable workspace bundle
+        // All AutomationPlans (+ their Plans) - same portable workspace bundle
         downloadJson(safeDownloadName('all-workflows'), exportWorkspacePayload())
       } else if (scope === 'currentWorkflow') {
         if (!selectedPlanId || !selectedPlan) throw new Error('Select a workflow first')

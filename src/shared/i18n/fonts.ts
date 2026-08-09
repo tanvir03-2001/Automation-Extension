@@ -1,13 +1,20 @@
 /**
  * Locale-aware font loading.
- * English keeps the lean Latin stack; Bangla lazily loads Anek Bangla (variable).
+ * English keeps the lean Latin stack.
+ * Bangla: Noto Sans Bengali for UI/body (legible at small sizes) + Anek Bangla for display.
  */
 
-const ANEK_STYLESHEET_ID = 'ae-font-anek-bangla'
+const BANGLA_STYLESHEET_ID = 'ae-font-bangla-ui'
 
-/** Variable weight range only (UI uses 400–700) — smaller than full 100–800. */
-export const ANEK_BANGLA_CSS =
-  'https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@400..700&display=swap'
+/**
+ * Discrete weights (better hinting than full variable axes at 12–14px).
+ * Noto = body/UI; Anek = headings only.
+ */
+export const BANGLA_UI_CSS =
+  'https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&family=Anek+Bangla:wght@500;600;700&display=swap'
+
+/** @deprecated use BANGLA_UI_CSS */
+export const ANEK_BANGLA_CSS = BANGLA_UI_CSS
 
 let banglaFontsRequested = false
 
@@ -19,26 +26,34 @@ function ensureFontPreconnect() {
   pre.crossOrigin = 'anonymous'
   pre.dataset.aeFontsPreconnect = 'gstatic'
   document.head.appendChild(pre)
+
+  const fontsPre = document.createElement('link')
+  fontsPre.rel = 'preconnect'
+  fontsPre.href = 'https://fonts.googleapis.com'
+  fontsPre.dataset.aeFontsPreconnect = 'googleapis'
+  document.head.appendChild(fontsPre)
 }
 
-/** Load Anek Bangla once; safe to call repeatedly. */
+/** Load Bangla UI fonts once; safe to call repeatedly. */
 export function loadBanglaFonts(): void {
   if (typeof document === 'undefined') return
-  if (document.getElementById(ANEK_STYLESHEET_ID)) {
+  if (document.getElementById(BANGLA_STYLESHEET_ID)) {
     banglaFontsRequested = true
     return
   }
+  // Remove legacy Anek-only stylesheet if present from an older build
+  document.getElementById('ae-font-anek-bangla')?.remove()
+
   ensureFontPreconnect()
   const link = document.createElement('link')
-  link.id = ANEK_STYLESHEET_ID
+  link.id = BANGLA_STYLESHEET_ID
   link.rel = 'stylesheet'
-  link.href = ANEK_BANGLA_CSS
+  link.href = BANGLA_UI_CSS
   link.media = 'print'
   link.onload = () => {
     link.media = 'all'
   }
   document.head.appendChild(link)
-  // Fallback if onload is skipped
   window.setTimeout(() => {
     if (link.media !== 'all') link.media = 'all'
   }, 1200)

@@ -229,7 +229,7 @@ export async function create(
     }
   })
 
-  // Persist like Text libraries — survives runs and shows in Planner UI
+  // Persist like Text libraries - survives runs and shows in Planner UI
   try {
     await saveDurableWorkflowStore(workflowId, result.store)
   } catch {

@@ -5,7 +5,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   'datasets.read': [
     'Reads a Workflow dataset (by name or id) into a variable.',
     'Optional path uses dotted keys / array indexes (e.g. title.0).',
-    'Datasets are shared by every Plan inside the Workflow — no extra setup.',
+    'Datasets are shared by every Plan inside the Workflow - no extra setup.',
   ],
   'datasets.write': [
     'Replaces the whole dataset JSON value.',
@@ -58,7 +58,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   'ai.open_chatgpt': [
     'Opens ChatGPT or focuses it if the tab is already open.',
     'Connect it after Start, then usually Wait For Page.',
-    'No coding needed — just connect the green dots in order.',
+    'No coding needed - just connect the green dots in order.',
   ],
   'browser.wait_for_page': [
     'Pauses until the page finishes loading.',
@@ -72,7 +72,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   'mouse.click_exact': [
     'Clicks the element whose visible text matches exactly (e.g. Continue).',
     'Type the exact label, or Pick with mouse to fill Exact text from the page.',
-    'Partial matches are ignored — only a full label match is clicked.',
+    'Partial matches are ignored - only a full label match is clicked.',
   ],
   'mouse.click_text': [
     'Finds text on the page (Contains or Exact) and clicks that control.',
@@ -80,7 +80,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Best when the label is visible but the selector is unstable.',
   ],
   'mouse.click_aria': [
-    'Clicks by aria-label / title — ideal for icon buttons (Go back, Close, Menu).',
+    'Clicks by aria-label / title - ideal for icon buttons (Go back, Close, Menu).',
     'Same universal click engine as Click.',
   ],
   'mouse.click_button': [
@@ -96,7 +96,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Uses the same multi-strategy click engine.',
   ],
   'downloads.click_download': [
-    'Dedicated download-button click — fires exactly one trusted click.',
+    'Dedicated download-button click - fires exactly one trusted click.',
     'Never retries with MAIN/synthetic/React fallbacks (avoids double downloads).',
     'Pick the Download control with your mouse before running.',
   ],
@@ -110,7 +110,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   'keyboard.paste_text': [
     'Same features as Type Text (manual, library, {_Story Title} template, queue).',
     'Instead of typing letter by letter, pastes the whole prompt instantly.',
-    'Faster for long prompts — use when you do not need human-like typing.',
+    'Faster for long prompts - use when you do not need human-like typing.',
     'Connect it after New chat / focus, then usually Click Send.',
   ],
   'keyboard.press_key': [
@@ -120,7 +120,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   ],
   'keyboard.shortcut': [
     'Press 2–3 keys together (Ctrl+C, Ctrl+Shift+Enter…).',
-    'Same picker as Press Key — select modifiers plus one main key.',
+    'Same picker as Press Key - select modifiers plus one main key.',
   ],
   'ai.click_send': [
     'Clicks the Send button after text is typed.',
@@ -133,10 +133,10 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   'clipboard.click_to_clipboard': [
     'Pick a page Copy button, then at runtime click it and keep the text on the clipboard.',
     'Also saves into {{clipboardText}} and __clipboard for later steps.',
-    'Does not write to Copy Store — use Copy Event when you need story-1, story-2… names.',
+    'Does not write to Copy Store - use Copy Event when you need story-1, story-2… names.',
   ],
   'clipboard.copy_event': [
-    'One event for the full copy pipeline — pick, click, capture, name, format, store.',
+    'One event for the full copy pipeline - pick, click, capture, name, format, store.',
     'Use “Pick Copy button” and click the real Copy control on the page.',
     'Default source: click that button → read clipboard → save as story-{_NumberAuto}.',
     'Later steps can use {{COPY:story-1}} (and COPY_NAME / COPY_NUMBER).',
@@ -154,12 +154,12 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'If ChatGPT returned a complete JSON story, it downloads that file.',
     'If it returned OUTPUT_LIMIT_REACHED / success:false, it asks how many parts are needed.',
     'Then it requests Part 1…N, copies each reply, joins with zero edits, and downloads the full JSON.',
-    'Each step waits until generation fully ends — long stories need long timeouts.',
+    'Each step waits until generation fully ends - long stories need long timeouts.',
   ],
   'flow.repeat_if_more': [
     'Used after TypeText from a text library with multiple titles.',
     'In Properties, pick which step to jump back to (usually “Click · New chat”).',
-    'You do not need to type node IDs — use the dropdown.',
+    'You do not need to type node IDs - use the dropdown.',
     'If more titles remain, the flow jumps back; otherwise it continues to End.',
   ],
   'flow.goto_step': [
@@ -169,7 +169,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   'flow.next_plan_execute': [
     'Hands off the run to another Plan inside the same Workflow.',
     'In Properties, pick the Target plan from the dropdown (same Workflow only).',
-    'Plan list order does not matter — only your selected Plan starts next.',
+    'Plan list order does not matter - only your selected Plan starts next.',
     'You can chain Plans (A → C → D). Plans that are not selected never auto-run.',
   ],
   'element.wait_visible': [
@@ -183,7 +183,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Pick the preferred button with mouse; leave the false-path Click for the fallback button.',
   ],
   'conditions.if': [
-    'Open Properties and choose “Check what?” — element visible, button name, number from element, page text, or variable.',
+    'Open Properties and choose “Check what?” - element visible, button name, number from element, page text, or variable.',
     'Number from element: Pick the balance/credits box (e.g. 118), then compare Greater / Less / Equals to your number.',
     'Use Pick with mouse for elements, or type a button label like Continue / Send.',
     'Wait before = pause first; Check window = how long to keep looking.',
@@ -191,7 +191,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
   ],
   'conditions.switch': [
     'Choose value from a variable, or pick an element to read its text/attribute.',
-    'Enter cases comma-separated (Continue,Retry,Cancel) — each becomes a branch handle.',
+    'Enter cases comma-separated (Continue,Retry,Cancel) - each becomes a branch handle.',
     'Unmatched values go to the default handle.',
     'Wait before / Check window work the same as If.',
   ],
@@ -214,7 +214,7 @@ const EXTRA_HOWTO: Record<string, string[]> = {
     'Connect the last action’s right green dot into End.',
   ],
   'flow.connector': [
-    'Does not run any page action — it only sits on the canvas as a labeled connector.',
+    'Does not run any page action - it only sits on the canvas as a labeled connector.',
     'Rename the Label in Properties to a big section title (e.g. “Login”, “Download”).',
     'Wire steps through it so the graph stays readable.',
   ],
@@ -228,17 +228,17 @@ const EXTRA_TOOLTIP: Record<string, string> = {
   'mouse.click_exact':
     'Clicks by exact text/label match. Pick with mouse or type the full label.',
   'mouse.click_text': 'Find text on the page and click it (contains or exact).',
-  'mouse.click_aria': 'Click by aria-label — great for icon-only controls.',
+  'mouse.click_aria': 'Click by aria-label - great for icon-only controls.',
   'mouse.click_button': 'Click a button/combobox by its visible name.',
   'mouse.click_link': 'Click a link by text or href.',
   'mouse.click_coordinates': 'Click at X/Y using the universal click engine.',
   'downloads.click_download':
-    'Single-click only for Download buttons — pick with mouse; never double-clicks.',
+    'Single-click only for Download buttons - pick with mouse; never double-clicks.',
   'keyboard.type_text': 'Types text (manual or from a Story Title library).',
   'keyboard.paste_text':
-    'Pastes full text instantly — same library & {_template} features as Type Text.',
+    'Pastes full text instantly - same library & {_template} features as Type Text.',
   'keyboard.press_key': 'Pick any key (or Ctrl/Alt/Shift chord) from the keyboard list.',
-  'keyboard.shortcut': 'Press multiple keys together — same picker, chord-focused.',
+  'keyboard.shortcut': 'Press multiple keys together - same picker, chord-focused.',
   'ai.click_send': 'Clicks the chat Send button.',
   'ai.wait_response': 'Waits until ChatGPT finishes answering.',
   'clipboard.click_to_clipboard':
@@ -252,20 +252,20 @@ const EXTRA_TOOLTIP: Record<string, string> = {
   'flow.repeat_if_more': 'If more library titles remain, jump back and run again.',
   'flow.goto_step': 'Jump to another step you choose from a list.',
   'flow.next_plan_execute':
-    'Start another Plan in this Workflow. Pick the target from the dropdown — list order is ignored.',
+    'Start another Plan in this Workflow. Pick the target from the dropdown - list order is ignored.',
   'element.wait_visible': 'Wait until a picked element/icon appears.',
   'element.if_visible': 'If element visible → true path; otherwise → false path.',
   'conditions.if':
-    'If/else on button, text, element, or variable — with mouse pick and wait.',
+    'If/else on button, text, element, or variable - with mouse pick and wait.',
   'conditions.switch':
-    'Multi-way branch on variable or picked element text — cases + default.',
+    'Multi-way branch on variable or picked element text - cases + default.',
   'element.wait_hidden': 'Wait until a picked element disappears.',
   'element.wait_text': 'Wait until text appears somewhere on the page.',
   'element.wait_button': 'Wait until a button is ready (by label or pick).',
   'flow.start': 'Starting point of the workflow.',
   'flow.end': 'Finishes the workflow.',
   'flow.connector':
-    'Visual connector only — rename the title; edges pass through with no side effects.',
+    'Visual connector only - rename the title; edges pass through with no side effects.',
 }
 
 export function getActionTooltip(action: ActionDefinition | string): string {

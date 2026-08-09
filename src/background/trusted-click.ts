@@ -62,7 +62,7 @@ export async function attachTrustedDebugger(tabId: number): Promise<boolean> {
         return false
       }
 
-      // Empty URL = still loading — wait and retry
+      // Empty URL = still loading - wait and retry
       if (!url && tab.status === 'loading') {
         await sleep(150)
         continue
@@ -139,7 +139,7 @@ export async function findDebuggableTabId(
   return web?.id
 }
 
-/** Click via page MAIN world — used when CDP did not produce a page effect. */
+/** Click via page MAIN world - used when CDP did not produce a page effect. */
 async function mainWorldClickAt(tabId: number, x: number, y: number): Promise<boolean> {
   try {
     const results = await chrome.scripting.executeScript({
@@ -206,7 +206,7 @@ async function mainWorldClickAt(tabId: number, x: number, y: number): Promise<bo
           }),
         )
         host.dispatchEvent(new MouseEvent('mouseup', { ...common, buttons: 0 }))
-        // One click only here — content script may still try native activate if no effect
+        // One click only here - content script may still try native activate if no effect
         host.dispatchEvent(new MouseEvent('click', { ...common, buttons: 0 }))
         return true
       },

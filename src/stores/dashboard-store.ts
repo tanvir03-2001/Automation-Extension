@@ -14,6 +14,7 @@ export type DashboardView =
   | 'queue'
   | 'activity'
   | 'settings'
+  | 'event-guide'
 
 interface DashboardStore {
   view: DashboardView

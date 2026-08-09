@@ -202,7 +202,7 @@ export interface PlanTextLibrary {
 
 /**
  * User-defined top-level JSON section on a Workflow (AutomationPlan).
- * Legacy — migrated into `datasets` on hydrate; kept for import compatibility.
+ * Legacy - migrated into `datasets` on hydrate; kept for import compatibility.
  */
 export interface PlanCustomSection {
   id: string
@@ -212,7 +212,7 @@ export interface PlanCustomSection {
   updatedAt: string
 }
 
-/** Dataset kinds — custom JSON, or dual-written text list for TypeText. */
+/** Dataset kinds - custom JSON, or dual-written text list for TypeText. */
 export type PlanDatasetKind = 'custom' | 'textLibrary' | 'legacyCustomSection'
 
 /**
@@ -223,7 +223,7 @@ export interface PlanDataset {
   id: string
   name: string
   description?: string
-  /** Arbitrary nested JSON — no fixed property names */
+  /** Arbitrary nested JSON - no fixed property names */
   data: unknown
   kind: PlanDatasetKind
   updatedAt: string
@@ -236,7 +236,7 @@ export interface AutomationPlan {
   color?: string
   tags: string[]
   workflowIds: string[]
-  /** Shared text lists for TypeText (story titles, prompts, etc.) — dual-written from datasets */
+  /** Shared text lists for TypeText (story titles, prompts, etc.) - dual-written from datasets */
   textLibraries: PlanTextLibrary[]
   /** @deprecated Prefer `datasets`. Kept for older exports / migration. */
   customSections: PlanCustomSection[]

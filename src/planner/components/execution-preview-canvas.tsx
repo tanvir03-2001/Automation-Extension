@@ -157,7 +157,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
     workflowId,
   ])
 
-  // Center on the active (or last active) event — including after stop/complete.
+  // Center on the active (or last active) event - including after stop/complete.
   useEffect(() => {
     if (!workflowId || !workflow || !checkpoint) return
     if (checkpoint.workflowId !== workflowId) return
@@ -182,7 +182,7 @@ function PreviewInner({ workflowId }: { workflowId: string | null }) {
     lastCenteredStatus.current = checkpoint.status
     centerOnNode(focusId, live ? 650 : 500)
 
-    // Layout expands after stop (~700ms) — re-center so the last event stays mid-screen.
+    // Layout expands after stop (~700ms) - re-center so the last event stays mid-screen.
     if (terminal) {
       const t1 = window.setTimeout(() => centerOnNode(focusId, 420), 380)
       const t2 = window.setTimeout(() => centerOnNode(focusId, 380), 780)

@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import {
   Activity,
+  BookOpen,
   LayoutDashboard,
   Moon,
   Network,
@@ -16,13 +17,20 @@ import { EngineKillSwitch } from '@/dashboard/components/engine-kill-switch'
 import { Button } from '@/components/ui/button'
 import { useT } from '@/shared/i18n/use-t'
 
-const itemIds = ['overview', 'planner', 'activity', 'settings'] as const satisfies readonly DashboardView[]
+const itemIds = [
+  'overview',
+  'planner',
+  'activity',
+  'settings',
+  'event-guide',
+] as const satisfies readonly DashboardView[]
 
 const itemIcons: Record<(typeof itemIds)[number], typeof LayoutDashboard> = {
   overview: LayoutDashboard,
   planner: Network,
   activity: Activity,
   settings: Settings2,
+  'event-guide': BookOpen,
 }
 
 const itemKeys: Record<(typeof itemIds)[number], string> = {
@@ -30,6 +38,7 @@ const itemKeys: Record<(typeof itemIds)[number], string> = {
   planner: 'nav.planner',
   activity: 'nav.activity',
   settings: 'nav.settings',
+  'event-guide': 'nav.eventGuide',
 }
 
 export function Sidebar() {

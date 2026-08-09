@@ -284,7 +284,7 @@ function findElementByExactText(label: string): HTMLElement | null {
   return findElementByTextMatch(label, true)
 }
 
-/** Find by visible text / label — contains or exact. Prefers smallest clickable host. */
+/** Find by visible text / label - contains or exact. Prefers smallest clickable host. */
 function findElementByTextMatch(label: string, exact: boolean): HTMLElement | null {
   const needle = label.trim().toLowerCase()
   if (!needle) return null
@@ -431,7 +431,7 @@ async function robustClickAt(x: number, y: number): Promise<void> {
         return
       }
     }
-    // No usable host under the point — fire CDP/MAIN at raw coordinates
+    // No usable host under the point - fire CDP/MAIN at raw coordinates
     const beforeUrl = location.href
     await requestTrustedClick(x, y, 'cdp')
     await sleep(200)
@@ -555,7 +555,7 @@ function isUsableEditable(el: HTMLElement): boolean {
   )
 }
 
-/** Prefer ChatGPT composer selectors — never the lock overlay. */
+/** Prefer ChatGPT composer selectors - never the lock overlay. */
 function findChatComposer(): HTMLElement | null {
   const selectors = [
     '#prompt-textarea',
@@ -590,7 +590,7 @@ async function waitForComposer(timeoutMs = 20_000): Promise<HTMLElement> {
   )
 }
 
-/** When no selector is set — type/paste into the chat composer. */
+/** When no selector is set - type/paste into the chat composer. */
 async function resolveFocusedEditable(): Promise<HTMLElement> {
   const active = document.activeElement
   if (active instanceof HTMLElement) {
@@ -782,7 +782,7 @@ function isSendButtonReady(preferredSelector?: string): boolean {
 }
 
 function pasteLooksSuccessful(el: HTMLElement, value: string): boolean {
-  // ChatGPT often enables Send only after real content lands — strongest signal.
+  // ChatGPT often enables Send only after real content lands - strongest signal.
   if (isSendButtonReady()) return true
 
   const got = readEditableText(el).replace(/\s+/g, ' ').trim()
@@ -1022,7 +1022,7 @@ async function triggerQuickTestEvent(
     return 'focused'
   }
 
-  // Wait / condition / extract — find + highlight only
+  // Wait / condition / extract - find + highlight only
   return null
 }
 
@@ -1193,7 +1193,7 @@ function countOpenMenus(): number {
   return n
 }
 
-/** Profile / account / dropdown toggles — a second click closes what the first opened. */
+/** Profile / account / dropdown toggles - a second click closes what the first opened. */
 function looksLikeToggleMenuHost(el: HTMLElement): boolean {
   if (el.getAttribute('aria-haspopup')) return true
   if (el.getAttribute('aria-expanded') != null) return true
@@ -1395,7 +1395,7 @@ function hasOpenOverlayUi(): boolean {
 
 /**
  * Sites often set overflow:hidden on <html>/<body> while a menu is open.
- * After a failed/toggle click the menu can close while scroll-lock sticks — restore it.
+ * After a failed/toggle click the menu can close while scroll-lock sticks - restore it.
  * Leave lock alone while a menu/dialog is still visible.
  */
 function restorePageScrollIfStale(): void {
@@ -1462,7 +1462,7 @@ async function dispatchSyntheticClick(clickTarget: HTMLElement, x: number, y: nu
 }
 
 /**
- * Single trusted click only — never retries with a second strategy.
+ * Single trusted click only - never retries with a second strategy.
  * Used for Download Click so browsers never start two downloads.
  */
 async function singleTrustedClick(el: HTMLElement): Promise<void> {
@@ -1487,7 +1487,7 @@ async function singleTrustedClick(el: HTMLElement): Promise<void> {
 
     const rect = clickTarget.getBoundingClientRect()
     if (rect.width < 2 || rect.height < 2) {
-      throw new Error('Download click target has no size — re-pick the Download button')
+      throw new Error('Download click target has no size - re-pick the Download button')
     }
 
     const { x, y } = resolveClickPoint(clickTarget)
@@ -1497,7 +1497,7 @@ async function singleTrustedClick(el: HTMLElement): Promise<void> {
       /* ignore */
     }
 
-    // Exactly one CDP click — no MAIN / synthetic / React fallbacks
+    // Exactly one CDP click - no MAIN / synthetic / React fallbacks
     const ok = await requestTrustedClick(x, y, 'cdp')
     if (!ok) {
       throw new Error(
@@ -1517,7 +1517,7 @@ async function singleTrustedClick(el: HTMLElement): Promise<void> {
 /**
  * Universal click for buttons, links, menus, Next.js nav, DeepSeek, etc.
  *
- * Strategy (stop as soon as the page reacts — avoids open→close on toggles):
+ * Strategy (stop as soon as the page reacts - avoids open→close on toggles):
  *  1) CDP trusted click at a hit-tested point
  *  2) If no effect → MAIN-world (skipped when CDP already fired on a toggle/menu)
  *  3) If still no effect → isolated synthetic events
@@ -1546,7 +1546,7 @@ async function robustClick(el: HTMLElement): Promise<void> {
 
     const rect = clickTarget.getBoundingClientRect()
     if (rect.width < 2 || rect.height < 2) {
-      throw new Error('Click target has no size — selector may point to a hidden node')
+      throw new Error('Click target has no size - selector may point to a hidden node')
     }
 
     const { x, y } = resolveClickPoint(clickTarget)
@@ -1577,24 +1577,24 @@ async function robustClick(el: HTMLElement): Promise<void> {
         restorePageScrollIfStale()
         return
       }
-      // CDP unavailable — one MAIN attempt only, then stop
+      // CDP unavailable - one MAIN attempt only, then stop
       await requestTrustedClick(x, y, 'main')
       await waitForEffect(280)
       restorePageScrollIfStale()
       return
     }
 
-    // 1) Trusted CDP (isTrusted=true) — required by many modern apps
+    // 1) Trusted CDP (isTrusted=true) - required by many modern apps
     const cdpOk = await requestTrustedClick(x, y, 'cdp')
     if (cdpOk) {
-      // CDP already delivered one real click — never stack another strategy
+      // CDP already delivered one real click - never stack another strategy
       // (profile menus / toggles open then immediately close otherwise).
       await waitForEffect(400)
       restorePageScrollIfStale()
       return
     }
 
-    // 2) MAIN world — only when CDP attach/send failed
+    // 2) MAIN world - only when CDP attach/send failed
     await requestTrustedClick(x, y, 'main')
     if (await waitForEffect(280)) {
       restorePageScrollIfStale()
@@ -1741,7 +1741,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         return { ok: true }
       }
       case 'clickOnce': {
-        if (!command.selector) throw new Error('selector is required — Pick the Download button')
+        if (!command.selector) throw new Error('selector is required - Pick the Download button')
         let el: Element
         try {
           el = await waitForClickable(command.selector, Math.min(command.timeoutMs ?? 30_000, 12_000), fb)
@@ -1899,7 +1899,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
               .filter(Boolean)
 
         const chord = normalizePressChord(rawKeys)
-        // Trusted CDP chord first — avoid double-firing Enter/shortcuts
+        // Trusted CDP chord first - avoid double-firing Enter/shortcuts
         const trusted = await requestTrustedKeys(chord)
         if (!trusted) {
           await dispatchKeyChord(target, chord)
@@ -2003,8 +2003,8 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
               text: textHint,
               triggered: null,
               message: present
-                ? `OK — page-এ “${textHint}” পাওয়া গেছে`
-                : `Fail — page-এ “${textHint}” নেই`,
+                ? `OK - page-এ “${textHint}” পাওয়া গেছে`
+                : `Fail - page-এ “${textHint}” নেই`,
             },
           }
         } else if (actionId === 'ai.click_send' && !primary && fb.length === 0) {
@@ -2022,7 +2022,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
                 tagName: '',
                 text: '',
                 triggered: null,
-                message: 'Fail — কোনো selector সেট নেই',
+                message: 'Fail - কোনো selector সেট নেই',
               },
             }
           }
@@ -2055,7 +2055,7 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
               tagName: '',
               text: '',
               triggered: null,
-              message: 'Fail — page-এ element পাওয়া যায়নি',
+              message: 'Fail - page-এ element পাওয়া যায়নি',
             },
           }
         }
@@ -2086,8 +2086,8 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
         }
 
         const baseMsg = visible
-          ? `OK — পাওয়া গেছে (${host.tagName.toLowerCase()}${clickable ? ', clickable' : ''}): “${label || matchedBy}”`
-          : `Found but hidden — “${label || matchedBy}”`
+          ? `OK - পাওয়া গেছে (${host.tagName.toLowerCase()}${clickable ? ', clickable' : ''}): “${label || matchedBy}”`
+          : `Found but hidden - “${label || matchedBy}”`
 
         let message = baseMsg
         if (triggerError) {

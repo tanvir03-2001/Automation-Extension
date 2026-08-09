@@ -72,7 +72,7 @@ export const sampleWorkflows: WorkflowDefinition[] = [
           retryOn: ['TimeoutError', 'ElementNotFoundError'],
         },
         params: {
-          // ChatGPT Send বাটনের ডিফল্ট selector — ভুল হলে Selector Lab দিয়ে নতুনটা নিন
+          // ChatGPT Send বাটনের ডিফল্ট selector - ভুল হলে Selector Lab দিয়ে নতুনটা নিন
           selector: 'button[data-testid="send-button"], button[aria-label*="Send"]',
         },
       },
@@ -82,7 +82,7 @@ export const sampleWorkflows: WorkflowDefinition[] = [
     id: 'wf_demo_research',
     name: 'Research → Image → TTS Pipeline',
     description:
-      'Configurable multi-service pipeline. Selectors and URLs are data-driven — swap modules without code changes.',
+      'Configurable multi-service pipeline. Selectors and URLs are data-driven - swap modules without code changes.',
     version: '1.0.0',
     tags: ['demo', 'pipeline'],
     variables: {

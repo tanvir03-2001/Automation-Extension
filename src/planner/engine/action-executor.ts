@@ -246,7 +246,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'flow.connector':
-        // Visual / wiring marker only — no side effects
+        // Visual / wiring marker only - no side effects
         return { status: 'success' }
 
       case 'flow.return':
@@ -293,7 +293,7 @@ export async function executePlannerAction(args: {
       case 'ai.open_grok': {
         const url = String(params.url ?? 'https://chatgpt.com/')
         const reuse = params.reuseExisting !== false
-        // Never force the OS window forward — flow keeps working if Chrome is minimized.
+        // Never force the OS window forward - flow keeps working if Chrome is minimized.
         const tab = reuse
           ? await tabController.openUrlOrFocus(url, {
               active: Boolean(params.active ?? true),
@@ -333,7 +333,7 @@ export async function executePlannerAction(args: {
           await activityLog.append(
             'warn',
             'Planner',
-            back.message ?? 'Go Back skipped — no previous page in history',
+            back.message ?? 'Go Back skipped - no previous page in history',
           )
           return {
             status: 'success',
@@ -357,7 +357,7 @@ export async function executePlannerAction(args: {
           await activityLog.append(
             'warn',
             'Planner',
-            forward.message ?? 'Go Forward skipped — no forward page in history',
+            forward.message ?? 'Go Forward skipped - no forward page in history',
           )
           return {
             status: 'success',
@@ -441,7 +441,7 @@ export async function executePlannerAction(args: {
       case 'downloads.click_download': {
         activeTabId = await ensureTab(activeTabId)
         if (!selector) {
-          throw new Error('Download Click needs a picked Download button — use Pick with mouse')
+          throw new Error('Download Click needs a picked Download button - use Pick with mouse')
         }
         const result = await runDom(activeTabId, {
           action: 'clickOnce',
@@ -748,7 +748,7 @@ export async function executePlannerAction(args: {
       case 'element.wait_icon':
       case 'wait.until_element': {
         activeTabId = await ensureTab(activeTabId)
-        if (!selector) throw new Error('Selector is required — pick the element/icon with mouse')
+        if (!selector) throw new Error('Selector is required - pick the element/icon with mouse')
         const result = await runDom(activeTabId, {
           action: 'waitForElementVisible',
           selector,
@@ -764,7 +764,7 @@ export async function executePlannerAction(args: {
 
       case 'element.if_visible': {
         activeTabId = await ensureTab(activeTabId)
-        if (!selector) throw new Error('Selector is required — pick the button/element with mouse')
+        if (!selector) throw new Error('Selector is required - pick the button/element with mouse')
         const pollMs = Math.max(
           0,
           Number(params.pollMs ?? args.timeoutMs ?? 2500),
@@ -790,7 +790,7 @@ export async function executePlannerAction(args: {
       case 'element.wait_hidden':
       case 'wait.until_hidden': {
         activeTabId = await ensureTab(activeTabId)
-        if (!selector) throw new Error('Selector is required — pick the element with mouse')
+        if (!selector) throw new Error('Selector is required - pick the element with mouse')
         const result = await runDom(activeTabId, {
           action: 'waitForElementHidden',
           selector,
@@ -807,7 +807,7 @@ export async function executePlannerAction(args: {
       case 'element.wait_clickable':
       case 'wait.until_clickable': {
         activeTabId = await ensureTab(activeTabId)
-        if (!selector) throw new Error('Selector is required — pick the element with mouse')
+        if (!selector) throw new Error('Selector is required - pick the element with mouse')
         const result = await runDom(activeTabId, {
           action: 'waitForClickable',
           selector,
@@ -948,8 +948,8 @@ export async function executePlannerAction(args: {
           'info',
           'Planner',
           hasMore
-            ? `More titles remain (${String(args.variables.__libraryQueueIndex ?? '?')}/${String(args.variables.__libraryQueueTotal ?? '?')}) — jump to ${target}`
-            : 'Library queue finished — continue to End',
+            ? `More titles remain (${String(args.variables.__libraryQueueIndex ?? '?')}/${String(args.variables.__libraryQueueTotal ?? '?')}) - jump to ${target}`
+            : 'Library queue finished - continue to End',
         )
         if (hasMore) {
           return { status: 'success', nextNodeId: target }
@@ -1384,7 +1384,7 @@ export async function executePlannerAction(args: {
               await activityLog.append(
                 'warn',
                 'CopyEvent',
-                'Clipboard empty after Copy click — used last assistant message text as fallback',
+                'Clipboard empty after Copy click - used last assistant message text as fallback',
               )
             } else {
               throw new Error(
@@ -1506,7 +1506,7 @@ export async function executePlannerAction(args: {
         const isReturn = entryHandle === 'return' && existingIdx >= 0
 
         if (!isReturn) {
-          // Fresh entry via “in” — resolve from Text libraries / Copy Store / legacy variable
+          // Fresh entry via “in” - resolve from Text libraries / Copy Store / legacy variable
           const resolved = await resolveMapArrayItems({
             params,
             planId: args.planId,
@@ -1522,7 +1522,7 @@ export async function executePlannerAction(args: {
             !String(params.collectionKey ?? '').trim()
           ) {
             throw new Error(
-              'Map needs an array source — pick Text libraries or Copy Store in Properties',
+              'Map needs an array source - pick Text libraries or Copy Store in Properties',
             )
           }
           const items = resolved.items
@@ -1531,7 +1531,7 @@ export async function executePlannerAction(args: {
             await activityLog.append(
               'info',
               'Map',
-              `Empty array “${resolved.sourceLabel}: ${collectionKey}” — taking completed`,
+              `Empty array “${resolved.sourceLabel}: ${collectionKey}” - taking completed`,
             )
             return {
               status: 'success',
@@ -1576,7 +1576,7 @@ export async function executePlannerAction(args: {
           }
         }
 
-        // Re-entry via “return” — advance to next item or complete
+        // Re-entry via “return” - advance to next item or complete
         const frame = stack[existingIdx]!
         const nextIndex = frame.index + 1
         if (nextIndex >= frame.items.length) {
@@ -1629,14 +1629,14 @@ export async function executePlannerAction(args: {
       }
 
       case 'loops.break': {
-        // Only Map has a real loop stack today — exit innermost Map to “completed”.
+        // Only Map has a real loop stack today - exit innermost Map to “completed”.
         // Outside Map, keep the legacy stub so existing graphs are unchanged.
         const stack = readMapStack(args.variables)
         if (stack.length > 0) {
           await activityLog.append(
             'info',
             'Map',
-            'Break — skip remaining iterations → completed',
+            'Break - skip remaining iterations → completed',
           )
           return {
             status: 'success',

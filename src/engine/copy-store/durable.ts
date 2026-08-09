@@ -2,7 +2,7 @@ import { storageGet, storageSet } from '@/shared/storage/chrome-storage'
 import { isWorkflowCopyStore, list } from './copy-store'
 import type { CopyStoresMap, CopyStoreEntry, WorkflowCopyStore } from './types'
 
-/** Durable library of Copy Event results — survives runs like Text libraries. */
+/** Durable library of Copy Event results - survives runs like Text libraries. */
 export const DURABLE_COPY_STORES_KEY = 'workflow-copy-stores'
 
 export async function loadDurableCopyStores(): Promise<CopyStoresMap> {

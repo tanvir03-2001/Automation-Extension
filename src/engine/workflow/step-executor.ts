@@ -146,7 +146,7 @@ export async function executeStep(
       return { variables: { [key]: value } }
     }
     case 'custom_script': {
-      // Intentionally unsupported for security — workflows must stay declarative.
+      // Intentionally unsupported for security - workflows must stay declarative.
       throw new Error('custom_script is disabled for security')
     }
     default: {

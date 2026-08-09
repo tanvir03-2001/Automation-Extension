@@ -1,5 +1,5 @@
 /**
- * Map loop (`loops.map`) — stack helpers shared by executor + planner-runner.
+ * Map loop (`loops.map`) - stack helpers shared by executor + planner-runner.
  * Kept additive so existing loop stubs keep their prior behavior.
  */
 
@@ -41,7 +41,7 @@ export function normalizeToArray(value: unknown): unknown[] {
       const parsed = JSON.parse(trimmed) as unknown
       if (Array.isArray(parsed)) return parsed
     } catch {
-      // fall through — treat as newline-separated list
+      // fall through - treat as newline-separated list
     }
     return trimmed
       .split(/\r?\n/)

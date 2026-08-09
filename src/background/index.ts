@@ -283,7 +283,7 @@ onRuntimeMessage(async (message, sender) => {
         tabId = active?.id
       }
       if (!tabId) {
-        return { ok: false, error: 'No browser tab open — open the target page first' }
+        return { ok: false, error: 'No browser tab open - open the target page first' }
       }
 
       try {
@@ -464,7 +464,7 @@ onRuntimeMessage(async (message, sender) => {
       // Master kill-switch: planner + legacy workflow runner + page lock
       workflowRunner.cancel()
       await plannerRunner.forceStop()
-      await activityLog.append('warn', 'Engine', 'Force stop — all runs cancelled')
+      await activityLog.append('warn', 'Engine', 'Force stop - all runs cancelled')
       return {
         ok: true,
         checkpoint: plannerRunner.getCheckpoint(),
@@ -544,7 +544,7 @@ onRuntimeMessage(async (message, sender) => {
       if (plannerRunner.isBusy()) {
         return {
           ok: false,
-          error: 'Planner is running — Pause/Cancel first, then test this step',
+          error: 'Planner is running - Pause/Cancel first, then test this step',
         }
       }
 

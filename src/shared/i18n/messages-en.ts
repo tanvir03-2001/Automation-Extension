@@ -10,6 +10,30 @@ export const en: MessageDict = {
   'nav.planner': 'Workflow Planner',
   'nav.activity': 'Activity',
   'nav.settings': 'Settings',
+  'nav.eventGuide': 'Event Guide',
+
+  'guide.title': 'Event Guide',
+  'guide.subtitle':
+    'Brief docs for every event: what it is, where to use it, and how each Properties feature works - with examples. Language follows Settings.',
+  'guide.search': 'Search events…',
+  'guide.noResults': 'No events match your search.',
+  'guide.pickEvent': 'Pick an event from the list.',
+  'guide.propertiesLabel': 'Properties',
+  'guide.whenWhy': 'Where & why to use',
+  'guide.example': 'Example',
+  'guide.eventFeatures': 'Event features (detail)',
+  'guide.fields': 'Settings fields',
+  'guide.sharedFeatures': 'Shared Properties panels',
+  'guide.sharedHelp':
+    'These panels appear on most events (same UI as Click): Test, Dependencies, Execution, Interaction.',
+  'guide.what': 'What',
+  'guide.why': 'Why',
+  'guide.how': 'How',
+  'guide.kindShared': 'Shared',
+  'guide.kindField': 'Field',
+  'guide.kindFeature': 'Feature',
+  'guide.tip':
+    'Tip: open Workflow Planner → select a step to edit the same panels live. Use Run test there after reading this guide.',
 
   'theme.dark': 'Dark mode',
   'theme.light': 'Light mode',
@@ -20,7 +44,7 @@ export const en: MessageDict = {
 
   'lang.section': 'Language',
   'lang.help':
-    'Choose English or simple Bangla for the whole extension. Bangla uses the Anek Bangla Google font.',
+    'Choose English or simple Bangla for the whole extension. Bangla UI uses Noto Sans Bengali (headings: Anek Bangla).',
   'lang.english': 'English',
   'lang.bangla': 'বাংলা',
 
@@ -33,7 +57,7 @@ export const en: MessageDict = {
   'engine.masterHint': 'Pause or force-stop the engine from any screen.',
   'engine.forceStop': 'Force Stop',
   'engine.stopShort': 'Stop',
-  'engine.forceStopHint': 'Force-stop every run and unlock the page — works anytime.',
+  'engine.forceStopHint': 'Force-stop every run and unlock the page - works anytime.',
   'engine.pauseHint': 'Pause the active planner run',
   'common.save': 'Save',
   'common.edit': 'Edit',
@@ -76,8 +100,8 @@ export const en: MessageDict = {
 
   'planner.title': 'Workflow Planner',
   'planner.subtitle':
-    'Create a Workflow, then add Plans inside it. Visual drag-and-drop automation — configure actions, conditions, loops, and more from the dashboard.',
-  'planner.subtitleShort': 'Workflows · Plans · Datasets — configure in the visual editor.',
+    'Create a Workflow, then add Plans inside it. Visual drag-and-drop automation - configure actions, conditions, loops, and more from the dashboard.',
+  'planner.subtitleShort': 'Workflows · Plans · Datasets - configure in the visual editor.',
   'planner.workflows': 'Workflows',
   'planner.workflowsHint': 'Create and select a workflow',
   'planner.createWorkflow': 'Create Workflow',
@@ -122,7 +146,7 @@ export const en: MessageDict = {
   'dataset.nameRequired': 'Name is required',
   'dataset.nameExists': '“{{name}}” already exists',
   'dataset.nameOk': 'Name is available',
-  'dataset.invalidJson': 'Invalid JSON — fix the value field',
+  'dataset.invalidJson': 'Invalid JSON - fix the value field',
   'dataset.importOk': 'Dataset imported: {{name}}',
   'dataset.exportOk': 'Dataset exported',
   'dataset.deleteConfirm': 'Delete “{{name}}”? Plans that use this dataset will need a new source.',
@@ -134,11 +158,11 @@ export const en: MessageDict = {
   'typeText.helpOutside':
     'Enter manual text, or bind a Dataset field with the visual path picker (leaf string/number/boolean).',
   'typeText.helpPaste':
-    'Same sources as TypeText — but the full text is pasted at once (no typing).',
+    'Same sources as TypeText - but the full text is pasted at once (no typing).',
   'typeText.helpInsideLoop':
     'This step is inside a Map/For loop body. Bind a field on the current loop item, or enter manual text.',
-  'typeText.insideMap': 'Inside Map — bind to item ({{name}})',
-  'typeText.onCompleted': 'On Map completed path ({{name}}) — datasets are available.',
+  'typeText.insideMap': 'Inside Map - bind to item ({{name}})',
+  'typeText.onCompleted': 'On Map completed path ({{name}}) - datasets are available.',
   'typeText.source': 'Source',
   'typeText.sourceManual': 'Manual text',
   'typeText.sourceDataset': 'Dataset (pick JSON path)',
@@ -148,7 +172,7 @@ export const en: MessageDict = {
   'typeText.placeholderType': 'What should be typed…',
   'typeText.placeholderPaste': 'What should be pasted…',
   'typeText.dataset': 'Dataset',
-  'typeText.chooseDataset': '— choose dataset —',
+  'typeText.chooseDataset': '- choose dataset -',
   'typeText.noDatasets':
     'No datasets yet. Create one in Workflow Planner → Datasets, then pick a JSON path here.',
   'typeText.openDatasets': 'Open Workflow Planner datasets',
@@ -160,7 +184,7 @@ export const en: MessageDict = {
   'typeText.switchDataset': 'Switch to dataset',
   'typeText.switchLoopItem': 'Bind to loop item',
   'typeText.insideLoopHint':
-    'This step is inside a Map body — prefer binding the current loop item instead of a full dataset.',
+    'This step is inside a Map body - prefer binding the current loop item instead of a full dataset.',
   'typeText.loopVariable': 'Loop item variable',
   'typeText.bindItem': 'Bind fields on {{name}}',
   'typeText.noSampleItem':
@@ -172,12 +196,12 @@ export const en: MessageDict = {
   'typeText.speedHuman': 'Human-like',
   'typeText.speedSlow': 'Slow (careful)',
   'typeText.speedInstant': 'Instant',
-  'typeText.pasteModeNote': 'Paste mode: full text goes in at once — no typing delay.',
+  'typeText.pasteModeNote': 'Paste mode: full text goes in at once - no typing delay.',
   'typeText.pathRoot': 'root',
   'typeText.pathNoData': 'No JSON data to browse.',
-  'typeText.pathLeafRoot': 'This value is already a leaf — select it to bind.',
+  'typeText.pathLeafRoot': 'This value is already a leaf - select it to bind.',
   'typeText.pathSelectValue': 'Use value',
-  'typeText.pathEmptyArray': 'Empty array — nothing to pick.',
+  'typeText.pathEmptyArray': 'Empty array - nothing to pick.',
   'typeText.pathCurrentItem': 'current item fields',
   'typeText.pathSelected': 'Selected path',
   'typeText.pathBack': 'Back',
@@ -185,7 +209,7 @@ export const en: MessageDict = {
   'typeText.pathSelect': 'Select',
   'typeText.pathLabel': 'Path',
   'typeText.pathUseList': 'Use this list (queue values)',
-  'typeText.pathQueueHint': '{{count}} values — each run can use the next one',
+  'typeText.pathQueueHint': '{{count}} values - each run can use the next one',
   'typeText.loopItemOutside':
     'Loop item binding only works inside a Map/For body. Switch to Dataset or move this step into the loop.',
 
@@ -244,13 +268,13 @@ export const en: MessageDict = {
   'palette.favorites': 'Favorites',
 
   'inspector.noStep': 'No step selected',
-  'inspector.noStepHelp': 'Click a node on the canvas to edit labels, selectors, and options — no coding required.',
+  'inspector.noStepHelp': 'Click a node on the canvas to edit labels, selectors, and options - no coding required.',
   'inspector.quickTest': 'Quick test',
   'inspector.quickTestHelp':
-    'Runs this full step now (same engine as a real run) — click, type, wait, copy, open URL, and more. No need to start the whole plan.',
-  'inspector.quickTestOk': 'OK — {{name}} executed',
-  'inspector.quickTestOkSaved': 'OK — saved as {{name}}',
-  'inspector.quickTestFail': 'Fail — {{name}}',
+    'Runs this full step now (same engine as a real run) - click, type, wait, copy, open URL, and more. No need to start the whole plan.',
+  'inspector.quickTestOk': 'OK - {{name}} executed',
+  'inspector.quickTestOkSaved': 'OK - saved as {{name}}',
+  'inspector.quickTestFail': 'Fail - {{name}}',
   'inspector.disable': 'Disable',
   'inspector.enable': 'Enable',
   'inspector.deleteStep': 'Delete step',
@@ -288,7 +312,7 @@ export const en: MessageDict = {
   'exec.dependenciesHelp': 'Run this event only when variable / dataset / history rules pass.',
   'exec.logicAnd': 'Match ALL rules (AND)',
   'exec.logicOr': 'Match ANY rule (OR)',
-  'exec.noRules': 'No rules — event always runs when reached.',
+  'exec.noRules': 'No rules - event always runs when reached.',
   'exec.sourceVariable': 'Variable',
   'exec.sourceDataset': 'Dataset',
   'exec.sourceHistory': 'History',
@@ -310,9 +334,9 @@ export const en: MessageDict = {
   'exec.testInputs': 'Test inputs (JSON variables override)',
   'exec.testInputsInvalid': 'Test inputs must be valid JSON',
   'exec.persistVariables': 'Persist variable changes into the active run',
-  'exec.testOk': 'OK — {{name}}',
-  'exec.testFail': 'Fail — {{name}}',
-  'exec.testSkipped': 'Skipped — dependencies not met ({{name}})',
+  'exec.testOk': 'OK - {{name}}',
+  'exec.testFail': 'Fail - {{name}}',
+  'exec.testSkipped': 'Skipped - dependencies not met ({{name}})',
   'exec.tab.timeline': 'Timeline',
   'exec.tab.output': 'Output',
   'exec.tab.deps': 'Deps',

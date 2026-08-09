@@ -1,5 +1,5 @@
 /**
- * Plan-level Dataset helpers — unique names, migration, TypeText dual-write.
+ * Plan-level Dataset helpers - unique names, migration, TypeText dual-write.
  */
 
 import { nanoid } from 'nanoid'
@@ -147,7 +147,7 @@ export function migratePlanDatasets(plan: AutomationPlan): PlanDataset[] {
   return out
 }
 
-/** Normalize a plan for hydrate/import — datasets + legacy arrays always present. */
+/** Normalize a plan for hydrate/import - datasets + legacy arrays always present. */
 export function normalizePlanData(plan: AutomationPlan): AutomationPlan {
   const textLibraries = plan.textLibraries ?? []
   const customSections = plan.customSections ?? []
@@ -194,7 +194,7 @@ export function syncTextLibrariesFromDatasets(
   return [...fromDatasets, ...orphans]
 }
 
-/** After Text Library panel upsert — mirror into datasets. */
+/** After Text Library panel upsert - mirror into datasets. */
 export function upsertDatasetFromTextLibrary(
   datasets: PlanDataset[],
   library: PlanTextLibrary,

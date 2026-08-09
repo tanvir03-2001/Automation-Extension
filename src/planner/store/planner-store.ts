@@ -464,7 +464,7 @@ export const usePlannerStore = create<PlannerState>()(
         const siblings = get().workflows.filter((wf) => wf.planId === workflow.planId)
         if (siblings.length <= 1) {
           window.alert(
-            'This is the only plan in the workflow — it cannot be deleted alone. Delete the whole workflow on the left, or create another plan first.',
+            'This is the only plan in the workflow - it cannot be deleted alone. Delete the whole workflow on the left, or create another plan first.',
           )
           return false
         }
@@ -734,7 +734,7 @@ export const usePlannerStore = create<PlannerState>()(
       },
 
       updateWorkflowGraph: (workflowId, nodes, edges) => {
-        // Position/edge autosave — do not bump graphRevision (avoids canvas reload loops)
+        // Position/edge autosave - do not bump graphRevision (avoids canvas reload loops)
         set((state) => ({
           dirty: true,
           workflows: state.workflows.map((wf) =>

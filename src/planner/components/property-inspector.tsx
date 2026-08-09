@@ -299,7 +299,7 @@ export function PropertyInspector() {
                   : selectedNode.data.actionId === 'clipboard.copy_event'
                     ? 'বাটনে ক্লিক করুন → পেজ খুলবে → page-এর Copy বাটনে ক্লিক করুন। Runtime-এ সেই বাটন click হবে, text capture হবে, Copy Store-এ save হবে।'
                     : selectedNode.data.actionId === 'downloads.click_download'
-                      ? 'পেজের Download বাটন/লিংক pick করুন। Runtime-এ ঠিক একবারই click হবে — কখনো double-click নয়।'
+                      ? 'পেজের Download বাটন/লিংক pick করুন। Runtime-এ ঠিক একবারই click হবে - কখনো double-click নয়।'
                       : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
               </p>
               <Button
@@ -358,7 +358,7 @@ export function PropertyInspector() {
 
           {selectedNode.data.actionId === 'flow.connector' ? (
             <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed text-muted-foreground">
-              Connector does nothing at runtime — it only organizes the canvas. Wire steps through
+              Connector does nothing at runtime - it only organizes the canvas. Wire steps through
               it like a labeled junction.
             </p>
           ) : null}
@@ -839,7 +839,7 @@ function PlanRefSelect({
       ) : null}
       {orphanWrongWorkflow ? (
         <p className="text-[10px] text-destructive">
-          Selected plan belongs to another Workflow — pick a plan from this Workflow.
+          Selected plan belongs to another Workflow - pick a plan from this Workflow.
         </p>
       ) : null}
       {value && resolved ? (

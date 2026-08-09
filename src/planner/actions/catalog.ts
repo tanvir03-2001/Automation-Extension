@@ -230,7 +230,7 @@ const mouseActions: ActionDefinition[] = [
     howto: [
       'Drag Click Exact Match onto the canvas.',
       'Type the exact button/label text, or use Pick with mouse on the real element.',
-      'Only an exact text match is clicked — partial matches are ignored.',
+      'Only an exact text match is clicked - partial matches are ignored.',
       'Connect it after Wait For Page / Wait For Button when the label may load late.',
     ],
     icon: 'MousePointerClick',
@@ -248,7 +248,7 @@ const mouseActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: false,
-        help: 'Optional — Pick with mouse to target a specific element and fill Exact text',
+        help: 'Optional - Pick with mouse to target a specific element and fill Exact text',
       },
       {
         key: 'exact',
@@ -297,7 +297,7 @@ const mouseActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: false,
-        help: 'Optional — Pick with mouse to fill text from a specific element',
+        help: 'Optional - Pick with mouse to fill text from a specific element',
       },
     ],
   }),
@@ -334,7 +334,7 @@ const mouseActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: false,
-        help: 'Optional — Pick with mouse',
+        help: 'Optional - Pick with mouse',
       },
     ],
   }),
@@ -347,7 +347,7 @@ const mouseActions: ActionDefinition[] = [
       'Only button / combobox / role=button style controls. Same universal click as Click.',
     howto: [
       'Type the button name (Send, Continue, Prompt Enhance…).',
-      'Contains match by default — switch to Exact if needed.',
+      'Contains match by default - switch to Exact if needed.',
     ],
     icon: 'RectangleHorizontal',
     supportsSelector: true,
@@ -476,7 +476,7 @@ const keyboardActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: false,
-        help: 'Optional — after New chat click, leave empty to type where the cursor blinks',
+        help: 'Optional - after New chat click, leave empty to type where the cursor blinks',
       },
       {
         key: 'textMode',
@@ -541,7 +541,7 @@ const keyboardActions: ActionDefinition[] = [
     name: 'Paste Text',
     category: 'keyboard',
     description:
-      'Same as Type Text (manual / library / {_template}), but pastes the full text instantly — no typing',
+      'Same as Type Text (manual / library / {_template}), but pastes the full text instantly - no typing',
     tooltip:
       'Pastes the full prompt at once. Same libraries & {_Story Title} templates as Type Text.',
     icon: 'ClipboardPaste',
@@ -629,7 +629,7 @@ const keyboardActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: false,
-        help: 'Optional — focus this element before pressing the key',
+        help: 'Optional - focus this element before pressing the key',
       },
     ],
   }),
@@ -653,12 +653,12 @@ const keyboardActions: ActionDefinition[] = [
         required: true,
         placeholder: 'Control+Enter',
         defaultValue: 'Control+Enter',
-        help: 'Pick from the keyboard list — up to 4 keys (mods + main)',
+        help: 'Pick from the keyboard list - up to 4 keys (mods + main)',
       },
       {
         ...selectorField,
         required: false,
-        help: 'Optional — focus this element before the shortcut',
+        help: 'Optional - focus this element before the shortcut',
       },
     ],
   }),
@@ -765,7 +765,7 @@ const elementActions: ActionDefinition[] = [
     fields: [
       {
         ...selectorField,
-        help: 'Pick with mouse — waits until that element is actually visible',
+        help: 'Pick with mouse - waits until that element is actually visible',
       },
     ],
   }),
@@ -878,7 +878,7 @@ const elementActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: false,
-        help: 'Optional — pick the button with mouse instead of label',
+        help: 'Optional - pick the button with mouse instead of label',
       },
     ],
   }),
@@ -987,7 +987,7 @@ const conditionActions: ActionDefinition[] = [
     name: 'If',
     category: 'conditions',
     description:
-      'If/else branch: element visible, button name, page text, number from element, or variable — with wait + mouse pick',
+      'If/else branch: element visible, button name, page text, number from element, or variable - with wait + mouse pick',
     icon: 'GitBranch',
     controlFlow: true,
     supportsSelector: true,
@@ -1042,7 +1042,7 @@ const conditionActions: ActionDefinition[] = [
     name: 'Switch',
     category: 'conditions',
     description:
-      'Multi-way branch on a variable, picked element text, or attribute — with wait + cases + default',
+      'Multi-way branch on a variable, picked element text, or attribute - with wait + cases + default',
     icon: 'Split',
     controlFlow: true,
     supportsSelector: true,
@@ -1097,7 +1097,7 @@ const loopActions: ActionDefinition[] = [
       'Pick Text libraries or Copy Store → choose a list → Loop out → body → return → next; Completed when done. Break → Completed.',
     howto: [
       'Drag Map onto the canvas.',
-      'In Properties, pick Section (Text libraries or Copy Store), then pick the list inside it — no typing.',
+      'In Properties, pick Section (Text libraries or Copy Store), then pick the list inside it - no typing.',
       'Connect the previous step into Map’s left “in” (execution) handle.',
       'Connect Map’s “loop” output into the first step of the body; use {{item}} / {{index}} inside the body.',
       'Connect the last body step back into Map’s “return” handle (not “in”).',
@@ -1133,7 +1133,7 @@ const loopActions: ActionDefinition[] = [
         key: 'collectionKey',
         label: 'Array variable',
         type: 'string',
-        help: 'Legacy / display mirror — set automatically by the picker',
+        help: 'Legacy / display mirror - set automatically by the picker',
       },
       {
         key: 'itemVariable',
@@ -1192,7 +1192,7 @@ const loopActions: ActionDefinition[] = [
     name: 'ForEach',
     category: 'loops',
     description:
-      'Loop over a Dataset (or array variable). Prefer Dataset selector — data is referenced, not copied.',
+      'Loop over a Dataset (or array variable). Prefer Dataset selector - data is referenced, not copied.',
     tooltip: 'Pick a Dataset / Text library / Copy Store list, or use a variable name',
     icon: 'ListTree',
     controlFlow: true,
@@ -1331,7 +1331,7 @@ const aiActions: ActionDefinition[] = [
     id: 'ai.open_chatgpt',
     name: 'Open ChatGPT',
     category: 'ai',
-    description: 'Open ChatGPT — reuses tab if already open',
+    description: 'Open ChatGPT - reuses tab if already open',
     icon: 'Bot',
     fields: [
       { key: 'url', label: 'URL', type: 'url', defaultValue: 'https://chatgpt.com/' },
@@ -1490,7 +1490,7 @@ const flowActions: ActionDefinition[] = [
     name: 'Connector',
     category: 'flow',
     description:
-      'Does nothing at runtime — a labeled pass-through used to organize and connect steps on the canvas',
+      'Does nothing at runtime - a labeled pass-through used to organize and connect steps on the canvas',
     tooltip:
       'Visual connector only. Rename the big title in Properties (Label). Edges still flow through it.',
     icon: 'Link',
@@ -1518,7 +1518,7 @@ const flowActions: ActionDefinition[] = [
     name: 'Jump To Step',
     category: 'flow',
     description: 'Jump to another step you pick from a list',
-    tooltip: 'Jump to another step you choose from a dropdown — no ID typing needed.',
+    tooltip: 'Jump to another step you choose from a dropdown - no ID typing needed.',
     icon: 'CornerUpRight',
     controlFlow: true,
     fields: [
@@ -1547,7 +1547,7 @@ const flowActions: ActionDefinition[] = [
         label: 'Jump back to step',
         type: 'nodeRef',
         required: true,
-        help: 'Usually choose “Click · New chat” — no need to type n_new_chat',
+        help: 'Usually choose “Click · New chat” - no need to type n_new_chat',
       },
     ],
   }),
@@ -1565,7 +1565,7 @@ const flowActions: ActionDefinition[] = [
     name: 'Next Plan Execute',
     category: 'flow',
     description:
-      'Hand off execution to another Plan in the same Workflow. List order does not matter — only the selected Plan runs next.',
+      'Hand off execution to another Plan in the same Workflow. List order does not matter - only the selected Plan runs next.',
     tooltip:
       'After this step, start another Plan from the same Workflow. Pick the target Plan from the dropdown.',
     icon: 'SkipForward',
@@ -1576,7 +1576,7 @@ const flowActions: ActionDefinition[] = [
         label: 'Target plan',
         type: 'planRef',
         required: true,
-        help: 'Only Plans from the current Workflow are listed. The selected Plan runs next — not the next item in the list.',
+        help: 'Only Plans from the current Workflow are listed. The selected Plan runs next - not the next item in the list.',
       },
     ],
   }),
@@ -1680,13 +1680,13 @@ const downloadActions: ActionDefinition[] = [
     name: 'Download Click',
     category: 'downloads',
     description:
-      'Click a download button exactly once — never double-clicks (safe for file downloads)',
+      'Click a download button exactly once - never double-clicks (safe for file downloads)',
     tooltip:
-      'Pick the page Download button with your mouse. Fires a single trusted click only — no fallback retries.',
+      'Pick the page Download button with your mouse. Fires a single trusted click only - no fallback retries.',
     howto: [
       'Drag Download Click onto the canvas.',
       'Use Pick with mouse on the real Download button/link.',
-      'This action always clicks once — it will never fire a second click strategy.',
+      'This action always clicks once - it will never fire a second click strategy.',
       'Place it when the download control is visible (after Wait Until Visible if needed).',
     ],
     icon: 'Download',
@@ -1696,7 +1696,7 @@ const downloadActions: ActionDefinition[] = [
       {
         ...selectorField,
         required: true,
-        help: 'Pick the Download button with mouse — required',
+        help: 'Pick the Download button with mouse - required',
       },
     ],
   }),
@@ -1761,7 +1761,7 @@ const clipboardActions: ActionDefinition[] = [
         label: 'Copy button selector',
         required: true,
         placeholder: 'Pick the Copy button with mouse',
-        help: 'Use Pick Copy button — required',
+        help: 'Use Pick Copy button - required',
       },
       {
         key: 'clickDelayMs',
@@ -1825,7 +1825,7 @@ const clipboardActions: ActionDefinition[] = [
         label: 'Copy button / element selector',
         required: false,
         placeholder: 'Pick the Copy button with mouse',
-        help: 'Use Pick Copy button — required for click/extract modes',
+        help: 'Use Pick Copy button - required for click/extract modes',
       },
       {
         key: 'text',
@@ -2085,7 +2085,7 @@ export function getActionById(id: string): ActionDefinition | undefined {
   return ACTION_LIBRARY.find((action) => action.id === actionId)
 }
 
-/** Palette / search — hides consolidated aliases unless the query matches an alias id exactly. */
+/** Palette / search - hides consolidated aliases unless the query matches an alias id exactly. */
 export function searchActions(
   query: string,
   localized?: Array<{ id: string; name: string; description: string }>,

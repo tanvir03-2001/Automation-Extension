@@ -2,13 +2,13 @@
  * Semantic selectors that survive DOM reshuffles when button text / aria / SVG identity is stable.
  *
  * Formats:
- *   ae:btn="Send"          — button-like exact visible label
- *   ae:btn~="Send"         — button-like label contains
+ *   ae:btn="Send"          - button-like exact visible label
+ *   ae:btn~="Send"         - button-like label contains
  *   ae:aria="…" / ae:aria~="…"
- *   ae:text~="…"           — any control containing text
- *   ae:svg~="…"            — control whose SVG title/aria-label/desc matches
- *   ae:role=button;text~="New chat"  — compound
- *   normal CSS             — document.querySelector
+ *   ae:text~="…"           - any control containing text
+ *   ae:svg~="…"            - control whose SVG title/aria-label/desc matches
+ *   ae:role=button;text~="New chat"  - compound
+ *   normal CSS             - document.querySelector
  */
 
 export interface SmartPickResult {
@@ -71,7 +71,7 @@ function visibleLabel(el: Element): string {
   return text.slice(0, 80)
 }
 
-/** Short label — rejects big containers that merely contain the word somewhere. */
+/** Short label - rejects big containers that merely contain the word somewhere. */
 function shortLabel(el: Element): string {
   const html = el as HTMLElement
   const aria = html.getAttribute('aria-label') || html.getAttribute('title') || ''
@@ -157,7 +157,7 @@ export function promoteToClickHost(el: Element): HTMLElement {
   if (ancestorHost) return ancestorHost
 
   // 2) Wrapper case: tooltip-trigger / tabindex shell around the real control
-  //    closest() cannot see descendants — must query inside.
+  //    closest() cannot see descendants - must query inside.
   let cur: HTMLElement | null = start
   for (let depth = 0; cur && depth < 5; depth += 1) {
     const nested = cur.querySelector<HTMLElement>(CLICK_HOST_SELECTOR)
@@ -406,7 +406,7 @@ function scoreMatch(el: HTMLElement, parts: ReturnType<typeof parseAeSelector>):
   )
 
   if (isNavControl) {
-    // Nav / aria controls are often top-left — do NOT prefer chat-bottom widgets
+    // Nav / aria controls are often top-left - do NOT prefer chat-bottom widgets
     score += Math.max(0, 50 - rect.top / 16)
     score += Math.max(0, 35 - rect.left / 24)
     // Prefer compact controls
@@ -553,7 +553,7 @@ export function buildSmartPick(el: Element): SmartPickResult {
     fallbacks.push(idSel)
   }
 
-  // CSS path last — and only as weak fallback
+  // CSS path last - and only as weak fallback
   const cssPath = buildCssPath(target)
   if (!primary) {
     primary = cssPath

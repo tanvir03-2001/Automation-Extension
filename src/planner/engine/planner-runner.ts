@@ -110,7 +110,7 @@ export class PlannerRunner {
     await resetWorkflowQueueCursors(workflow.id)
 
     // Hydrate Copy Store library (durable) so previous Copy Events stay available
-    // and numbering continues (story-4 after story-1..3) — like Text libraries.
+    // and numbering continues (story-4 after story-1..3) - like Text libraries.
     const durableStore = await loadDurableWorkflowStore(workflow.id)
     copyStore.resetRuntime(workflow.id)
     copyStore.hydrateRuntime({
@@ -144,7 +144,7 @@ export class PlannerRunner {
     }
 
     runGuardController.start()
-    // Debugger bar ON immediately with Run / Flow Start — don't wait for Open URL.
+    // Debugger bar ON immediately with Run / Flow Start - don't wait for Open URL.
     const debugTabId = await runGuardController.beginTrustedDebug(
       this.checkpoint.browserState.activeTabId,
     )
@@ -182,7 +182,7 @@ export class PlannerRunner {
       this.checkpoint.updatedAt = new Date().toISOString()
       void this.persist()
     }
-    // Always release page lock / debugger — even if a step is mid-wait
+    // Always release page lock / debugger - even if a step is mid-wait
     void runGuardController.stop()
     this.emit()
   }
@@ -246,7 +246,7 @@ export class PlannerRunner {
     store: Record<string, unknown>,
   ): Promise<void> {
     if (!this.checkpoint) return
-    // Allowed while running — Copy Store library edits must not bounce back from checkpoint
+    // Allowed while running - Copy Store library edits must not bounce back from checkpoint
     const prevStores =
       this.checkpoint.variables.copyStores &&
       typeof this.checkpoint.variables.copyStores === 'object'
@@ -638,7 +638,7 @@ export class PlannerRunner {
       return `Next Plan Execute: target plan “${next.name}” has no Start step`
     }
 
-    // Clear nested-return pointers — this is a handoff, not a subflow
+    // Clear nested-return pointers - this is a handoff, not a subflow
     delete this.checkpoint.temporaryVariables.__returnWorkflowId
     delete this.checkpoint.temporaryVariables.__returnNodeId
 

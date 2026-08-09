@@ -80,7 +80,7 @@ export function CustomSectionsPanel({ planId }: CustomSectionsPanelProps) {
 
   return (
     <div className="space-y-3">
-      {/* Hardcoded Add Section control — below Text libraries / Copy Store */}
+      {/* Hardcoded Add Section control - below Text libraries / Copy Store */}
       <div className="rounded-2xl border border-border/80 bg-card p-5 text-card-foreground shadow-panel">
         <div className="flex items-start justify-between gap-2">
           <div>
@@ -238,7 +238,7 @@ export function CustomSectionsPanel({ planId }: CustomSectionsPanelProps) {
             {open ? (
               <div className="mt-4 space-y-2">
                 <p className="text-xs text-muted-foreground">
-                  Add properties and nested lists freely — names are not hardcoded. Map can pick any
+                  Add properties and nested lists freely - names are not hardcoded. Map can pick any
                   list path inside this section.
                 </p>
                 <div className="flex flex-wrap gap-1.5">

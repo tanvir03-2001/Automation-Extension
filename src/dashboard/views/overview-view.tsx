@@ -163,7 +163,7 @@ export function OverviewView() {
   const previewWorkflowId = plannerBusy
     ? plannerCheckpoint.workflowId
     : (selectedPlan?.id ?? null)
-  // Only while a run is active — on stop/complete/cancel, sections restore to default sizes.
+  // Only while a run is active - on stop/complete/cancel, sections restore to default sizes.
   const liveExpanded = plannerBusy
 
   async function startSelected() {

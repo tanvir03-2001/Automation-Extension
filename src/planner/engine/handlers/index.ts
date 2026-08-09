@@ -1,5 +1,5 @@
 /**
- * Action handler registry — canonical IDs + aliases.
+ * Action handler registry - canonical IDs + aliases.
  * Execution still lives in action-executor.ts; this module is the
  * single source of truth for resolution used by palette, docs, and runner.
  */

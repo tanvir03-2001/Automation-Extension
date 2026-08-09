@@ -32,7 +32,7 @@ class RunGuardController {
     return this.lockedTabId
   }
 
-  /** Page lock / keepalive — debugger session starts on flow.start via beginTrustedDebug. */
+  /** Page lock / keepalive - debugger session starts on flow.start via beginTrustedDebug. */
   start(): void {
     this.enabled = true
     this.hookNavigation()
@@ -49,7 +49,7 @@ class RunGuardController {
 
     let targetId = await findDebuggableTabId(tabId)
 
-    // No normal web tab yet (dashboard focused) — open a seed page we can debug.
+    // No normal web tab yet (dashboard focused) - open a seed page we can debug.
     if (targetId == null) {
       try {
         const seed = await chrome.tabs.create({ url: DEBUG_SEED_URL, active: false })
@@ -68,7 +68,7 @@ class RunGuardController {
       void activityLog.append(
         'warn',
         'Debugger',
-        'Start ran but no tab available to attach debugger yet — will attach on Open URL',
+        'Start ran but no tab available to attach debugger yet - will attach on Open URL',
       )
       return undefined
     }
@@ -92,11 +92,11 @@ class RunGuardController {
       void activityLog.append(
         'warn',
         'Debugger',
-        `Attach failed on Start — will retry when a website tab opens`,
+        `Attach failed on Start - will retry when a website tab opens`,
       )
     }
 
-    // 2) Page lock (optional — must not block debugger)
+    // 2) Page lock (optional - must not block debugger)
     try {
       await ensureContentScript(targetId)
       await sendTabMessage(targetId, {
@@ -135,7 +135,7 @@ class RunGuardController {
     if (this.lockedTabId != null && this.lockedTabId !== tabId) {
       await this.unlockTab(this.lockedTabId)
       // Keep debugger on previous tab during session; also attach to the new one.
-      // Do not detach previous while session active — Chrome keeps the infobar
+      // Do not detach previous while session active - Chrome keeps the infobar
       // as long as any tab stays attached.
     }
 
@@ -158,7 +158,7 @@ class RunGuardController {
         payload: { message },
       })
     } catch {
-      // Tab may be restricted or mid-navigation — retry on complete.
+      // Tab may be restricted or mid-navigation - retry on complete.
     }
   }
 

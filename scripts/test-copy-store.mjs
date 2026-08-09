@@ -248,7 +248,7 @@ async function main() {
     'story-8',
   ])
 
-  console.log('OK — copy store tests passed (1–13 core cases)')
+  console.log('OK - copy store tests passed (1–13 core cases)')
 }
 
 main().catch((error) => {

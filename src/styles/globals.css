@@ -34,12 +34,11 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
-/* Bangla UI — Anek Bangla (Google Fonts, loaded on demand) */
+/* Bangla UI - Noto Sans Bengali for body (small UI), Anek for display headings */
 html[lang='bn'],
 html[data-locale='bn'] {
-  --font-sans: 'Anek Bangla', 'IBM Plex Sans', 'Noto Sans Bengali', ui-sans-serif, system-ui,
-    sans-serif;
-  --font-display: 'Anek Bangla', 'Space Grotesk', 'IBM Plex Sans', ui-sans-serif, system-ui,
+  --font-sans: 'Noto Sans Bengali', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Anek Bangla', 'Noto Sans Bengali', 'Space Grotesk', ui-sans-serif, system-ui,
     sans-serif;
 }
 
@@ -91,12 +90,15 @@ body {
   background-attachment: fixed;
 }
 
-/* Bangla: slightly taller line box + kerning for conjuncts */
+/* Bangla: slightly larger body + taller line box; subpixel for clearer small glyphs on Windows */
 html[lang='bn'] body,
 html[data-locale='bn'] body {
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.6;
   font-feature-settings: 'kern' 1, 'liga' 1;
-  -webkit-font-smoothing: antialiased;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
 }
 
 html[lang='bn'] .font-display,
@@ -104,6 +106,13 @@ html[data-locale='bn'] .font-display {
   font-family: var(--font-display);
   letter-spacing: 0.01em;
   font-weight: 600;
+}
+
+/* Tiny Bangla labels (badges / hints) - avoid sub-13px which looks broken */
+html[lang='bn'] .text-xs,
+html[data-locale='bn'] .text-xs {
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.45;
 }
 
 ::-webkit-scrollbar {

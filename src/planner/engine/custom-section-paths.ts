@@ -1,6 +1,6 @@
 /**
  * Discover nested array/field paths inside arbitrary JSON for Map pickers.
- * No hardcoded property names — walks whatever structure the data has.
+ * No hardcoded property names - walks whatever structure the data has.
  */
 
 import { normalizeToArray } from '@/planner/engine/map-loop'
@@ -128,7 +128,7 @@ export function discoverJsonArrayPaths(
         }
       }
     } else if (Array.isArray(sample)) {
-      // array of arrays — offer flatten
+      // array of arrays - offer flatten
       const flatPath = `${value}${FLAT_SUFFIX}`
       if (!out.some((item) => item.value === flatPath)) {
         out.push({
@@ -161,7 +161,7 @@ export function discoverJsonArrayPaths(
       } else if (child && typeof child === 'object') {
         discoverJsonArrayPaths(child, path, out, depth + 1)
       } else if (!prefix) {
-        // top-level scalar — not a list; skip
+        // top-level scalar - not a list; skip
       }
     }
   }

@@ -46,7 +46,7 @@ interface DynamicJsonEditorProps {
   className?: string
 }
 
-/** Recursive JSON builder — property names are user-typed, never hardcoded. */
+/** Recursive JSON builder - property names are user-typed, never hardcoded. */
 export function DynamicJsonEditor({
   value,
   onChange,
