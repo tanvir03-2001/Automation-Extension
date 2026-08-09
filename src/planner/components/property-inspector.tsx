@@ -1,13 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
-  CheckCircle2,
   Copy,
   Crosshair,
-  FlaskConical,
   Loader2,
   MousePointerClick,
   Trash2,
-  XCircle,
 } from 'lucide-react'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { getActionById } from '@/planner/actions/catalog'
@@ -28,21 +25,16 @@ import {
   ConditionFields,
 } from '@/planner/components/condition-fields'
 import { KeyPressFields } from '@/planner/components/key-press-fields'
+import { ExecutionOptionsPanel } from '@/planner/components/execution-options-panel'
+import { DependencyRulesPanel } from '@/planner/components/dependency-rules-panel'
+import { EventTestPanel } from '@/planner/components/event-test-panel'
 import { formatChord } from '@/planner/data/keyboard-keys'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-import { sendRuntimeMessage } from '@/shared/messaging/bus'
-import { cn } from '@/shared/utils/cn'
 import { useT } from '@/shared/i18n/use-t'
 import type { VisualWorkflow } from '@/planner/types/plan'
-
-type QuickTestResult = {
-  ok: boolean
-  message: string
-  detail?: string
-}
 
 function labelAfterPick(currentLabel: string, actionId: string, pickedText?: string): string {
   if (!pickedText) return currentLabel
@@ -109,13 +101,6 @@ export function PropertyInspector() {
   const removeNode = usePlannerStore((s) => s.removeNode)
   const { picking, error, lastPicked, pickElement } = useElementPicker(workflow)
   const [activePickField, setActivePickField] = useState<string | null>(null)
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<QuickTestResult | null>(null)
-
-  useEffect(() => {
-    setTestResult(null)
-    setTesting(false)
-  }, [nodeId])
 
   const node = workflow?.nodes.find((item) => item.id === nodeId)
   if (!workflowId || !node) {
@@ -137,108 +122,6 @@ export function PropertyInspector() {
     localizeAction(selectedNode.data.actionId, locale) ??
     getActionById(selectedNode.data.actionId)
   const accent = selectedNode.data.color ?? action?.color ?? '#0f766e'
-
-  async function runQuickTest() {
-    setTesting(true)
-    setTestResult(null)
-    try {
-      const params = selectedNode.data.params
-      const selector =
-        selectedNode.data.selector?.primary ||
-        String(params.selector ?? '')
-      const fallbacks =
-        selectedNode.data.selector?.fallbacks ??
-        (Array.isArray(params.selectorFallbacks)
-          ? (params.selectorFallbacks as string[])
-          : [])
-      const actionId = selectedNode.data.actionId
-      const actionName = action?.name ?? actionId
-
-      // Every step: run the FULL planner action (same engine path as a real run).
-      const response = await sendRuntimeMessage<{
-        ok: boolean
-        error?: string
-        result?: {
-          status?: string
-          branch?: string
-          nextNodeId?: string | null
-          activeTabId?: number
-          storedAs?: string
-          textPreview?: string
-          textLength?: number
-          format?: string
-          sourceMode?: string
-          clipboardOk?: boolean
-          clipboardError?: string
-          output?: Record<string, unknown>
-        }
-        checkpoint?: unknown
-      }>({
-        type: 'PLANNER_TEST_ACTION',
-        payload: {
-          workflowId,
-          planId: workflow?.planId,
-          actionId,
-          params,
-          selector: selector || undefined,
-          fallbacks,
-          timeoutMs: selectedNode.data.timeoutMs ?? 30_000,
-        },
-      })
-
-      if (response.checkpoint !== undefined) {
-        usePlannerStore.getState().setCheckpoint(
-          response.checkpoint as ReturnType<typeof usePlannerStore.getState>['checkpoint'],
-        )
-      }
-
-      if (!response.ok) {
-        setTestResult({
-          ok: false,
-          message: response.error ?? t('inspector.quickTestFail', { name: actionName }),
-        })
-        return
-      }
-
-      const data = response.result
-      const output = data?.output ?? {}
-      const nextPlanId =
-        typeof output.nextWorkflowId === 'string' ? output.nextWorkflowId : undefined
-      const nextPlanName = nextPlanId
-        ? workflows.find((wf) => wf.id === nextPlanId)?.name
-        : undefined
-
-      setTestResult({
-        ok: true,
-        message: data?.storedAs
-          ? t('inspector.quickTestOkSaved', { name: data.storedAs })
-          : t('inspector.quickTestOk', { name: actionName }),
-        detail: [
-          data?.status && data.status !== 'success' ? `status=${data.status}` : '',
-          data?.branch ? `branch=${data.branch}` : '',
-          nextPlanName ? `next plan: ${nextPlanName}` : '',
-          data?.format ? `format=${data.format}` : '',
-          data?.textLength != null ? `${data.textLength} chars` : '',
-          data?.clipboardOk === false
-            ? `clipboard warn: ${data.clipboardError ?? 'failed'}`
-            : data?.clipboardOk
-              ? 'clipboard ok'
-              : '',
-          data?.textPreview ? `preview: ${data.textPreview}` : '',
-          data?.activeTabId != null ? `tab=${data.activeTabId}` : '',
-        ]
-          .filter(Boolean)
-          .join(' · ') || undefined,
-      })
-    } catch (err) {
-      setTestResult({
-        ok: false,
-        message: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      setTesting(false)
-    }
-  }
 
   async function applyPickedSelector(fieldKey: string) {
     setActivePickField(fieldKey)
@@ -357,53 +240,42 @@ export function PropertyInspector() {
           </Badge>
         </div>
 
-        <div className="mt-3 space-y-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3">
-          <p className="text-xs font-semibold text-foreground">{t('inspector.quickTest')}</p>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {t('inspector.quickTestHelp')}
-          </p>
-          <Button
-            size="sm"
-            className="w-full rounded-xl"
-            disabled={testing || picking}
-            onClick={() => void runQuickTest()}
-          >
-            {testing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <FlaskConical className="h-3.5 w-3.5" />
-            )}
-            {testing ? t('inspector.testing') : t('inspector.quickTest')}
-          </Button>
-          {testResult ? (
-            <div
-              className={cn(
-                'flex items-start gap-2 rounded-xl border px-2.5 py-2 text-[11px] leading-relaxed',
-                testResult.ok
-                  ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-100'
-                  : 'border-rose-500/35 bg-rose-500/10 text-rose-100',
-              )}
-            >
-              {testResult.ok ? (
-                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
-              ) : (
-                <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
-              )}
-              <div className="min-w-0">
-                <p className="font-medium text-foreground">{testResult.message}</p>
-                {testResult.detail ? (
-                  <p className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">
-                    {testResult.detail}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
+        <div className="mt-3">
+          <EventTestPanel
+            workflowId={workflowId}
+            planId={workflow?.planId}
+            nodeId={selectedNode.id}
+            nodeData={selectedNode.data}
+            actionName={action?.name ?? selectedNode.data.actionId}
+          />
         </div>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="min-w-0 space-y-4 p-4">
+          <DependencyRulesPanel
+            value={selectedNode.data.runWhen}
+            onChange={(runWhen) => updateNodeData(workflowId, selectedNode.id, { runWhen })}
+          />
+          <ExecutionOptionsPanel
+            timeoutMs={selectedNode.data.timeoutMs ?? 30_000}
+            errorPolicy={selectedNode.data.errorPolicy}
+            preWait={selectedNode.data.preWait}
+            interaction={selectedNode.data.interaction}
+            onTimeoutChange={(ms) =>
+              updateNodeData(workflowId, selectedNode.id, { timeoutMs: ms })
+            }
+            onErrorPolicyChange={(errorPolicy) =>
+              updateNodeData(workflowId, selectedNode.id, { errorPolicy })
+            }
+            onPreWaitChange={(preWait) =>
+              updateNodeData(workflowId, selectedNode.id, { preWait })
+            }
+            onInteractionChange={(interaction) =>
+              updateNodeData(workflowId, selectedNode.id, { interaction })
+            }
+          />
+
           {selectedNode.data.actionId !== 'conditions.if' &&
             selectedNode.data.actionId !== 'conditions.switch' &&
             (action?.supportsSelector ||
@@ -484,24 +356,12 @@ export function PropertyInspector() {
             />
           </Field>
 
-          {selectedNode.data.actionId !== 'flow.connector' ? (
-            <Field label="Timeout (ms)">
-              <Input
-                type="number"
-                value={selectedNode.data.timeoutMs}
-                onChange={(event) =>
-                  updateNodeData(workflowId, selectedNode.id, {
-                    timeoutMs: Number(event.target.value) || 30000,
-                  })
-                }
-              />
-            </Field>
-          ) : (
-            <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          {selectedNode.data.actionId === 'flow.connector' ? (
+            <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed text-muted-foreground">
               Connector does nothing at runtime — it only organizes the canvas. Wire steps through
               it like a labeled junction.
             </p>
-          )}
+          ) : null}
 
           {selectedNode.data.actionId === 'keyboard.type_text' ||
           selectedNode.data.actionId === 'keyboard.paste_text' ? (

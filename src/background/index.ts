@@ -7,7 +7,8 @@ import { storageGet, storageSet } from '@/shared/storage/chrome-storage'
 import { sampleWorkflows } from '@/data/sample-workflows'
 import { samplePlans, sampleVisualWorkflows } from '@/planner/data/sample-plans'
 import { plannerRunner } from '@/planner/engine/planner-runner'
-import { executePlannerAction } from '@/planner/engine/action-executor'
+import { runEventStep } from '@/planner/engine/run-event-step'
+import { normalizeNodeData } from '@/planner/engine/normalize-node-data'
 import { copyStore, isWorkflowCopyStore } from '@/engine/copy-store'
 import {
   clearDurableWorkflowStore,
@@ -20,7 +21,7 @@ import { KEEPALIVE_ALARM, runGuardController } from '@/background/run-guard-cont
 import { trustedClickAt, trustedKeyChord } from '@/background/trusted-click'
 import { sendTabMessage } from '@/shared/messaging/bus'
 import type { WorkflowDefinition } from '@/shared/types/workflow'
-import type { VisualWorkflow } from '@/planner/types/plan'
+import type { AutomationPlan, PlannerNodeData, VisualWorkflow } from '@/planner/types/plan'
 import type { WorkflowStartPayload } from '@/shared/types/messages'
 
 interface PickedElement {
@@ -510,11 +511,18 @@ onRuntimeMessage(async (message, sender) => {
       const payload = (message.payload ?? {}) as {
         workflowId: string
         planId?: string
+        nodeId?: string
         actionId: string
         params?: Record<string, unknown>
         selector?: string
         fallbacks?: string[]
         timeoutMs?: number
+        nodeData?: PlannerNodeData
+        testInputs?: Record<string, unknown>
+        /** Live datasets from the dashboard store (preferred over storage). */
+        datasets?: AutomationPlan['datasets']
+        persistVariables?: boolean
+        captureBrowserLogs?: boolean
       }
 
       if (!payload.workflowId || !payload.actionId) {
@@ -524,18 +532,28 @@ onRuntimeMessage(async (message, sender) => {
       if (plannerRunner.isBusy()) {
         return {
           ok: false,
-          error: 'Planner is running — Pause/Cancel first, then Quick test this step',
+          error: 'Planner is running — Pause/Cancel first, then test this step',
         }
       }
 
       try {
         const durable = await loadDurableWorkflowStore(payload.workflowId)
         const checkpoint = plannerRunner.getCheckpoint()
+        const workspace = await storageGet<{
+          plans?: AutomationPlan[]
+          workflows?: VisualWorkflow[]
+        }>('planner-workspace', { plans: [], workflows: [] })
+        const plan =
+          workspace.plans?.find((item) => item.id === payload.planId) ??
+          workspace.plans?.find((item) => item.workflowIds.includes(payload.workflowId)) ??
+          null
+        const workflow =
+          workspace.workflows?.find((item) => item.id === payload.workflowId) ?? null
+
         const baseVars =
           checkpoint?.workflowId === payload.workflowId ? { ...checkpoint.variables } : {}
         const liveStore = isWorkflowCopyStore(baseVars.copyStore) ? baseVars.copyStore : {}
         const mergedStore = { ...durable, ...liveStore }
-
         const prevStores =
           baseVars.copyStores && typeof baseVars.copyStores === 'object'
             ? (baseVars.copyStores as Record<string, unknown>)
@@ -543,6 +561,7 @@ onRuntimeMessage(async (message, sender) => {
 
         const variables: Record<string, unknown> = {
           ...baseVars,
+          ...(payload.testInputs ?? {}),
           copyStore: mergedStore,
           copyStores: {
             ...prevStores,
@@ -556,53 +575,75 @@ onRuntimeMessage(async (message, sender) => {
           copyStores: { [payload.workflowId]: mergedStore },
         })
 
-        const params: Record<string, unknown> = {
-          ...(payload.params ?? {}),
-        }
-        if (payload.selector) params.selector = payload.selector
-        if (payload.fallbacks?.length) params.selectorFallbacks = payload.fallbacks
+        const nodeData = normalizeNodeData(
+          payload.nodeData ?? {
+            actionId: payload.actionId,
+            label: payload.actionId,
+            enabled: true,
+            collapsed: false,
+            favorite: false,
+            params: {
+              ...(payload.params ?? {}),
+              ...(payload.selector ? { selector: payload.selector } : {}),
+              ...(payload.fallbacks?.length
+                ? { selectorFallbacks: payload.fallbacks }
+                : {}),
+            },
+            timeoutMs: payload.timeoutMs ?? 30_000,
+          },
+        )
 
-        const result = await executePlannerAction({
-          actionId: payload.actionId,
-          params,
+        const step = await runEventStep({
+          nodeData,
           variables,
+          temporaryVariables: {},
+          datasets:
+            payload.datasets && payload.datasets.length > 0
+              ? payload.datasets
+              : (plan?.datasets ?? []),
+          history: checkpoint?.history ?? [],
+          workflow,
+          plan,
           activeTabId: checkpoint?.browserState.activeTabId,
-          timeoutMs: payload.timeoutMs ?? 30_000,
           workflowId: payload.workflowId,
-          planId: payload.planId,
+          planId: payload.planId ?? plan?.id,
+          nodeId: payload.nodeId,
+          runId: checkpoint?.runId,
         })
 
-        if (result.variables) {
-          await plannerRunner.mergeVariablesFromTest(payload.workflowId, result.variables)
+        if (payload.persistVariables !== false && step.result.variables && !step.skipped) {
+          // Default false from UI; only merge when explicitly requested
+        }
+        if (payload.persistVariables && step.result.variables) {
+          await plannerRunner.mergeVariablesFromTest(
+            payload.workflowId,
+            step.result.variables,
+          )
         }
 
-        const output =
-          result.output && typeof result.output === 'object'
-            ? (result.output as Record<string, unknown>)
-            : { value: result.output }
+        const result = step.result
+        const ok =
+          step.skipped || result.status === 'success' || result.status === 'waiting'
 
         return {
-          // waiting (e.g. Pause) still means the step ran as designed in Quick Test
-          ok: result.status === 'success' || result.status === 'waiting',
+          ok,
           error: result.error,
+          skipped: step.skipped,
+          dependency: step.dependency,
+          timeline: step.timeline,
+          performance: step.performance,
+          variables: step.variables,
+          browserLogs: step.browserLogs,
+          logs: step.timeline.map(
+            (item) => `${item.phase}${item.detail ? `: ${item.detail}` : ''}`,
+          ),
           result: {
             status: result.status,
             branch: result.branch,
             nextNodeId: result.nextNodeId,
             activeTabId: result.activeTabId,
-            storedAs: output.storedAs,
-            textPreview:
-              typeof output.text === 'string'
-                ? String(output.text).slice(0, 160)
-                : typeof output.matchedText === 'string'
-                  ? String(output.matchedText).slice(0, 160)
-                  : undefined,
-            textLength: typeof output.text === 'string' ? output.text.length : undefined,
-            format: output.format,
-            sourceMode: output.sourceMode,
-            clipboardOk: output.clipboardOk,
-            clipboardError: output.clipboardError,
-            output,
+            output: result.output,
+            error: result.error,
           },
           checkpoint: plannerRunner.getCheckpoint(),
         }

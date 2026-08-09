@@ -211,7 +211,18 @@ function legacySectionToSource(sectionId: string, label: string): MapArraySource
 }
 
 /** Built-ins + Datasets (+ legacy section:* aliases). */
-export function getMapArraySources(ctx: MapArraySourceContext): MapArraySourceDefinition[] {
+export function getMapArraySources(
+  ctx: MapArraySourceContext,
+  options?: { keepSourceId?: string },
+): MapArraySourceDefinition[] {
+  const keep = options?.keepSourceId
+  const builtins = MAP_ARRAY_SOURCES.filter((source) => {
+    // Keep currently selected built-in so existing graphs don't break
+    if (keep && source.id === keep) return true
+    if (source.id === 'textLibrary') return ctx.textLibraries.length > 0
+    if (source.id === 'copyStore') return ctx.copyEntries.length > 0
+    return true
+  })
   const datasetSources = ctx.datasets.map(datasetToSource)
   const datasetIds = new Set(ctx.datasets.map((item) => item.id))
   // Orphan legacy sections not yet in datasets (rare)
@@ -220,7 +231,7 @@ export function getMapArraySources(ctx: MapArraySourceContext): MapArraySourceDe
     .map((section) => legacySectionToSource(section.id, section.title))
 
   // Prefer dataset:* in the dropdown; section:* still resolvable via getMapArraySource
-  return [...MAP_ARRAY_SOURCES, ...datasetSources, ...orphanSections]
+  return [...builtins, ...datasetSources, ...orphanSections]
 }
 
 export function getMapArraySource(
@@ -231,7 +242,9 @@ export function getMapArraySource(
   const builtin = MAP_ARRAY_SOURCES.find((source) => source.id === id)
   if (builtin) return builtin
   if (ctx) {
-    const fromList = getMapArraySources(ctx).find((source) => source.id === id)
+    const fromList = getMapArraySources(ctx, { keepSourceId: id }).find(
+      (source) => source.id === id,
+    )
     if (fromList) return fromList
     // Resolve dataset:/section: even if not in the primary list (aliases)
     const datasetId = parseDatasetSourceId(id) ?? parseCustomSectionSourceId(id)

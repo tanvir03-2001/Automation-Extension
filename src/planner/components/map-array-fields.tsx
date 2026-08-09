@@ -68,7 +68,10 @@ export function MapArrayFields({ workflowId, params, onChange }: MapArrayFieldsP
     ctx?.copyEntries,
   ])
 
-  const sources = useMemo(() => getMapArraySources(syncCtx), [syncCtx])
+  const sources = useMemo(
+    () => getMapArraySources(syncCtx, { keepSourceId: sourceId || undefined }),
+    [syncCtx, sourceId],
+  )
   const source: MapArraySourceDefinition | undefined = getMapArraySource(sourceId, syncCtx)
 
   useEffect(() => {
@@ -202,8 +205,8 @@ export function MapArrayFields({ workflowId, params, onChange }: MapArrayFieldsP
           </p>
           <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
             {bn
-              ? 'সেকশন (Datasets / Text libraries / Copy Store) → লিস্ট → প্রয়োজনে নেস্টেড পাথ। ডেটা ইভেন্টে কপি হয় না — রেফারেন্স।'
-              : 'Section (Datasets / Text libraries / Copy Store) → list → nested path. Events reference data — no copy.'}
+              ? 'সেকশন: আগে Datasets। Text libraries / Copy Store শুধু থাকলে দেখায়। লিস্ট → প্রয়োজনে নেস্টেড পাথ। ডেটা ইভেন্টে কপি হয় না — রেফারেন্স।'
+              : 'Section: prefer Datasets. Text libraries / Copy Store appear only when they have data. Then list → nested path. Events reference data — no copy.'}
           </p>
         </div>
       </div>

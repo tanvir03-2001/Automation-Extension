@@ -2234,6 +2234,87 @@ export async function executeDomCommand(command: AutomationCommand): Promise<Aut
           },
         }
       }
+      case 'dismissOverlays': {
+        const clicked: string[] = []
+        const candidates = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            [
+              '[aria-label="Close"]',
+              '[aria-label="close"]',
+              'button[aria-label*="Close" i]',
+              '[data-testid*="close" i]',
+              '.modal-backdrop',
+              '[class*="overlay" i][class*="open" i]',
+              'div[role="dialog"] button',
+            ].join(','),
+          ),
+        )
+        for (const el of candidates.slice(0, 8)) {
+          if (!isElementVisible(el)) continue
+          const label = (el.getAttribute('aria-label') || el.innerText || '').trim()
+          if (
+            /close|dismiss|got it|accept|agree|no thanks|not now|×|✕/i.test(label) ||
+            el.className.toString().includes('backdrop')
+          ) {
+            try {
+              el.click()
+              clicked.push(label || el.tagName)
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+        // Escape as a soft fallback for modal focus traps
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        )
+        return { ok: true, data: { clicked } }
+      }
+      case 'waitNetworkIdle': {
+        const timeoutMs = command.timeoutMs ?? 15_000
+        const idleMs = Number(command.options?.idleMs ?? 500)
+        const started = Date.now()
+        let lastChange = Date.now()
+        let lastCount = performance.getEntriesByType('resource').length
+        while (Date.now() - started <= timeoutMs) {
+          const count = performance.getEntriesByType('resource').length
+          if (count !== lastCount) {
+            lastCount = count
+            lastChange = Date.now()
+          }
+          if (Date.now() - lastChange >= idleMs && document.readyState === 'complete') {
+            return { ok: true, data: { idleMs, resources: count } }
+          }
+          await new Promise((r) => window.setTimeout(r, 100))
+        }
+        return { ok: false, error: `Network did not go idle within ${timeoutMs}ms` }
+      }
+      case 'waitDomStable': {
+        const timeoutMs = command.timeoutMs ?? 15_000
+        const stableMs = Number(command.options?.stableMs ?? 400)
+        const started = Date.now()
+        let lastMutation = Date.now()
+        const observer = new MutationObserver(() => {
+          lastMutation = Date.now()
+        })
+        observer.observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          characterData: true,
+        })
+        try {
+          while (Date.now() - started <= timeoutMs) {
+            if (Date.now() - lastMutation >= stableMs) {
+              return { ok: true, data: { stableMs } }
+            }
+            await new Promise((r) => window.setTimeout(r, 80))
+          }
+          return { ok: false, error: `DOM did not stabilize within ${timeoutMs}ms` }
+        } finally {
+          observer.disconnect()
+        }
+      }
       default:
         return { ok: false, error: `Unsupported action: ${command.action}` }
     }

@@ -78,6 +78,9 @@ export interface AutomationCommand {
     | 'testSelector'
     | 'writeClipboard'
     | 'readClipboard'
+    | 'dismissOverlays'
+    | 'waitNetworkIdle'
+    | 'waitDomStable'
   selector?: string
   /** Alternative selectors tried if primary fails (text / aria / svg / css path). */
   fallbacks?: string[]

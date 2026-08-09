@@ -20,6 +20,9 @@ import {
 } from '@/planner/engine/map-loop'
 import type { ActionHandlerResult } from '@/planner/actions/types'
 import type { AutomationCommand } from '@/shared/types/messages'
+import type { EventContext } from '@/planner/engine/event-context'
+import { resolveActionAlias } from '@/planner/engine/action-aliases'
+import { getByPath } from '@/planner/engine/path-utils'
 
 async function sendDom(
   tabId: number,
@@ -183,8 +186,14 @@ export async function executePlannerAction(args: {
   workflowId?: string
   nodeId?: string
   planId?: string
+  eventContext?: EventContext
 }): Promise<ActionHandlerResult> {
-  const params = interpolateParams(args.params, args.variables)
+  const alias = resolveActionAlias(args.actionId)
+  const actionId = alias.actionId
+  const params = interpolateParams(
+    { ...alias.paramDefaults, ...args.params },
+    args.variables,
+  )
   const selector = params.selector ? String(params.selector) : undefined
   const fallbacks = Array.isArray(params.selectorFallbacks)
     ? (params.selectorFallbacks as unknown[]).map(String).filter(Boolean)
@@ -195,12 +204,35 @@ export async function executePlannerAction(args: {
           .filter(Boolean)
       : []
   let activeTabId = args.activeTabId
+  const ctx = args.eventContext
+  const interaction =
+    params.__interaction && typeof params.__interaction === 'object'
+      ? (params.__interaction as {
+          scrollIntoView?: boolean
+          dismissOverlays?: boolean
+          waitEnabled?: boolean
+          forceClick?: boolean
+          stabilizeMs?: number
+        })
+      : undefined
 
-  const runDom = (tabId: number, command: AutomationCommand) =>
-    sendDom(tabId, { ...command, fallbacks: command.fallbacks ?? fallbacks })
+  const runDom = async (tabId: number, command: AutomationCommand) => {
+    if (interaction?.dismissOverlays && command.action === 'click') {
+      await sendDom(tabId, { action: 'dismissOverlays', timeoutMs: 2_000 }).catch(() => undefined)
+    }
+    if (interaction?.scrollIntoView !== false && command.selector && command.action === 'click') {
+      await sendDom(tabId, {
+        action: 'scroll',
+        selector: command.selector,
+        timeoutMs: Math.min(args.timeoutMs, 5_000),
+        options: { intoView: true },
+      }).catch(() => undefined)
+    }
+    return sendDom(tabId, { ...command, fallbacks: command.fallbacks ?? fallbacks })
+  }
 
   try {
-    switch (args.actionId) {
+    switch (actionId) {
       case 'flow.start': {
         // Debugger bar ON from Start → stays until End
         const tabId = await runGuardController.beginTrustedDebug(args.activeTabId)
@@ -573,12 +605,14 @@ export async function executePlannerAction(args: {
           workflowId: args.workflowId,
           nodeId: args.nodeId,
           planId: args.planId,
+          variables: args.variables,
+          datasets: ctx?.datasets,
         })
         if (!resolved.text.trim()) {
           throw new Error(
             pasteMode
               ? 'Nothing to paste. Pick a Text library title, or enter manual text on Paste Text.'
-              : 'Nothing to type. Pick a Text library title, or enter manual text on TypeText.',
+              : 'Nothing to type. Pick a dataset path, loop item field, or enter manual text on TypeText.',
           )
         }
 
@@ -1613,20 +1647,244 @@ export async function executePlannerAction(args: {
         return { status: 'success', branch: args.actionId }
       }
 
-      case 'loops.for':
-      case 'loops.while':
-      case 'loops.foreach':
-      case 'loops.continue':
-        // Legacy stubs — unchanged (no Map stack semantics)
-        return { status: 'success', branch: args.actionId }
+      case 'loops.for': {
+        // Counted loop using the same stack + loop/return/completed handles as Map
+        const itemVariable = String(params.itemVariable ?? 'item').trim() || 'item'
+        const indexVariable = String(params.indexVariable ?? 'index').trim() || 'index'
+        const nodeId = args.nodeId
+        if (!nodeId) throw new Error('For loop requires a node id')
+        const count = Math.max(0, Math.floor(Number(params.count ?? params.times ?? 0)))
+        const stack = readMapStack(args.variables)
+        const entryHandle = String(args.variables[MAP_ENTRY_HANDLE_KEY] ?? '')
+        const existingIdx = stack.findIndex((frame) => frame.nodeId === nodeId)
+        const isReturn = entryHandle === 'return' && existingIdx >= 0
+
+        if (!isReturn) {
+          const items = Array.from({ length: count }, (_, i) => i)
+          const nextStack = stack.filter((frame) => frame.nodeId !== nodeId)
+          if (!items.length) {
+            return {
+              status: 'success',
+              branch: 'completed',
+              variables: { [MAP_STACK_KEY]: nextStack },
+              output: { count: 0, branch: 'completed' },
+            }
+          }
+          const frame: MapLoopFrame = {
+            nodeId,
+            items,
+            index: 0,
+            itemVariable,
+            indexVariable,
+            collectionKey: `for:${count}`,
+          }
+          nextStack.push(frame)
+          return {
+            status: 'success',
+            branch: 'loop',
+            variables: {
+              [MAP_STACK_KEY]: nextStack,
+              [itemVariable]: 0,
+              [indexVariable]: 0,
+            },
+            output: { count, index: 0, branch: 'loop' },
+          }
+        }
+
+        const frame = stack[existingIdx]!
+        const nextIndex = frame.index + 1
+        if (nextIndex >= frame.items.length) {
+          const nextStack = stack.filter((_, idx) => idx !== existingIdx)
+          return {
+            status: 'success',
+            branch: 'completed',
+            variables: {
+              [MAP_STACK_KEY]: nextStack,
+              [frame.itemVariable]: undefined,
+              [frame.indexVariable]: undefined,
+            },
+            output: { count: frame.items.length, branch: 'completed' },
+          }
+        }
+        const nextStack = [...stack]
+        nextStack[existingIdx] = { ...frame, index: nextIndex }
+        return {
+          status: 'success',
+          branch: 'loop',
+          variables: {
+            [MAP_STACK_KEY]: nextStack,
+            [frame.itemVariable]: frame.items[nextIndex],
+            [frame.indexVariable]: nextIndex,
+          },
+          output: { index: nextIndex, branch: 'loop' },
+        }
+      }
+
+      case 'loops.while': {
+        const nodeId = args.nodeId
+        if (!nodeId) throw new Error('While loop requires a node id')
+        const left = params.left ?? args.variables[String(params.variable ?? '')]
+        const operator = String(params.operator ?? 'truthy')
+        const right = params.right
+        const ok =
+          operator === 'truthy'
+            ? Boolean(left)
+            : operator === 'falsy'
+              ? !left
+              : evaluateCondition(left, operator, right)
+        const maxIterations = Math.max(1, Number(params.maxIterations ?? 1000))
+        const counts = (args.variables.__whileCounts as Record<string, number> | undefined) ?? {}
+        const current = Number(counts[nodeId] ?? 0)
+        if (!ok || current >= maxIterations) {
+          const nextCounts = { ...counts }
+          delete nextCounts[nodeId]
+          return {
+            status: 'success',
+            branch: 'completed',
+            variables: { __whileCounts: nextCounts },
+            output: { continued: false, iterations: current },
+          }
+        }
+        return {
+          status: 'success',
+          branch: 'loop',
+          variables: { __whileCounts: { ...counts, [nodeId]: current + 1 } },
+          output: { continued: true, iterations: current + 1 },
+        }
+      }
+
+      case 'loops.continue': {
+        // Re-enter innermost Map/For via its return handle (skip rest of body)
+        const stack = readMapStack(args.variables)
+        const frame = stack[stack.length - 1]
+        if (!frame) {
+          return {
+            status: 'success',
+            output: { continue: true, orphan: true },
+          }
+        }
+        return {
+          status: 'success',
+          nextNodeId: frame.nodeId,
+          variables: { [MAP_ENTRY_HANDLE_KEY]: 'return' },
+          output: { continue: true, mapNodeId: frame.nodeId },
+        }
+      }
+
+      case 'variables.get': {
+        const path = String(params.path ?? params.name ?? '').trim()
+        const key = String(params.outputKey ?? path.split('.')[0] ?? 'value')
+        const value = getByPath(args.variables, path)
+        return {
+          status: 'success',
+          variables: { [key]: value },
+          output: { path, value },
+        }
+      }
+
+      case 'datasets.read': {
+        if (!ctx) throw new Error('datasets.read requires EventContext')
+        const ref = String(params.dataset ?? params.name ?? '').trim()
+        const path = String(params.path ?? '').trim()
+        const key = String(params.outputKey ?? 'datasetValue')
+        const value = ctx.getDataset(ref, path)
+        ctx.setVar(key, value)
+        return {
+          status: 'success',
+          variables: { [key]: value },
+          output: { dataset: ref, path, value },
+        }
+      }
+
+      case 'datasets.write': {
+        if (!ctx) throw new Error('datasets.write requires EventContext')
+        const ref = String(params.dataset ?? params.name ?? '').trim()
+        let data: unknown = params.data
+        if (typeof data === 'string') {
+          try {
+            data = JSON.parse(data)
+          } catch {
+            /* keep string */
+          }
+        }
+        ctx.setDataset(ref, data)
+        return {
+          status: 'success',
+          output: { dataset: ref, written: true },
+        }
+      }
+
+      case 'datasets.update_path': {
+        if (!ctx) throw new Error('datasets.update_path requires EventContext')
+        const ref = String(params.dataset ?? params.name ?? '').trim()
+        const path = String(params.path ?? '').trim()
+        if (!path) throw new Error('path is required')
+        let value: unknown = params.value
+        if (typeof value === 'string') {
+          try {
+            value = JSON.parse(value)
+          } catch {
+            /* keep string */
+          }
+        }
+        ctx.updateDatasetPath(ref, path, value)
+        return {
+          status: 'success',
+          output: { dataset: ref, path, value },
+        }
+      }
+
+      case 'wait.network_idle': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'waitNetworkIdle',
+          timeoutMs: args.timeoutMs,
+          options: { idleMs: Number(params.idleMs ?? 500) },
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'wait.dom_stable': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'waitDomStable',
+          timeoutMs: args.timeoutMs,
+          options: { stableMs: Number(params.stableMs ?? 400) },
+        })
+        if (!result.ok) {
+          const err = new Error(result.error)
+          err.name = 'TimeoutError'
+          throw err
+        }
+        return { status: 'success', activeTabId, output: result.data }
+      }
+
+      case 'element.dismiss_overlay': {
+        activeTabId = await ensureTab(activeTabId)
+        const result = await runDom(activeTabId, {
+          action: 'dismissOverlays',
+          timeoutMs: args.timeoutMs,
+        })
+        if (!result.ok) throw new Error(result.error)
+        return { status: 'success', activeTabId, output: result.data }
+      }
 
       default:
         await activityLog.append(
-          'warn',
+          'error',
           'Planner',
-          `Action registered but executor stub: ${args.actionId}`,
+          `Unknown action (no handler): ${actionId}`,
         )
-        return { status: 'success', output: { stub: true, actionId: args.actionId } }
+        return {
+          status: 'failed',
+          error: `Unknown action: ${actionId}`,
+          activeTabId,
+        }
     }
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error))

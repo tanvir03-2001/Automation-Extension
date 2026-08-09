@@ -3,7 +3,6 @@ import { storageGet, storageSet } from '@/shared/storage/chrome-storage'
 import { activityLog } from '@/engine/activity/activity-log'
 import { sleep } from '@/engine/retry/retry-policy'
 import { runGuardController } from '@/background/run-guard-controller'
-import { executePlannerAction } from '@/planner/engine/action-executor'
 import { resetWorkflowQueueCursors } from '@/planner/engine/text-library'
 import { copyStore } from '@/engine/copy-store'
 import { loadDurableWorkflowStore } from '@/engine/copy-store/durable'
@@ -13,8 +12,12 @@ import {
   MAP_STACK_KEY,
   readMapStack,
 } from '@/planner/engine/map-loop'
+import { runEventStep } from '@/planner/engine/run-event-step'
+import { normalizeNodeData } from '@/planner/engine/normalize-node-data'
 import type {
+  AutomationPlan,
   ExecutionCheckpoint,
+  PlanDataset,
   PlannerEdge,
   PlannerNode,
   StepExecutionStatus,
@@ -295,33 +298,46 @@ export class PlannerRunner {
         this.checkpoint.status = 'running'
         await this.persist()
 
-        const policy = node.data.errorPolicy
+        const nodeData = normalizeNodeData(node.data)
+        const policy = nodeData.errorPolicy
+        const plan = await this.loadPlan(this.checkpoint.planId)
+        const datasets = plan?.datasets ?? []
         let attempt = 0
-        let resultStatus: StepExecutionStatus = 'failed'
         let done = false
 
         while (!done) {
           attempt += 1
           this.checkpoint.retryCount = attempt
-          const result = await executePlannerAction({
-            actionId: node.data.actionId,
-            params: {
-              ...node.data.params,
-              selector: node.data.selector?.primary || node.data.params.selector,
-              selectorFallbacks:
-                node.data.selector?.fallbacks ?? node.data.params.selectorFallbacks,
-            },
+
+          const step = await runEventStep({
+            nodeData,
             variables: {
               ...this.checkpoint.variables,
-              ...this.checkpoint.temporaryVariables,
               __workflowId: this.checkpoint.workflowId,
             },
+            temporaryVariables: this.checkpoint.temporaryVariables,
+            datasets,
+            history: this.checkpoint.history,
+            workflow,
+            plan,
             activeTabId: this.checkpoint.browserState.activeTabId,
-            timeoutMs: node.data.timeoutMs,
             workflowId: this.checkpoint.workflowId,
             nodeId: node.id,
             planId: this.checkpoint.planId,
+            runId: this.checkpoint.runId,
           })
+
+          if (step.skipped) {
+            this.pushHistory(node.id, 'skipped', undefined, {
+              dependency: step.dependency,
+              reason: 'runWhen not satisfied',
+            })
+            this.advance(workflow, node.id)
+            done = true
+            break
+          }
+
+          const result = step.result
 
           if (result.activeTabId !== undefined) {
             this.checkpoint.browserState.activeTabId = result.activeTabId
@@ -331,6 +347,10 @@ export class PlannerRunner {
           }
           if (result.variables) {
             for (const [key, value] of Object.entries(result.variables)) {
+              if (key === MAP_ENTRY_HANDLE_KEY) {
+                this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY] = value
+                continue
+              }
               if (value === undefined) {
                 delete this.checkpoint.variables[key]
               } else {
@@ -338,17 +358,18 @@ export class PlannerRunner {
               }
             }
           }
+          if (step.dirtyDatasets.length && plan) {
+            await this.persistDatasets(plan.id, step.datasets)
+          }
 
-          if (result.status === 'waiting' || node.data.actionId === 'flow.pause') {
-            this.pushHistory(node.id, 'waiting')
+          if (result.status === 'waiting' || nodeData.actionId === 'flow.pause') {
+            this.pushHistory(node.id, 'waiting', undefined, result.output)
             this.checkpoint.status = 'paused'
             await this.persist()
             return
           }
 
           if (result.status === 'success') {
-            resultStatus = 'success'
-
             if (result.branch === 'execute_plan' && result.output) {
               const handoffError = await this.handoffToPlan(
                 workflow,
@@ -360,7 +381,7 @@ export class PlannerRunner {
                 this.checkpoint.status = 'failed'
                 await activityLog.append('error', 'PlannerRunner', handoffError, {
                   nodeId: node.id,
-                  actionId: node.data.actionId,
+                  actionId: nodeData.actionId,
                 })
                 await this.persist()
                 return
@@ -370,7 +391,6 @@ export class PlannerRunner {
               break
             }
 
-            // Map Break: leave innermost Map immediately via its “completed” edge
             if (result.branch === MAP_BREAK_BRANCH) {
               this.pushHistory(node.id, 'success', undefined, result.output)
               const stack = readMapStack(this.checkpoint.variables)
@@ -396,7 +416,12 @@ export class PlannerRunner {
 
             this.pushHistory(node.id, 'success', undefined, result.output)
 
-            if (node.data.actionId === 'loops.map' && result.branch === 'loop') {
+            if (
+              (nodeData.actionId === 'loops.map' ||
+                nodeData.actionId === 'loops.foreach' ||
+                nodeData.actionId === 'loops.for') &&
+              result.branch === 'loop'
+            ) {
               const idx = Number((result.output as { index?: number } | undefined)?.index)
               this.checkpoint.loopCounts[node.id] = Number.isFinite(idx) ? idx + 1 : 1
             }
@@ -422,14 +447,16 @@ export class PlannerRunner {
                 await this.persist()
                 return
               }
-              delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
+              // Preserve continue → Map return handle if set by the action
+              if (this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY] == null) {
+                delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
+              }
               this.checkpoint.previousNodeId = node.id
               this.checkpoint.currentNodeId = resolved
             } else if (result.branch === 'nested' && result.output) {
               const nestedId = String((result.output as { nestedWorkflowId?: string }).nestedWorkflowId)
               const nested = this.workflows.get(nestedId)
               if (!nested) throw new Error(`Nested workflow missing: ${nestedId}`)
-              // Save return pointer then jump into nested start
               this.checkpoint.temporaryVariables.__returnWorkflowId = workflow.id
               this.checkpoint.temporaryVariables.__returnNodeId = outgoing(workflow.edges, node.id)[0]?.target
               delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
@@ -450,16 +477,17 @@ export class PlannerRunner {
             (policy?.strategy === 'retry' && attempt < (policy.maxRetries ?? 3))
 
           if (canRetry) {
-            resultStatus = 'retrying'
-            this.pushHistory(node.id, 'retrying', result.error)
+            this.pushHistory(node.id, 'retrying', result.error, {
+              attempt,
+              timeline: step.timeline,
+            })
             await this.persist()
             await sleep(policy?.retryDelayMs ?? 1000)
             continue
           }
 
           if (policy?.strategy === 'ignore') {
-            resultStatus = 'failed'
-            this.pushHistory(node.id, 'failed', result.error)
+            this.pushHistory(node.id, 'failed', result.error, result.output)
             this.advance(workflow, node.id)
             done = true
             break
@@ -473,12 +501,65 @@ export class PlannerRunner {
             break
           }
 
-          resultStatus = result.status === 'timeout' ? 'timeout' : 'failed'
-          this.pushHistory(node.id, resultStatus, result.error)
+          if (
+            (policy?.strategy === 'run_workflow' || policy?.strategy === 'recovery_workflow') &&
+            policy.workflowId
+          ) {
+            this.pushHistory(node.id, 'failed', result.error, {
+              recovery: policy.strategy,
+              workflowId: policy.workflowId,
+            })
+            this.checkpoint.temporaryVariables.__returnWorkflowId = workflow.id
+            this.checkpoint.temporaryVariables.__returnNodeId =
+              outgoing(workflow.edges, node.id)[0]?.target
+            const recovery = this.workflows.get(policy.workflowId)
+            if (!recovery) {
+              this.checkpoint.status = 'failed'
+              await this.persist()
+              return
+            }
+            this.checkpoint.workflowId = recovery.id
+            this.checkpoint.currentNodeId = findStart(recovery.nodes)?.id ?? null
+            done = true
+            break
+          }
+
+          if (policy?.strategy === 'notify' || policy?.strategy === 'log') {
+            await activityLog.append(
+              'error',
+              'PlannerRunner',
+              policy.notifyMessage || result.error || 'Step failed',
+              { nodeId: node.id, actionId: nodeData.actionId },
+            )
+            this.pushHistory(node.id, 'failed', result.error)
+            this.advance(workflow, node.id)
+            done = true
+            break
+          }
+
+          if (policy?.strategy === 'screenshot') {
+            await activityLog.append(
+              'info',
+              'PlannerRunner',
+              `Screenshot fallback after failure: ${result.error ?? ''}`,
+              { nodeId: node.id },
+            )
+            this.pushHistory(node.id, 'failed', result.error, { screenshot: true })
+            this.advance(workflow, node.id)
+            done = true
+            break
+          }
+
+          const resultStatus: StepExecutionStatus =
+            result.status === 'timeout' ? 'timeout' : 'failed'
+          this.pushHistory(node.id, resultStatus, result.error, {
+            timeline: step.timeline,
+            performance: step.performance,
+          })
           this.checkpoint.status = 'failed'
           await activityLog.append('error', 'PlannerRunner', result.error ?? 'Step failed', {
             nodeId: node.id,
-            actionId: node.data.actionId,
+            actionId: nodeData.actionId,
           })
           await this.persist()
           return
@@ -610,6 +691,39 @@ export class PlannerRunner {
       delete this.checkpoint.temporaryVariables.__returnNodeId
       delete this.checkpoint.temporaryVariables[MAP_ENTRY_HANDLE_KEY]
     }
+  }
+
+  private async loadPlan(planId: string): Promise<AutomationPlan | null> {
+    const workspace = await storageGet<{ plans?: AutomationPlan[] }>('planner-workspace', {
+      plans: [],
+    })
+    return workspace.plans?.find((plan) => plan.id === planId) ?? null
+  }
+
+  /** Persist dataset mutations from event handlers back into planner-workspace. */
+  private async persistDatasets(planId: string, datasets: PlanDataset[]): Promise<void> {
+    const workspace = await storageGet<{
+      plans?: AutomationPlan[]
+      workflows?: VisualWorkflow[]
+      favorites?: string[]
+      theme?: 'light' | 'dark'
+      locale?: 'en' | 'bn'
+      updatedAt?: string
+    }>('planner-workspace', { plans: [], workflows: [] })
+    const plans = (workspace.plans ?? []).map((plan) =>
+      plan.id !== planId
+        ? plan
+        : {
+            ...plan,
+            datasets,
+            updatedAt: new Date().toISOString(),
+          },
+    )
+    await storageSet('planner-workspace', {
+      ...workspace,
+      plans,
+      updatedAt: new Date().toISOString(),
+    })
   }
 
   private pushHistory(

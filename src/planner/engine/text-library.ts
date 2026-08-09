@@ -1,7 +1,21 @@
 import { storageGet, storageSet } from '@/shared/storage/chrome-storage'
-import type { AutomationPlan, PlanTextItem, PlanTextLibrary } from '@/planner/types/plan'
+import { getJsonAtPath } from '@/planner/engine/custom-section-paths'
+import { extractTextItems } from '@/planner/engine/dataset-utils'
+import { getByPath } from '@/planner/engine/path-utils'
+import type {
+  AutomationPlan,
+  PlanDataset,
+  PlanTextItem,
+  PlanTextLibrary,
+} from '@/planner/types/plan'
 
-export type TextSourceMode = 'manual' | 'library' | 'json_label' | 'json_queue'
+export type TextSourceMode =
+  | 'manual'
+  | 'library'
+  | 'dataset'
+  | 'loop_item'
+  | 'json_label'
+  | 'json_queue'
 
 export type ResolvedTypeText = {
   text: string
@@ -134,6 +148,230 @@ export async function loadPlanTextLibraries(planId?: string): Promise<PlanTextLi
   return plan?.textLibraries ?? []
 }
 
+async function loadPlanDatasetsForText(planId?: string): Promise<PlanDataset[]> {
+  if (!planId) return []
+  const workspace = await storageGet<{ plans?: AutomationPlan[] }>('planner-workspace', {
+    plans: [],
+  })
+  const plan = (workspace.plans ?? []).find((item) => item.id === planId)
+  return plan?.datasets ?? []
+}
+
+function stringifyLeaf(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
+function isPrimitiveLeaf(value: unknown): boolean {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+}
+
+/** Coerce array elements into queueable title strings. */
+function arrayToQueueTexts(value: unknown[]): string[] {
+  return value
+    .map((item) => {
+      if (typeof item === 'string') return item
+      if (typeof item === 'number' || typeof item === 'boolean') return String(item)
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const record = item as Record<string, unknown>
+        if (typeof record.title === 'string') return record.title
+        if (typeof record.text === 'string') return record.text
+        if (typeof record.name === 'string') return record.name
+      }
+      return ''
+    })
+    .filter((item) => item.length > 0)
+}
+
+async function resolveQueuedStrings(args: {
+  items: string[]
+  queueKey: string
+  metaPrefix: string
+  workflowId?: string
+  nodeId?: string
+  wrap: boolean
+  template?: string
+  libraries?: PlanTextLibrary[]
+  library?: PlanTextLibrary
+}): Promise<ResolvedTypeText> {
+  const { items, queueKey, metaPrefix, wrap } = args
+  if (!items.length) {
+    throw new Error('No text values found at the selected path.')
+  }
+
+  const asItem = (text: string, index: number): PlanTextItem => ({
+    id: `${queueKey}:${index}`,
+    title: text,
+    text,
+  })
+
+  const finish = (text: string, index: number, total: number, hasMore: boolean) => {
+    let out = text
+    if (args.template && args.libraries && args.library) {
+      out = applyTextTemplate(args.template, {
+        libraries: args.libraries,
+        currentLibrary: args.library,
+        currentItem: asItem(text, index),
+      })
+    }
+    return {
+      text: out,
+      meta: `${metaPrefix}:${index + 1}/${total}`,
+      hasMore,
+      index,
+      total,
+    } satisfies ResolvedTypeText
+  }
+
+  if (items.length === 1) {
+    return finish(items[0]!, 0, 1, false)
+  }
+
+  if (!args.workflowId || !args.nodeId) {
+    return finish(items[0]!, 0, items.length, items.length > 1)
+  }
+
+  const current = await getQueueCursor(args.workflowId, args.nodeId, queueKey)
+  if (!wrap && current >= items.length) {
+    throw new Error(`Text queue finished (${items.length} values). Run again to restart.`)
+  }
+  const index = wrap ? current % items.length : current
+  await setQueueCursor(args.workflowId, args.nodeId, queueKey, current + 1)
+  const hasMore = wrap ? items.length > 1 : index + 1 < items.length
+  return finish(items[index]!, index, items.length, hasMore)
+}
+
+async function resolveDatasetText(args: {
+  params: Record<string, unknown>
+  workflowId?: string
+  nodeId?: string
+  planId?: string
+  datasets?: PlanDataset[]
+}): Promise<ResolvedTypeText> {
+  // Prefer live EventContext / caller datasets; storage only when not provided
+  let datasets = args.datasets
+  if (datasets === undefined) {
+    datasets = await loadPlanDatasetsForText(
+      args.planId ?? String(args.params.planId ?? ''),
+    )
+  }
+  const datasetId = String(args.params.textDatasetId ?? '').trim()
+  if (!datasetId) {
+    throw new Error('Select a dataset for this TypeText step.')
+  }
+  let dataset = datasets.find((item) => item.id === datasetId || item.name === datasetId)
+  // Live list may be stale/empty while storage already has the dataset
+  if (!dataset && args.datasets !== undefined) {
+    const fromStorage = await loadPlanDatasetsForText(
+      args.planId ?? String(args.params.planId ?? ''),
+    )
+    dataset = fromStorage.find((item) => item.id === datasetId || item.name === datasetId)
+  }
+  if (!dataset) {
+    throw new Error(
+      `Dataset "${datasetId}" not found. Create it in Workflow Planner → Datasets.`,
+    )
+  }
+
+  const dataPath = String(args.params.textDataPath ?? '').trim()
+  let value: unknown =
+    !dataPath || dataPath === '$' ? dataset.data : getJsonAtPath(dataset.data, dataPath)
+
+  // textLibrary shortcut: path at items → queue titles
+  if (
+    dataset.kind === 'textLibrary' &&
+    (!dataPath || dataPath === '$' || dataPath === 'items')
+  ) {
+    const titles = extractTextItems(dataset.data).map((item) => item.title)
+    return resolveQueuedStrings({
+      items: titles,
+      queueKey: `ds:${dataset.id}:${dataPath || 'items'}`,
+      metaPrefix: `dataset:${dataset.name}`,
+      workflowId: args.workflowId,
+      nodeId: args.nodeId,
+      wrap: args.params.queueWrap === true,
+    })
+  }
+
+  if (isPrimitiveLeaf(value)) {
+    return {
+      text: stringifyLeaf(value),
+      meta: `dataset:${dataset.name}${dataPath ? `:${dataPath}` : ''}`,
+      hasMore: false,
+      index: 0,
+      total: 1,
+    }
+  }
+
+  if (Array.isArray(value)) {
+    const items = arrayToQueueTexts(value)
+    return resolveQueuedStrings({
+      items,
+      queueKey: `ds:${dataset.id}:${dataPath || '$'}`,
+      metaPrefix: `dataset:${dataset.name}`,
+      workflowId: args.workflowId,
+      nodeId: args.nodeId,
+      wrap: args.params.queueWrap === true,
+    })
+  }
+
+  throw new Error(
+    `Dataset path "${dataPath || '(root)'}" is not a text value. Pick a leaf key (string, number, or boolean), or an array of titles.`,
+  )
+}
+
+function resolveLoopItemText(args: {
+  params: Record<string, unknown>
+  variables?: Record<string, unknown>
+}): ResolvedTypeText {
+  const variables = args.variables ?? {}
+  const itemVariable =
+    String(args.params.textItemVariable ?? args.params.itemVariable ?? 'item').trim() ||
+    'item'
+  if (!(itemVariable in variables)) {
+    throw new Error(
+      `Loop item "{{${itemVariable}}}" is not available. Place this TypeText inside a Map/For loop body, or switch Source to Dataset.`,
+    )
+  }
+  const root = variables[itemVariable]
+  const itemPath = String(args.params.textItemPath ?? '').trim()
+  const value = itemPath ? getByPath(root, itemPath) : root
+
+  if (isPrimitiveLeaf(value)) {
+    return {
+      text: stringifyLeaf(value),
+      meta: `loop:${itemVariable}${itemPath ? `.${itemPath}` : ''}`,
+      hasMore: false,
+      index: 0,
+      total: 1,
+    }
+  }
+
+  if (Array.isArray(value)) {
+    const texts = arrayToQueueTexts(value)
+    if (texts.length === 1) {
+      return {
+        text: texts[0]!,
+        meta: `loop:${itemVariable}${itemPath ? `.${itemPath}` : ''}`,
+        hasMore: false,
+        index: 0,
+        total: 1,
+      }
+    }
+  }
+
+  throw new Error(
+    `Loop item path "{{${itemVariable}}${itemPath ? `.${itemPath}` : ''}}" is not a text value. Pick a leaf field on the current item.`,
+  )
+}
+
 /** Resolve the text to type for a TypeText step */
 export async function resolveTypeText(args: {
   params: Record<string, unknown>
@@ -141,6 +379,8 @@ export async function resolveTypeText(args: {
   nodeId?: string
   planId?: string
   libraries?: PlanTextLibrary[]
+  datasets?: PlanDataset[]
+  variables?: Record<string, unknown>
 }): Promise<ResolvedTypeText> {
   const mode = String(args.params.textMode ?? 'manual') as TextSourceMode
 
@@ -151,6 +391,14 @@ export async function resolveTypeText(args: {
       index: 0,
       total: 1,
     }
+  }
+
+  if (mode === 'dataset') {
+    return resolveDatasetText(args)
+  }
+
+  if (mode === 'loop_item') {
+    return resolveLoopItemText(args)
   }
 
   if (mode === 'library') {

@@ -6,9 +6,12 @@ import {
   libraryPlaceholder,
   resetQueueCursor,
 } from '@/planner/engine/text-library'
+import { resolveLoopScope } from '@/planner/engine/loop-scope'
+import { JsonPathPicker, previewJsonPath } from '@/planner/components/json-path-picker'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/shared/utils/cn'
+import { useT } from '@/shared/i18n/use-t'
 
 interface TypeTextFieldsProps {
   workflowId: string
@@ -26,16 +29,31 @@ export function TypeTextFields({
   onChange,
   variant = 'type',
 }: TypeTextFieldsProps) {
+  const t = useT()
   const isPaste = variant === 'paste'
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
   const plan = usePlannerStore((s) => s.plans.find((item) => item.id === workflow?.planId))
   const setBuilderOpen = usePlannerStore((s) => s.setBuilderOpen)
 
+  const scope = useMemo(
+    () => (workflow ? resolveLoopScope(workflow, nodeId, plan) : { kind: 'outside' as const }),
+    [workflow, nodeId, plan],
+  )
+  const insideLoop = scope.kind === 'body'
+  const loopFrame = insideLoop ? scope.stack[scope.stack.length - 1] : undefined
+
   const libraries = plan?.textLibraries ?? []
+  const datasets = plan?.datasets ?? []
   const mode = String(params.textMode ?? 'manual')
   const libraryId = String(params.textLibraryId ?? '')
   const selectedLibrary = libraries.find((lib) => lib.id === libraryId) ?? null
   const textTemplate = String(params.textTemplate ?? '')
+  const datasetId = String(params.textDatasetId ?? '')
+  const selectedDataset = datasets.find((ds) => ds.id === datasetId || ds.name === datasetId) ?? null
+  const dataPath = String(params.textDataPath ?? '')
+  const itemVariable =
+    String(params.textItemVariable ?? loopFrame?.itemVariable ?? 'item').trim() || 'item'
+  const itemPath = String(params.textItemPath ?? '')
 
   const selectedIds = useMemo(() => {
     const raw = params.textItemIds
@@ -103,6 +121,19 @@ export function TypeTextFields({
     })
   }, [selectedLibrary, nextTitle, textTemplate, libraries])
 
+  const datasetPreview = useMemo(() => {
+    if (!selectedDataset) return ''
+    return previewJsonPath(selectedDataset.data, dataPath)
+  }, [selectedDataset, dataPath])
+
+  const loopPreview = useMemo(() => {
+    if (!loopFrame) return ''
+    const sample = loopFrame.sampleItem
+    if (sample === undefined) return `{{${itemVariable}${itemPath ? `.${itemPath}` : ''}}}`
+    const value = previewJsonPath(sample, itemPath)
+    return value || `{{${itemVariable}${itemPath ? `.${itemPath}` : ''}}}`
+  }, [loopFrame, itemVariable, itemPath])
+
   function toggleItem(id: string) {
     if (!selectedLibrary) return
     const next = new Set(selectedIds)
@@ -122,90 +153,315 @@ export function TypeTextFields({
     onChange({ textItemIds: [] })
   }
 
+  const sourceSelectValue =
+    mode === 'json_label' || mode === 'json_queue' ? 'manual' : mode
+  const showLibraryOption = mode === 'library'
+
   return (
     <div className="min-w-0 space-y-4 rounded-2xl border border-border bg-muted/30 p-3">
       <div>
         <p className="text-xs font-semibold text-foreground">
-          {isPaste ? 'Text to paste' : 'Text to type'}
+          {isPaste ? t('typeText.pasteTitle') : t('typeText.typeTitle')}
         </p>
         <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          {isPaste ? (
-            <>
-              TypeText-এর মতোই — library +{' '}
-              <code className="rounded bg-background px-1">{'{_Story Title}'}</code> template — কিন্তু
-              পুরো টেক্সট একবারে paste হবে (typing নয়)।
-            </>
-          ) : (
-            <>
-              Manual লিখুন, অথবা text library থেকে title বেছে নিয়ে prompt template-এ{' '}
-              <code className="rounded bg-background px-1">{'{_Story Title}'}</code> বসান।
-            </>
-          )}
+          {insideLoop
+            ? t('typeText.helpInsideLoop')
+            : isPaste
+              ? t('typeText.helpPaste')
+              : t('typeText.helpOutside')}
         </p>
+        {insideLoop && loopFrame ? (
+          <p className="mt-1.5 rounded-lg bg-primary/10 px-2 py-1 text-[11px] text-foreground">
+            {t('typeText.insideMap', { name: loopFrame.label })}
+          </p>
+        ) : null}
+        {scope.kind === 'completed' ? (
+          <p className="mt-1.5 rounded-lg bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+            {t('typeText.onCompleted', { name: scope.label })}
+          </p>
+        ) : null}
       </div>
 
       <label className="block space-y-1.5">
-        <span className="text-xs font-semibold text-foreground">Source</span>
+        <span className="text-xs font-semibold text-foreground">{t('typeText.source')}</span>
         <select
           className="h-9 w-full rounded-xl border border-input bg-background px-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
-          value={mode === 'json_label' || mode === 'json_queue' ? 'manual' : mode}
-          onChange={(event) =>
-            onChange({
-              textMode: event.target.value,
-              ...(event.target.value === 'library' && libraries[0]
-                ? {
-                    textLibraryId: libraryId || libraries[0].id,
-                    textItemIds: params.textItemIds ?? 'all',
-                    textTemplate:
-                      textTemplate ||
-                      `writing a story about ${libraryPlaceholder(libraries[0].name)} — make it a long 20 minute story`,
-                  }
-                : {}),
-            })
-          }
+          value={sourceSelectValue}
+          onChange={(event) => {
+            const next = event.target.value
+            if (next === 'manual') {
+              onChange({ textMode: 'manual' })
+              return
+            }
+            if (next === 'dataset') {
+              onChange({
+                textMode: 'dataset',
+                textDatasetId: datasetId || datasets[0]?.id || '',
+                textDataPath: dataPath,
+              })
+              return
+            }
+            if (next === 'loop_item') {
+              onChange({
+                textMode: 'loop_item',
+                textItemVariable: loopFrame?.itemVariable ?? 'item',
+                textItemPath: itemPath,
+              })
+              return
+            }
+            if (next === 'library') {
+              onChange({
+                textMode: 'library',
+                textLibraryId: libraryId || libraries[0]?.id || '',
+                textItemIds: params.textItemIds ?? 'all',
+                textTemplate:
+                  textTemplate ||
+                  (libraries[0]
+                    ? `writing a story about ${libraryPlaceholder(libraries[0].name)} — make it a long 20 minute story`
+                    : ''),
+              })
+            }
+          }}
         >
-          <option value="manual">Manual text</option>
-          <option value="library">Text library (pick titles)</option>
+          <option value="manual">{t('typeText.sourceManual')}</option>
+          {insideLoop ? (
+            <option value="loop_item">{t('typeText.sourceLoopItem')}</option>
+          ) : (
+            <option value="dataset">{t('typeText.sourceDataset')}</option>
+          )}
+          {/* Keep current mode selectable if scope moved (legacy / edge cases) */}
+          {mode === 'dataset' && insideLoop ? (
+            <option value="dataset">{t('typeText.sourceDataset')}</option>
+          ) : null}
+          {mode === 'loop_item' && !insideLoop ? (
+            <option value="loop_item">{t('typeText.sourceLoopItem')}</option>
+          ) : null}
+          {showLibraryOption ? (
+            <option value="library">{t('typeText.sourceLibraryLegacy')}</option>
+          ) : null}
         </select>
       </label>
 
       {mode === 'manual' || mode === 'json_label' || mode === 'json_queue' ? (
         mode === 'manual' ? (
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-foreground">Text</span>
+            <span className="text-xs font-semibold text-foreground">{t('typeText.text')}</span>
             <textarea
               className="min-h-24 w-full max-w-full resize-y break-words rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
               value={String(params.text ?? '')}
-              placeholder={isPaste ? 'What should be pasted…' : 'What should be typed…'}
+              placeholder={isPaste ? t('typeText.placeholderPaste') : t('typeText.placeholderType')}
               onChange={(event) => onChange({ text: event.target.value })}
             />
           </label>
         ) : (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-foreground">
-            Old JSON mode detected. Switch Source to <strong>Text library</strong> and pick a list
-            from Workflow Planner.
+            {t('typeText.legacyJson')}
             <Button
               size="sm"
               variant="outline"
               className="mt-2 w-full rounded-xl"
               onClick={() =>
-                onChange({
-                  textMode: 'library',
-                  textLibraryId: libraries[0]?.id ?? '',
-                  textItemIds: 'all',
-                })
+                onChange(
+                  insideLoop
+                    ? {
+                        textMode: 'loop_item',
+                        textItemVariable: loopFrame?.itemVariable ?? 'item',
+                      }
+                    : {
+                        textMode: 'dataset',
+                        textDatasetId: datasets[0]?.id ?? '',
+                      },
+                )
               }
             >
-              Switch to text library
+              {insideLoop ? t('typeText.switchLoopItem') : t('typeText.switchDataset')}
             </Button>
           </div>
         )
       ) : null}
 
+      {mode === 'dataset' ? (
+        <div className="space-y-3">
+          <label className="block space-y-1.5">
+            <span className="text-xs font-semibold text-foreground">{t('typeText.dataset')}</span>
+            <select
+              className="h-9 w-full rounded-xl border border-input bg-background px-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
+              value={datasetId}
+              onChange={(event) =>
+                onChange({ textDatasetId: event.target.value, textDataPath: '' })
+              }
+            >
+              <option value="">{t('typeText.chooseDataset')}</option>
+              {datasets.map((dataset) => (
+                <option key={dataset.id} value={dataset.id}>
+                  {dataset.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {!datasets.length ? (
+            <div className="rounded-xl border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
+              {t('typeText.noDatasets')}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2 w-full rounded-xl"
+                onClick={() => setBuilderOpen(false)}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                {t('typeText.openDatasets')}
+              </Button>
+            </div>
+          ) : null}
+
+          {selectedDataset ? (
+            <>
+              <JsonPathPicker
+                root={selectedDataset.data}
+                path={dataPath}
+                rootLabel={selectedDataset.name}
+                onChange={(nextPath) => onChange({ textDataPath: nextPath })}
+              />
+              {datasetPreview ? (
+                <div className="rounded-xl border border-border bg-background px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">
+                      {isPaste ? t('typeText.willPaste') : t('typeText.willType')}
+                    </span>{' '}
+                    {datasetPreview}
+                  </p>
+                </div>
+              ) : null}
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[hsl(var(--primary))]"
+                  checked={params.queueWrap === true}
+                  onChange={(event) => onChange({ queueWrap: event.target.checked })}
+                />
+                {t('typeText.queueWrap')}
+              </label>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {mode === 'loop_item' && !insideLoop ? (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-foreground">
+          {t('typeText.loopItemOutside')}
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 w-full rounded-xl"
+            onClick={() =>
+              onChange({
+                textMode: 'dataset',
+                textDatasetId: datasets[0]?.id ?? '',
+              })
+            }
+          >
+            {t('typeText.switchDataset')}
+          </Button>
+        </div>
+      ) : null}
+
+      {mode === 'loop_item' && insideLoop && loopFrame ? (
+        <div className="space-y-3">
+          {scope.stack.length > 1 ? (
+            <label className="block space-y-1.5">
+              <span className="text-xs font-semibold text-foreground">
+                {t('typeText.loopVariable')}
+              </span>
+              <select
+                className="h-9 w-full rounded-xl border border-input bg-background px-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
+                value={itemVariable}
+                onChange={(event) =>
+                  onChange({
+                    textItemVariable: event.target.value,
+                    textItemPath: '',
+                  })
+                }
+              >
+                {scope.stack.map((frame) => (
+                  <option key={frame.loopNodeId} value={frame.itemVariable}>
+                    {frame.label} → {`{{${frame.itemVariable}}}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              {t('typeText.bindItem', { name: `{{${itemVariable}}}` })}
+            </p>
+          )}
+
+          {(() => {
+            const frame =
+              scope.stack.find((item) => item.itemVariable === itemVariable) ?? loopFrame
+            const sample = frame.sampleItem
+            if (sample === undefined) {
+              return (
+                <p className="rounded-xl border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+                  {t('typeText.noSampleItem')}
+                </p>
+              )
+            }
+            return (
+              <JsonPathPicker
+                root={sample}
+                path={itemPath}
+                rootLabel={`{{${itemVariable}}}`}
+                onChange={(nextPath) =>
+                  onChange({
+                    textItemVariable: itemVariable,
+                    textItemPath: nextPath,
+                  })
+                }
+              />
+            )
+          })()}
+
+          {loopPreview ? (
+            <div className="rounded-xl border border-border bg-background px-3 py-2">
+              <p className="text-[11px] text-muted-foreground">
+                <span className="font-semibold text-foreground">
+                  {isPaste ? t('typeText.willPaste') : t('typeText.willType')}
+                </span>{' '}
+                {loopPreview}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Inside loop but still on dataset/library — nudge */}
+      {insideLoop && (mode === 'dataset' || mode === 'library') ? (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-foreground">
+          {t('typeText.insideLoopHint')}
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 w-full rounded-xl"
+            onClick={() =>
+              onChange({
+                textMode: 'loop_item',
+                textItemVariable: loopFrame?.itemVariable ?? 'item',
+                textItemPath: '',
+              })
+            }
+          >
+            {t('typeText.switchLoopItem')}
+          </Button>
+        </div>
+      ) : null}
+
       {mode === 'library' ? (
         <>
           <label className="block space-y-1.5">
-            <span className="text-xs font-semibold text-foreground">Library</span>
+            <span className="text-xs font-semibold text-foreground">
+              {t('typeText.sourceLibraryLegacy')}
+            </span>
             <select
               className="h-9 w-full rounded-xl border border-input bg-background px-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
               value={libraryId}
@@ -234,8 +490,7 @@ export function TypeTextFields({
 
           {!libraries.length ? (
             <div className="rounded-xl border border-dashed border-border px-3 py-3 text-[11px] text-muted-foreground">
-              এখনো কোনো list নেই। Workflow Planner hub-এ গিয়ে Text libraries-এ নাম দিয়ে titles যোগ
-              করুন।
+              {t('typeText.noLibraries')}
               <Button
                 size="sm"
                 variant="outline"
@@ -243,7 +498,7 @@ export function TypeTextFields({
                 onClick={() => setBuilderOpen(false)}
               >
                 <BookOpen className="h-3.5 w-3.5" />
-                Open Workflow Planner libraries
+                {t('typeText.openLibraries')}
               </Button>
             </div>
           ) : null}
@@ -326,7 +581,7 @@ export function TypeTextFields({
                 {resolvedPreview ? (
                   <p className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-muted/50 px-2 py-1.5 text-[11px] leading-relaxed text-foreground">
                     <span className="font-semibold text-muted-foreground">
-                      {isPaste ? 'Will paste: ' : 'Will type: '}
+                      {isPaste ? t('typeText.willPaste') : t('typeText.willType')}
                     </span>
                     {resolvedPreview}
                   </p>
@@ -366,7 +621,7 @@ export function TypeTextFields({
                   checked={params.queueWrap === true}
                   onChange={(event) => onChange({ queueWrap: event.target.checked })}
                 />
-                Wrap forever (off = stop after last title; use Repeat step for batch)
+                {t('typeText.queueWrap')}
               </label>
             </div>
           ) : null}
@@ -375,20 +630,20 @@ export function TypeTextFields({
 
       {!isPaste ? (
         <label className="block space-y-1.5">
-          <span className="text-xs font-semibold text-foreground">Typing speed</span>
+          <span className="text-xs font-semibold text-foreground">{t('typeText.typingSpeed')}</span>
           <select
             className="h-9 w-full rounded-xl border border-input bg-background px-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
             value={String(params.typingSpeed ?? 'human')}
             onChange={(event) => onChange({ typingSpeed: event.target.value })}
           >
-            <option value="human">Human-like</option>
-            <option value="slow">Slow (careful)</option>
-            <option value="instant">Instant</option>
+            <option value="human">{t('typeText.speedHuman')}</option>
+            <option value="slow">{t('typeText.speedSlow')}</option>
+            <option value="instant">{t('typeText.speedInstant')}</option>
           </select>
         </label>
       ) : (
         <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[11px] text-foreground">
-          Paste mode: full text goes in at once — no typing delay.
+          {t('typeText.pasteModeNote')}
         </p>
       )}
     </div>
@@ -506,7 +761,6 @@ function PromptTemplateField({
           }
         }}
         onBlur={() => {
-          // Allow click on suggestion before closing
           window.setTimeout(() => setMenu((prev) => ({ ...prev, open: false })), 120)
         }}
       />
@@ -582,6 +836,10 @@ export const TYPE_TEXT_MANAGED_KEYS = new Set([
   'textQueueKey',
   'textLibraryId',
   'textItemIds',
+  'textDatasetId',
+  'textDataPath',
+  'textItemVariable',
+  'textItemPath',
   'queueWrap',
   'queueEnabled',
   'typingSpeed',

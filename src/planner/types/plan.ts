@@ -48,6 +48,73 @@ export const SelectorConfigSchema = z.object({
 
 export type SelectorConfig = z.infer<typeof SelectorConfigSchema>
 
+export const DependencyOpSchema = z.enum([
+  'eq',
+  'neq',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'contains',
+  'exists',
+  'empty',
+  'truthy',
+  'falsy',
+])
+
+export type DependencyOp = z.infer<typeof DependencyOpSchema>
+
+export const DependencyRuleSchema = z.object({
+  source: z.enum(['variable', 'dataset', 'history']),
+  path: z.string().default(''),
+  op: DependencyOpSchema.default('exists'),
+  value: z.unknown().optional(),
+})
+
+export type DependencyRule = z.infer<typeof DependencyRuleSchema>
+
+export const RunWhenSchema = z.object({
+  logic: z.enum(['and', 'or']).default('and'),
+  rules: z.array(DependencyRuleSchema).default([]),
+})
+
+export type RunWhen = z.infer<typeof RunWhenSchema>
+
+export const PreWaitSchema = z.object({
+  strategy: z
+    .enum([
+      'none',
+      'delay',
+      'random',
+      'network_idle',
+      'dom_stable',
+      'url',
+      'element',
+      'text',
+    ])
+    .default('none'),
+  timeoutMs: z.number().int().positive().default(15_000),
+  delayMs: z.number().int().min(0).optional(),
+  minMs: z.number().int().min(0).optional(),
+  maxMs: z.number().int().min(0).optional(),
+  urlContains: z.string().optional(),
+  selector: z.string().optional(),
+  text: z.string().optional(),
+  stableMs: z.number().int().min(0).optional(),
+})
+
+export type PreWait = z.infer<typeof PreWaitSchema>
+
+export const InteractionOptionsSchema = z.object({
+  scrollIntoView: z.boolean().default(true),
+  dismissOverlays: z.boolean().default(false),
+  waitEnabled: z.boolean().default(true),
+  forceClick: z.boolean().default(false),
+  stabilizeMs: z.number().int().min(0).default(0),
+})
+
+export type InteractionOptions = z.infer<typeof InteractionOptionsSchema>
+
 export const PlannerNodeDataSchema = z.object({
   actionId: z.string(),
   label: z.string(),
@@ -62,6 +129,12 @@ export const PlannerNodeDataSchema = z.object({
   errorPolicy: ErrorPolicySchema.optional(),
   timeoutMs: z.number().int().positive().default(30_000),
   outputKey: z.string().optional(),
+  /** Pre-run dependency gate (AND/OR over variable/dataset/history rules). */
+  runWhen: RunWhenSchema.optional(),
+  /** Wait strategy before the action body runs. */
+  preWait: PreWaitSchema.optional(),
+  /** Real-browser interaction helpers (scroll, overlays, disabled wait). */
+  interaction: InteractionOptionsSchema.optional(),
 })
 
 export type PlannerNodeData = z.infer<typeof PlannerNodeDataSchema>

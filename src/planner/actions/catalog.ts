@@ -1,4 +1,9 @@
 import type { ActionCategory, ActionDefinition, ActionField } from '@/planner/actions/types'
+import {
+  ACTION_ALIASES,
+  PALETTE_HIDDEN_ALIASES,
+  resolveActionAlias,
+} from '@/planner/engine/action-aliases'
 
 const selectorField: ActionField = {
   key: 'selector',
@@ -477,12 +482,13 @@ const keyboardActions: ActionDefinition[] = [
         key: 'textMode',
         label: 'Text source',
         type: 'select',
-        defaultValue: 'library',
+        defaultValue: 'manual',
         options: [
           { label: 'Manual text', value: 'manual' },
-          { label: 'Text library', value: 'library' },
+          { label: 'Dataset', value: 'dataset' },
+          { label: 'Text library (legacy)', value: 'library' },
         ],
-        help: 'Libraries are managed in Workflow Planner → Text libraries',
+        help: 'Use Dataset + path picker in Properties, or Manual text',
       },
       {
         key: 'text',
@@ -553,12 +559,13 @@ const keyboardActions: ActionDefinition[] = [
         key: 'textMode',
         label: 'Text source',
         type: 'select',
-        defaultValue: 'library',
+        defaultValue: 'manual',
         options: [
           { label: 'Manual text', value: 'manual' },
-          { label: 'Text library', value: 'library' },
+          { label: 'Dataset', value: 'dataset' },
+          { label: 'Text library (legacy)', value: 'library' },
         ],
-        help: 'Libraries are managed in Workflow Planner → Text libraries',
+        help: 'Use Dataset + path picker in Properties, or Manual text',
       },
       {
         key: 'text',
@@ -1948,6 +1955,89 @@ const screenshotActions: ActionDefinition[] = [
   }),
 ]
 
+const datasetActions: ActionDefinition[] = [
+  def({
+    id: 'variables.get',
+    name: 'Get Variable',
+    category: 'variables',
+    description: 'Read a variable path into an output key',
+    icon: 'Variable',
+    fields: [
+      { key: 'path', label: 'Path', type: 'string', required: true, placeholder: 'item.title' },
+      { key: 'outputKey', label: 'Output variable', type: 'string', defaultValue: 'value' },
+    ],
+  }),
+  def({
+    id: 'datasets.read',
+    name: 'Read Dataset',
+    category: 'data',
+    description: 'Read a workflow dataset (optional path) into a variable',
+    icon: 'Database',
+    fields: [
+      {
+        key: 'dataset',
+        label: 'Dataset name or id',
+        type: 'string',
+        required: true,
+        placeholder: 'Story Topic',
+      },
+      { key: 'path', label: 'Path inside dataset', type: 'string', placeholder: 'title.0' },
+      { key: 'outputKey', label: 'Output variable', type: 'string', defaultValue: 'datasetValue' },
+    ],
+  }),
+  def({
+    id: 'datasets.write',
+    name: 'Write Dataset',
+    category: 'data',
+    description: 'Replace a workflow dataset value (JSON)',
+    icon: 'DatabaseZap',
+    fields: [
+      { key: 'dataset', label: 'Dataset name or id', type: 'string', required: true },
+      { key: 'data', label: 'JSON value', type: 'json', required: true, defaultValue: '{}' },
+    ],
+  }),
+  def({
+    id: 'datasets.update_path',
+    name: 'Update Dataset Path',
+    category: 'data',
+    description: 'Set a nested path inside a workflow dataset',
+    icon: 'Pencil',
+    fields: [
+      { key: 'dataset', label: 'Dataset name or id', type: 'string', required: true },
+      { key: 'path', label: 'Path', type: 'string', required: true, placeholder: 'title.0' },
+      { key: 'value', label: 'Value (JSON or text)', type: 'textarea', required: true },
+    ],
+  }),
+  def({
+    id: 'wait.network_idle',
+    name: 'Wait Network Idle',
+    category: 'wait',
+    description: 'Wait until network activity settles (resource timeline idle)',
+    icon: 'Wifi',
+    fields: [
+      { key: 'idleMs', label: 'Idle ms', type: 'number', defaultValue: 500 },
+    ],
+  }),
+  def({
+    id: 'wait.dom_stable',
+    name: 'Wait DOM Stable',
+    category: 'wait',
+    description: 'Wait until the DOM stops mutating for a short window',
+    icon: 'Trees',
+    fields: [
+      { key: 'stableMs', label: 'Stable ms', type: 'number', defaultValue: 400 },
+    ],
+  }),
+  def({
+    id: 'element.dismiss_overlay',
+    name: 'Dismiss Overlay',
+    category: 'element',
+    description: 'Try to close common modal/backdrop overlays',
+    icon: 'X',
+    supportsSelector: false,
+  }),
+]
+
 export const ACTION_LIBRARY: ActionDefinition[] = [
   ...flowActions,
   ...browserActions,
@@ -1961,6 +2051,7 @@ export const ACTION_LIBRARY: ActionDefinition[] = [
   ...waitActions,
   ...aiActions,
   ...dataActions,
+  ...datasetActions,
   ...downloadActions,
   ...clipboardActions,
   ...loggingActions,
@@ -1987,25 +2078,39 @@ export const ACTION_CATEGORIES: ActionCategory[] = [
 ]
 
 export function getActionById(id: string): ActionDefinition | undefined {
-  return ACTION_LIBRARY.find((action) => action.id === id)
+  const direct = ACTION_LIBRARY.find((action) => action.id === id)
+  if (direct) return direct
+  const { actionId } = resolveActionAlias(id)
+  if (actionId === id) return undefined
+  return ACTION_LIBRARY.find((action) => action.id === actionId)
 }
 
+/** Palette / search — hides consolidated aliases unless the query matches an alias id exactly. */
 export function searchActions(
   query: string,
   localized?: Array<{ id: string; name: string; description: string }>,
 ): ActionDefinition[] {
   const q = query.trim().toLowerCase()
-  if (!q) return ACTION_LIBRARY
   const locById = localized
     ? new Map(localized.map((item) => [item.id, item]))
     : null
-  return ACTION_LIBRARY.filter((action) => {
+
+  const visible = ACTION_LIBRARY.filter((action) => {
+    if (!PALETTE_HIDDEN_ALIASES.has(action.id)) return true
+    // Allow discovering an alias when the user types its exact id
+    return q.length > 0 && action.id.toLowerCase() === q
+  })
+
+  if (!q) return visible
+  return visible.filter((action) => {
     const loc = locById?.get(action.id)
+    const aliasOf = Object.entries(ACTION_ALIASES).find(([, v]) => v.canonical === action.id)
     return (
       action.name.toLowerCase().includes(q) ||
       action.id.toLowerCase().includes(q) ||
       action.description.toLowerCase().includes(q) ||
       action.category.includes(q) ||
+      (aliasOf?.[0].toLowerCase().includes(q) ?? false) ||
       (loc?.name.toLowerCase().includes(q) ?? false) ||
       (loc?.description.toLowerCase().includes(q) ?? false)
     )

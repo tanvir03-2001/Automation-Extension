@@ -34,6 +34,7 @@ import {
   remapWorkflowIds,
   type AnyExportPayload,
 } from '@/planner/io/export-import'
+import { normalizeWorkflows } from '@/planner/engine/normalize-node-data'
 import { applyDocumentLocale } from '@/shared/i18n/fonts'
 
 interface PlannerState {
@@ -176,15 +177,16 @@ export const usePlannerStore = create<PlannerState>()(
       hydrate: async () => {
         const data = await loadWorkspace()
         const plans = (data.plans ?? []).map((plan) => normalizePlanData(plan))
+        const workflows = normalizeWorkflows(data.workflows ?? [])
         const locale = data.locale === 'bn' ? 'bn' : 'en'
         set({
           plans,
-          workflows: data.workflows ?? [],
+          workflows,
           favoriteActionIds: data.favorites ?? [],
           theme: data.theme ?? 'light',
           locale,
           selectedPlanId: plans[0]?.id ?? null,
-          selectedWorkflowId: data.workflows?.[0]?.id ?? null,
+          selectedWorkflowId: workflows[0]?.id ?? null,
           dirty: false,
           graphRevision: 0,
         })
@@ -980,7 +982,7 @@ export const usePlannerStore = create<PlannerState>()(
             const plans = payload.plans.map((plan) => normalizePlanData(plan))
             set({
               plans,
-              workflows: payload.workflows,
+              workflows: normalizeWorkflows(payload.workflows),
               favoriteActionIds: payload.favorites ?? get().favoriteActionIds,
               theme: payload.theme ?? get().theme,
               locale: payload.locale === 'bn' ? 'bn' : payload.locale === 'en' ? 'en' : get().locale,
@@ -997,7 +999,7 @@ export const usePlannerStore = create<PlannerState>()(
               return remapPlanBundle(plan, related)
             })
             const plans = bundled.map((item) => item.plan)
-            const workflows = bundled.flatMap((item) => item.workflows)
+            const workflows = normalizeWorkflows(bundled.flatMap((item) => item.workflows))
             set((state) => ({
               plans: [...plans, ...state.plans],
               workflows: [...workflows, ...state.workflows],
@@ -1012,7 +1014,8 @@ export const usePlannerStore = create<PlannerState>()(
         }
 
         if (payload.kind === 'plan') {
-          const { plan, workflows } = remapPlanBundle(payload.plan, payload.workflows)
+          const { plan, workflows: rawWorkflows } = remapPlanBundle(payload.plan, payload.workflows)
+          const workflows = normalizeWorkflows(rawWorkflows)
           set((state) => ({
             plans: [plan, ...state.plans],
             workflows: [...workflows, ...state.workflows],

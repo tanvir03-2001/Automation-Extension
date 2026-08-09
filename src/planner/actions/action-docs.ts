@@ -2,6 +2,44 @@ import { getActionById, ACTION_LIBRARY } from '@/planner/actions/catalog'
 import type { ActionDefinition } from '@/planner/actions/types'
 
 const EXTRA_HOWTO: Record<string, string[]> = {
+  'datasets.read': [
+    'Reads a Workflow dataset (by name or id) into a variable.',
+    'Optional path uses dotted keys / array indexes (e.g. title.0).',
+    'Datasets are shared by every Plan inside the Workflow — no extra setup.',
+  ],
+  'datasets.write': [
+    'Replaces the whole dataset JSON value.',
+    'Prefer Update Dataset Path when you only need to change one nested field.',
+  ],
+  'datasets.update_path': [
+    'Sets one nested path inside a dataset (creates intermediate objects/arrays as needed).',
+  ],
+  'wait.network_idle': [
+    'Waits until the page resource timeline is quiet for Idle ms.',
+    'Useful after navigation on JS-heavy sites before clicking.',
+  ],
+  'wait.dom_stable': [
+    'Waits until the DOM stops mutating for Stable ms.',
+    'Helps with SPA re-renders and late-injected overlays.',
+  ],
+  'element.dismiss_overlay': [
+    'Tries common Close / backdrop controls and sends Escape.',
+    'Pair with Interaction → Dismiss overlays on click-heavy steps.',
+  ],
+  'variables.get': [
+    'Reads a variable path (e.g. item.title) into an output key for later steps.',
+  ],
+  'loops.for': [
+    'Repeats N times using the same loop / return / completed wiring as Map.',
+    'Use {{item}} / {{index}} (or your index variable) inside the body.',
+  ],
+  'loops.while': [
+    'Continues looping while the condition is true (capped by Max iterations).',
+    'Wire loop → body → return; completed when the condition fails.',
+  ],
+  'loops.continue': [
+    'Skips the rest of the current Map/For body and advances to the next item.',
+  ],
   'browser.open_url': [
     'Drag Open URL onto the canvas.',
     'Enter the website address (example: https://chatgpt.com/).',
