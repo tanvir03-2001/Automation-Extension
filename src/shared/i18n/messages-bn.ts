@@ -50,6 +50,7 @@ export const bn: MessageDict = {
   'lang.bangla': 'বাংলা',
 
   'common.reload': 'এক্সটেনশন রিলোড',
+  'common.pending': 'পেন্ডিং…',
   'common.start': 'স্টার্ট',
   'common.pause': 'পজ',
   'common.resume': 'রেজিউম',
@@ -60,6 +61,8 @@ export const bn: MessageDict = {
   'engine.stopShort': 'স্টপ',
   'engine.forceStopHint': 'সব রান জোর করে বন্ধ করে পেজ আনলক করে - যেকোনো সময় কাজ করে।',
   'engine.pauseHint': 'চলমান প্ল্যানার রান পজ করুন',
+  'engine.pausePending': 'পজ হচ্ছে…',
+  'engine.stopPending': 'স্টপ হচ্ছে…',
   'common.save': 'সেভ',
   'common.edit': 'এডিট',
   'common.delete': 'ডিলিট',

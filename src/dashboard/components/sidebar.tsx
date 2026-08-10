@@ -103,34 +103,40 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="space-y-2 border-t border-border px-4 py-4">
-        <div className="space-y-1.5">
+      <div className="space-y-2.5 border-t border-border px-4 py-4">
+        <div className="space-y-2">
           <p className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {t('engine.masterControls')}
           </p>
-          <EngineKillSwitch className="w-full justify-stretch [&>button]:flex-1" />
+          <EngineKillSwitch className="w-full" />
           <p className="px-0.5 text-[11px] leading-relaxed text-muted-foreground">
             {t('engine.masterHint')}
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full justify-center rounded-xl"
-          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-        >
-          {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-          {theme === 'light' ? t('theme.dark') : t('theme.light')}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="w-full justify-center rounded-xl"
-          onClick={() => void reloadExtension()}
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          {t('common.reload')}
-        </Button>
+        <div className="grid gap-1.5 rounded-2xl border border-border/80 bg-gradient-to-b from-muted/40 to-muted/10 p-1.5 shadow-sm">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-10 w-full justify-start gap-2.5 rounded-xl px-3 text-[15px] font-medium hover:bg-background/80"
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          >
+            {theme === 'light' ? (
+              <Moon className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <Sun className="h-4 w-4 text-amber-500" />
+            )}
+            {theme === 'light' ? t('theme.dark') : t('theme.light')}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-10 w-full justify-start gap-2.5 rounded-xl px-3 text-[15px] font-medium hover:bg-background/80"
+            onClick={() => void reloadExtension()}
+          >
+            <RotateCcw className="h-4 w-4 text-muted-foreground" />
+            {t('common.reload')}
+          </Button>
+        </div>
         <p className="text-center text-xs text-muted-foreground">{t('app.manifestNote')}</p>
       </div>
     </aside>

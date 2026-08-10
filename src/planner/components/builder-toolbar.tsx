@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   History,
+  Loader2,
   OctagonX,
   Pause,
   Play,
@@ -9,13 +10,18 @@ import {
   Save,
   Undo2,
 } from 'lucide-react'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { usePlannerStore, undoPlanner, redoPlanner } from '@/planner/store/planner-store'
 import { ImportExportMenu } from '@/planner/components/import-export-menu'
+import {
+  waitForPauseSettled,
+  waitForStopSettled,
+  type EnginePending,
+} from '@/shared/utils/engine-controls'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { cn } from '@/shared/utils/cn'
 import { useT } from '@/shared/i18n/use-t'
@@ -32,6 +38,7 @@ export function BuilderToolbar() {
   const saveVersion = usePlannerStore((s) => s.saveVersion)
   const setCheckpoint = usePlannerStore((s) => s.setCheckpoint)
   const setBuilderOpen = usePlannerStore((s) => s.setBuilderOpen)
+  const [enginePending, setEnginePending] = useState<EnginePending>(null)
   const runningPlan =
     checkpoint?.workflowId &&
     (checkpoint.status === 'running' ||
@@ -72,13 +79,42 @@ export function BuilderToolbar() {
   }, [])
 
   async function runPlan() {
-    if (!workflow) return
+    if (!workflow || enginePending) return
     await persist()
     const response = await sendRuntimeMessage<{ ok: boolean; checkpoint?: typeof checkpoint }>({
       type: 'PLANNER_START',
       payload: { workflow },
     })
     if (response.checkpoint) setCheckpoint(response.checkpoint)
+  }
+
+  async function pausePlan() {
+    if (enginePending) return
+    setEnginePending('pause')
+    try {
+      const res = await sendRuntimeMessage<{ checkpoint?: typeof checkpoint }>({
+        type: 'PLANNER_PAUSE',
+      })
+      if (res.checkpoint) setCheckpoint(res.checkpoint)
+      await waitForPauseSettled(setCheckpoint)
+    } finally {
+      setEnginePending(null)
+    }
+  }
+
+  async function forceStopPlan() {
+    if (enginePending) return
+    setEnginePending('stop')
+    try {
+      const res = await sendRuntimeMessage<{ checkpoint?: typeof checkpoint | null }>({
+        type: 'ENGINE_FORCE_STOP',
+      })
+      if (res.checkpoint !== undefined) setCheckpoint(res.checkpoint)
+      else setCheckpoint(null)
+      await waitForStopSettled(setCheckpoint)
+    } finally {
+      setEnginePending(null)
+    }
   }
 
   return (
@@ -153,31 +189,33 @@ export function BuilderToolbar() {
       </ToolGroup>
 
       <ToolGroup>
-        <Button size="sm" className="rounded-xl px-4" onClick={() => void runPlan()}>
+        <Button
+          size="sm"
+          className="rounded-xl px-4"
+          disabled={enginePending !== null}
+          onClick={() => void runPlan()}
+        >
           <Play className="h-3.5 w-3.5" />
           {t('builder.run')}
         </Button>
         <IconBtn
-          onClick={() =>
-            void sendRuntimeMessage({ type: 'PLANNER_PAUSE' }).then((res) => {
-              const data = res as { checkpoint?: typeof checkpoint }
-              if (data.checkpoint) setCheckpoint(data.checkpoint)
-            })
+          disabled={enginePending !== null || checkpoint?.status !== 'running'}
+          onClick={() => void pausePlan()}
+          title={
+            enginePending === 'pause' ? t('engine.pausePending') : t('common.pause')
           }
-          title={t('common.pause')}
+          pending={enginePending === 'pause'}
         >
           <Pause className="h-3.5 w-3.5" />
         </IconBtn>
         <IconBtn
           destructive
-          onClick={() =>
-            void sendRuntimeMessage({ type: 'ENGINE_FORCE_STOP' }).then((res) => {
-              const data = res as { checkpoint?: typeof checkpoint | null }
-              if (data.checkpoint !== undefined) setCheckpoint(data.checkpoint)
-              else setCheckpoint(null)
-            })
+          disabled={enginePending !== null}
+          onClick={() => void forceStopPlan()}
+          title={
+            enginePending === 'stop' ? t('engine.stopPending') : t('engine.forceStopHint')
           }
-          title={t('engine.forceStopHint')}
+          pending={enginePending === 'stop'}
         >
           <OctagonX className="h-3.5 w-3.5" />
         </IconBtn>
@@ -211,18 +249,21 @@ function IconBtn({
   disabled,
   title,
   destructive,
+  pending,
 }: {
   children: ReactNode
   onClick?: () => void
   disabled?: boolean
   title?: string
   destructive?: boolean
+  pending?: boolean
 }) {
   return (
     <button
       type="button"
       title={title}
       disabled={disabled}
+      aria-busy={pending}
       onMouseDown={(event) => {
         // Keep focus quirks from stealing the click when editing inputs
         event.preventDefault()
@@ -231,9 +272,11 @@ function IconBtn({
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-40',
         destructive && 'hover:bg-destructive/15 hover:text-destructive',
+        pending && 'bg-accent text-foreground',
+        pending && destructive && 'bg-destructive/15 text-destructive',
       )}
     >
-      {children}
+      {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : children}
     </button>
   )
 }

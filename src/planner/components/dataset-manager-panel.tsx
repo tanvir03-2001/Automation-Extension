@@ -132,8 +132,8 @@ export function DatasetManagerPanel({ planId, compact = false }: DatasetManagerP
     return (
       <div
         className={cn(
-          'flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel',
-          !compact && 'rounded-2xl p-5',
+          'flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card',
+          !compact && 'rounded-3xl p-5',
         )}
       >
         <div className="border-b border-border px-3.5 py-3">
@@ -145,7 +145,7 @@ export function DatasetManagerPanel({ planId, compact = false }: DatasetManagerP
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-3">
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-base font-semibold text-foreground">
@@ -355,7 +355,7 @@ function DatasetCard({
   }
 
   return (
-    <div className="rounded-lg border border-border/80 bg-background/60 px-3 py-2.5">
+    <div className="rounded-xl border border-border/80 bg-background/60 px-3 py-2.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[15px] font-medium text-foreground">{dataset.name}</p>

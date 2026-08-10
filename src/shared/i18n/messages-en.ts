@@ -49,6 +49,7 @@ export const en: MessageDict = {
   'lang.bangla': 'বাংলা',
 
   'common.reload': 'Reload extension',
+  'common.pending': 'Pending…',
   'common.start': 'Start',
   'common.pause': 'Pause',
   'common.resume': 'Resume',
@@ -59,6 +60,8 @@ export const en: MessageDict = {
   'engine.stopShort': 'Stop',
   'engine.forceStopHint': 'Force-stop every run and unlock the page - works anytime.',
   'engine.pauseHint': 'Pause the active planner run',
+  'engine.pausePending': 'Pausing…',
+  'engine.stopPending': 'Stopping…',
   'common.save': 'Save',
   'common.edit': 'Edit',
   'common.delete': 'Delete',

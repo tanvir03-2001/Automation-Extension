@@ -194,7 +194,7 @@ export function PlannerView() {
 
       <PlannerHubLayout
         workflows={
-        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3.5 py-3">
             <div>
               <p className="text-base font-semibold text-foreground">{t('planner.workflows')}</p>
@@ -273,7 +273,7 @@ export function PlannerView() {
                   <div
                     key={plan.id}
                     className={cn(
-                      'rounded-lg border px-3 py-2.5 transition',
+                      'rounded-xl border px-3 py-2.5 transition',
                       active
                         ? 'border-primary/45 bg-primary/10'
                         : 'border-border/70 bg-background/50 hover:bg-accent/50',
@@ -379,7 +379,7 @@ export function PlannerView() {
         </section>
         }
         plans={
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card/95 shadow-panel">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card">
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-3">
               <div className="min-w-0">
                 <p className="text-base font-semibold text-foreground">{t('planner.plans')}</p>
@@ -432,7 +432,7 @@ export function PlannerView() {
                       <div
                         key={wf.id}
                         className={cn(
-                          'rounded-lg border px-3 py-2.5 transition',
+                          'rounded-xl border px-3 py-2.5 transition',
                           active
                             ? 'border-primary/45 bg-primary/10'
                             : 'border-border/70 bg-background/50 hover:bg-accent/50',
