@@ -216,6 +216,16 @@ export const bn: MessageDict = {
   'typeText.loopItemOutside':
     'Loop item বাঁধা শুধু Map/For বডির ভিতরে কাজ করে। Dataset-এ যান অথবা স্টেপটি লুপের ভিতরে নিন।',
 
+  'template.hint': '${ লিখে dataset / loop ভেরিয়েবল বাছুন ({{…}} ও কাজ করে)',
+  'template.noVariables': 'কোনো মিল থাকা ভেরিয়েবল নেই',
+
+  'loop.iterableMode': 'Iterable মোড',
+  'loop.iteratesOver': 'অ্যারের মান',
+  'loop.itemVar': 'Item',
+  'loop.indexVar': 'Index',
+  'loop.sampleFields': 'Item ফিল্ড',
+  'loop.nestedCount': 'নেস্টেড লুপ: {{count}}',
+
   'builder.workflows': 'ওয়ার্কফ্লো',
   'builder.noPlan': 'কোনো প্ল্যান সিলেক্ট নেই',
   'builder.runningElsewhere': 'অন্য প্ল্যানে চলছে',

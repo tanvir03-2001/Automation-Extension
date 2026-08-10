@@ -14,7 +14,7 @@ import { useStore } from 'zustand'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { usePlannerStore } from '@/planner/store/planner-store'
+import { usePlannerStore, undoPlanner, redoPlanner } from '@/planner/store/planner-store'
 import { ImportExportMenu } from '@/planner/components/import-export-menu'
 import { sendRuntimeMessage } from '@/shared/messaging/bus'
 import { cn } from '@/shared/utils/cn'
@@ -51,6 +51,25 @@ export function BuilderToolbar() {
     }, 500)
     return () => window.clearTimeout(timer)
   }, [dirty, persist, workflow?.updatedAt])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey
+      if (!mod) return
+      const key = event.key.toLowerCase()
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault()
+        undoPlanner()
+        return
+      }
+      if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault()
+        redoPlanner()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   async function runPlan() {
     if (!workflow) return
@@ -111,10 +130,18 @@ export function BuilderToolbar() {
       </div>
 
       <ToolGroup>
-        <IconBtn disabled={!canUndo} onClick={() => temporal.getState().undo()} title="Undo">
+        <IconBtn
+          disabled={!canUndo}
+          onClick={() => undoPlanner()}
+          title="Undo (Ctrl+Z)"
+        >
           <Undo2 className="h-3.5 w-3.5" />
         </IconBtn>
-        <IconBtn disabled={!canRedo} onClick={() => temporal.getState().redo()} title="Redo">
+        <IconBtn
+          disabled={!canRedo}
+          onClick={() => redoPlanner()}
+          title="Redo (Ctrl+Shift+Z)"
+        >
           <Redo2 className="h-3.5 w-3.5" />
         </IconBtn>
         <IconBtn onClick={() => workflowId && saveVersion(workflowId)} title="Save version">
@@ -196,6 +223,10 @@ function IconBtn({
       type="button"
       title={title}
       disabled={disabled}
+      onMouseDown={(event) => {
+        // Keep focus quirks from stealing the click when editing inputs
+        event.preventDefault()
+      }}
       onClick={onClick}
       className={cn(
         'inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-40',

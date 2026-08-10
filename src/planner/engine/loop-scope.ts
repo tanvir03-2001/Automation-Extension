@@ -16,6 +16,8 @@ export type LoopScopeFrame = {
   itemVariable: string
   indexVariable: string
   sampleItem?: unknown
+  /** Human-readable collection binding, e.g. `story title → items`. */
+  collectionLabel: string
 }
 
 export type LoopScope =
@@ -104,6 +106,58 @@ function sampleItemFromLoopParams(
   return undefined
 }
 
+/** Same sentinel as map-array-sources COPY_STORE_ALL_REF. */
+const COPY_STORE_ALL_REF_LOCAL = '__all__'
+
+function collectionLabelFromLoopParams(
+  loopNode: PlannerNode,
+  plan: AutomationPlan | null | undefined,
+): string {
+  const params = loopNode.data.params
+  const actionId = resolveActionAlias(loopNode.data.actionId).actionId
+
+  if (actionId === 'loops.for') {
+    const count = Number(params.count ?? 3)
+    return `For 0..${Number.isFinite(count) && count > 0 ? count - 1 : 'N'}`
+  }
+
+  const sourceId = String(params.collectionSource ?? '').trim()
+  const ref = String(params.collectionRef ?? '').trim()
+  const nestPath = String(params.collectionPath ?? '').trim()
+
+  const datasetId = parseDatasetSourceId(sourceId)
+  if (datasetId && plan) {
+    const dataset = plan.datasets.find((ds) => ds.id === datasetId || ds.name === datasetId)
+    const name = dataset?.name ?? datasetId
+    const path =
+      nestPath && nestPath !== '$'
+        ? nestPath
+        : ref && ref !== '$'
+          ? ref
+          : dataset?.kind === 'textLibrary'
+            ? 'items'
+            : ''
+    return path ? `${name} → ${path}` : name
+  }
+
+  if (sourceId === 'textLibrary' && plan) {
+    const lib = plan.textLibraries.find((item) => item.id === ref || item.name === ref)
+    const name = lib?.name || ref || 'Text library'
+    return `${name} → items`
+  }
+
+  if (sourceId === 'copyStore') {
+    const path = nestPath && nestPath !== '$' ? nestPath : ''
+    const name = ref === COPY_STORE_ALL_REF_LOCAL ? 'Copy Store (all)' : ref || 'Copy Store'
+    return path ? `${name} → ${path}` : name
+  }
+
+  const legacyKey = String(params.collectionKey ?? '').trim()
+  if (legacyKey) return legacyKey
+
+  return loopNode.data.label || actionId
+}
+
 function frameFromLoop(
   loopNode: PlannerNode,
   plan: AutomationPlan | null | undefined,
@@ -122,6 +176,7 @@ function frameFromLoop(
     itemVariable,
     indexVariable,
     sampleItem: sampleItemFromLoopParams(loopNode, plan),
+    collectionLabel: collectionLabelFromLoopParams(loopNode, plan),
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import {
   Copy,
   Crosshair,
@@ -33,6 +33,12 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
+import {
+  InterpolatedTextField,
+  useTemplateCompletionScope,
+} from '@/planner/components/interpolated-text-field'
+import { LoopIterableBanner } from '@/planner/components/loop-iterable-banner'
+import { resolveLoopScope } from '@/planner/engine/loop-scope'
 import { useT } from '@/shared/i18n/use-t'
 import type { VisualWorkflow } from '@/planner/types/plan'
 
@@ -101,6 +107,12 @@ export function PropertyInspector() {
   const removeNode = usePlannerStore((s) => s.removeNode)
   const { picking, error, lastPicked, pickElement, cancelPick } = useElementPicker(workflow)
   const [activePickField, setActivePickField] = useState<string | null>(null)
+  const templateScope = useTemplateCompletionScope(workflowId, nodeId)
+  const plan = usePlannerStore((s) => s.plans.find((item) => item.id === workflow?.planId))
+  const loopScope = useMemo(
+    () => (workflow && nodeId ? resolveLoopScope(workflow, nodeId, plan) : { kind: 'outside' as const }),
+    [workflow, nodeId, plan],
+  )
 
   const node = workflow?.nodes.find((item) => item.id === nodeId)
   if (!workflowId || !node) {
@@ -368,6 +380,10 @@ export function PropertyInspector() {
             />
           </Field>
 
+          {loopScope.kind === 'body' ? (
+            <LoopIterableBanner stack={loopScope.stack} />
+          ) : null}
+
           {selectedNode.data.actionId === 'flow.connector' ? (
             <p className="rounded-xl border border-dashed border-border bg-muted/40 px-3 py-2 text-sm leading-relaxed text-muted-foreground">
               Connector does nothing at runtime - it only organizes the canvas. Wire steps through
@@ -515,7 +531,24 @@ export function PropertyInspector() {
               field.type === 'selector' || field.key.toLowerCase().includes('selector')
             return (
               <Field key={field.key} label={field.label} help={field.help}>
-                {field.type === 'textarea' || field.type === 'json' ? (
+                {field.type === 'textarea' ? (
+                  <div className="space-y-1">
+                    <InterpolatedTextField
+                      multiline
+                      scope={templateScope}
+                      value={String(
+                        selectedNode.data.params[field.key] ?? field.defaultValue ?? '',
+                      )}
+                      placeholder={field.placeholder}
+                      onChange={(next) =>
+                        updateNodeData(workflowId, selectedNode.id, {
+                          params: { ...selectedNode.data.params, [field.key]: next },
+                        })
+                      }
+                    />
+                    <p className="text-[11px] text-muted-foreground">{t('template.hint')}</p>
+                  </div>
+                ) : field.type === 'json' ? (
                   <textarea
                     className="min-h-24 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
                     value={String(selectedNode.data.params[field.key] ?? field.defaultValue ?? '')}
@@ -586,24 +619,45 @@ export function PropertyInspector() {
                   />
                 ) : (
                   <div className="space-y-2">
-                    <Input
-                      type={field.type === 'number' ? 'number' : 'text'}
-                      value={String(
-                        selectedNode.data.params[field.key] ?? field.defaultValue ?? '',
-                      )}
-                      placeholder={field.placeholder}
-                      onChange={(event) =>
-                        updateNodeData(workflowId, selectedNode.id, {
-                          params: {
-                            ...selectedNode.data.params,
-                            [field.key]:
-                              field.type === 'number'
-                                ? Number(event.target.value)
-                                : event.target.value,
-                          },
-                        })
-                      }
-                    />
+                    {field.type === 'number' || isSelectorField ? (
+                      <Input
+                        type={field.type === 'number' ? 'number' : 'text'}
+                        value={String(
+                          selectedNode.data.params[field.key] ?? field.defaultValue ?? '',
+                        )}
+                        placeholder={field.placeholder}
+                        onChange={(event) =>
+                          updateNodeData(workflowId, selectedNode.id, {
+                            params: {
+                              ...selectedNode.data.params,
+                              [field.key]:
+                                field.type === 'number'
+                                  ? Number(event.target.value)
+                                  : event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    ) : (
+                      <div className="space-y-1">
+                        <InterpolatedTextField
+                          scope={templateScope}
+                          value={String(
+                            selectedNode.data.params[field.key] ?? field.defaultValue ?? '',
+                          )}
+                          placeholder={field.placeholder}
+                          onChange={(next) =>
+                            updateNodeData(workflowId, selectedNode.id, {
+                              params: {
+                                ...selectedNode.data.params,
+                                [field.key]: next,
+                              },
+                            })
+                          }
+                        />
+                        <p className="text-[11px] text-muted-foreground">{t('template.hint')}</p>
+                      </div>
+                    )}
                     {isSelectorField ? (
                       <div className="flex gap-2">
                         <Button

@@ -2,8 +2,13 @@ import { Crosshair, Loader2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  InterpolatedTextField,
+  useTemplateCompletionScope,
+} from '@/planner/components/interpolated-text-field'
 import { useElementPicker } from '@/planner/hooks/use-element-picker'
 import { usePlannerStore } from '@/planner/store/planner-store'
+import { useT } from '@/shared/i18n/use-t'
 import type { VisualWorkflow } from '@/planner/types/plan'
 
 export const CONDITION_MANAGED_KEYS = new Set([
@@ -84,9 +89,11 @@ export function ConditionFields({
   workflow,
   onChange,
 }: Props) {
+  const t = useT()
   const updateNodeData = usePlannerStore((s) => s.updateNodeData)
   const { picking, error, lastPicked, pickElement, cancelPick } = useElementPicker(workflow)
   const [pickingActive, setPickingActive] = useState(false)
+  const templateScope = useTemplateCompletionScope(workflowId, nodeId)
 
   const checkType = String(params.checkType ?? 'element_visible')
   const sourceType = String(params.sourceType ?? 'variable')
@@ -287,12 +294,11 @@ export function ConditionFields({
       {needsButtonName ? (
         <>
           <Field label="Button name / label" help='Example: "Continue", "Send", "New chat"'>
-            <Input
+            <InterpolatedTextField
+              scope={templateScope}
               value={String(params.buttonName ?? params.text ?? '')}
               placeholder="Continue"
-              onChange={(event) =>
-                onChange({ buttonName: event.target.value, text: event.target.value })
-              }
+              onChange={(next) => onChange({ buttonName: next, text: next })}
             />
           </Field>
           <label className="flex items-center gap-2 text-sm">
@@ -309,11 +315,12 @@ export function ConditionFields({
 
       {needsText ? (
         <>
-          <Field label="Text">
-            <Input
+          <Field label="Text" help={t('template.hint')}>
+            <InterpolatedTextField
+              scope={templateScope}
               value={String(params.text ?? '')}
               placeholder="Text to find on page"
-              onChange={(event) => onChange({ text: event.target.value })}
+              onChange={(next) => onChange({ text: next })}
             />
           </Field>
           <Field label="Match mode">
@@ -365,11 +372,12 @@ export function ConditionFields({
 
       {needsVariable ? (
         <>
-          <Field label="Left value" help="Use {{variable}} if needed">
-            <Input
+          <Field label="Left value" help={t('template.hint')}>
+            <InterpolatedTextField
+              scope={templateScope}
               value={String(params.left ?? '')}
-              placeholder="{{myVar}}"
-              onChange={(event) => onChange({ left: event.target.value })}
+              placeholder="${myVar}"
+              onChange={(next) => onChange({ left: next })}
             />
           </Field>
           <Field label="Operator">
@@ -390,10 +398,11 @@ export function ConditionFields({
               ]}
             />
           </Field>
-          <Field label="Right value">
-            <Input
+          <Field label="Right value" help={t('template.hint')}>
+            <InterpolatedTextField
+              scope={templateScope}
               value={String(params.right ?? '')}
-              onChange={(event) => onChange({ right: event.target.value })}
+              onChange={(next) => onChange({ right: next })}
             />
           </Field>
         </>
@@ -412,11 +421,12 @@ export function ConditionFields({
       ) : null}
 
       {variant === 'switch' && sourceType === 'variable' ? (
-        <Field label="Value" help="Typed text or {{variable}}">
-          <Input
+        <Field label="Value" help={t('template.hint')}>
+          <InterpolatedTextField
+            scope={templateScope}
             value={String(params.value ?? '')}
-            placeholder="{{status}}"
-            onChange={(event) => onChange({ value: event.target.value })}
+            placeholder="${status}"
+            onChange={(next) => onChange({ value: next })}
           />
         </Field>
       ) : null}

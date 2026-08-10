@@ -52,6 +52,8 @@ interface PlannerState {
   locale: 'en' | 'bn'
   builderOpen: boolean
   graphRevision: number
+  /** Bumped by undo/redo so canvas reloads positions/edges from store (not local drag cache). */
+  layoutSync: number
   docsActionId: string | null
 
   hydrate: () => Promise<void>
@@ -154,6 +156,16 @@ async function loadWorkspace() {
   return response.value
 }
 
+/** Optional flush of in-progress canvas graph (edges/positions) before undo/redo. */
+let canvasGraphFlush: (() => void) | null = null
+
+export function registerCanvasGraphFlush(fn: (() => void) | null) {
+  canvasGraphFlush = fn
+}
+
+/** Flush debounced history capture before undo/redo. */
+let pendingTemporalFlush: (() => void) | null = null
+
 export const usePlannerStore = create<PlannerState>()(
   temporal(
     (set, get) => ({
@@ -171,6 +183,7 @@ export const usePlannerStore = create<PlannerState>()(
       locale: 'en',
       builderOpen: false,
       graphRevision: 0,
+      layoutSync: 0,
       docsActionId: null,
       nodeClipboard: null,
 
@@ -189,6 +202,7 @@ export const usePlannerStore = create<PlannerState>()(
           selectedWorkflowId: workflows[0]?.id ?? null,
           dirty: false,
           graphRevision: 0,
+          layoutSync: 0,
         })
         document.documentElement.classList.toggle('dark', (data.theme ?? 'light') === 'dark')
         applyDocumentLocale(locale)
@@ -1107,6 +1121,86 @@ export const usePlannerStore = create<PlannerState>()(
         workflows: state.workflows,
       }),
       limit: 50,
+      // Skip history when graph data refs are unchanged (selectNode, UI flags, etc.)
+      equality: (a, b) => a.plans === b.plans && a.workflows === b.workflows,
+      // Batch rapid property edits into one undo step
+      handleSet: (handleSet) => {
+        // zundo types handleSet as setState, but runtime is _handleSet(past, replace, current, delta)
+        type TemporalHandleSet = (
+          pastState: unknown,
+          replace: unknown,
+          currentState: unknown,
+          deltaState?: unknown,
+        ) => void
+        const save = handleSet as unknown as TemporalHandleSet
+
+        let timer: ReturnType<typeof setTimeout> | undefined
+        let firstPast: unknown
+        let lastArgs:
+          | {
+              replace: unknown
+              currentState: unknown
+              deltaState: unknown
+            }
+          | undefined
+
+        const flush = () => {
+          if (timer) clearTimeout(timer)
+          timer = undefined
+          if (firstPast === undefined || !lastArgs) {
+            firstPast = undefined
+            lastArgs = undefined
+            pendingTemporalFlush = null
+            return
+          }
+          save(firstPast, lastArgs.replace, lastArgs.currentState, lastArgs.deltaState)
+          firstPast = undefined
+          lastArgs = undefined
+          pendingTemporalFlush = null
+        }
+
+        pendingTemporalFlush = flush
+
+        return (pastState, replace, currentState, deltaState) => {
+          if (firstPast === undefined) firstPast = pastState
+          lastArgs = { replace, currentState, deltaState }
+          pendingTemporalFlush = flush
+          if (timer) clearTimeout(timer)
+          timer = setTimeout(flush, 400)
+        }
+      },
     },
   ),
 )
+
+/** Undo last graph edit and refresh canvas (bumps graphRevision without a history entry). */
+export function undoPlanner() {
+  canvasGraphFlush?.()
+  pendingTemporalFlush?.()
+  const temporal = usePlannerStore.temporal.getState()
+  if (!temporal.pastStates.length) return
+  temporal.undo()
+  temporal.pause()
+  usePlannerStore.setState((s) => ({
+    graphRevision: s.graphRevision + 1,
+    layoutSync: s.layoutSync + 1,
+    dirty: true,
+  }))
+  temporal.resume()
+}
+
+/** Redo last undone graph edit and refresh canvas. */
+export function redoPlanner() {
+  canvasGraphFlush?.()
+  pendingTemporalFlush?.()
+  const temporal = usePlannerStore.temporal.getState()
+  if (!temporal.futureStates.length) return
+  temporal.redo()
+  temporal.pause()
+  usePlannerStore.setState((s) => ({
+    graphRevision: s.graphRevision + 1,
+    layoutSync: s.layoutSync + 1,
+    dirty: true,
+  }))
+  temporal.resume()
+}

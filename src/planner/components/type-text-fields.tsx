@@ -8,6 +8,10 @@ import {
 } from '@/planner/engine/text-library'
 import { resolveLoopScope } from '@/planner/engine/loop-scope'
 import { JsonPathPicker, previewJsonPath } from '@/planner/components/json-path-picker'
+import {
+  InterpolatedTextField,
+  useTemplateCompletionScope,
+} from '@/planner/components/interpolated-text-field'
 import { usePlannerStore } from '@/planner/store/planner-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/shared/utils/cn'
@@ -39,6 +43,7 @@ export function TypeTextFields({
     () => (workflow ? resolveLoopScope(workflow, nodeId, plan) : { kind: 'outside' as const }),
     [workflow, nodeId, plan],
   )
+  const templateScope = useTemplateCompletionScope(workflowId, nodeId)
   const insideLoop = scope.kind === 'body'
   const loopFrame = insideLoop ? scope.stack[scope.stack.length - 1] : undefined
 
@@ -170,11 +175,6 @@ export function TypeTextFields({
               ? t('typeText.helpPaste')
               : t('typeText.helpOutside')}
         </p>
-        {insideLoop && loopFrame ? (
-          <p className="mt-1.5 rounded-lg bg-primary/10 px-2 py-1 text-[11px] text-foreground">
-            {t('typeText.insideMap', { name: loopFrame.label })}
-          </p>
-        ) : null}
         {scope.kind === 'completed' ? (
           <p className="mt-1.5 rounded-lg bg-muted px-2 py-1 text-[11px] text-muted-foreground">
             {t('typeText.onCompleted', { name: scope.label })}
@@ -246,12 +246,14 @@ export function TypeTextFields({
         mode === 'manual' ? (
           <label className="block space-y-1.5">
             <span className="text-xs font-semibold text-foreground">{t('typeText.text')}</span>
-            <textarea
-              className="min-h-24 w-full max-w-full resize-y break-words rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground outline-none ring-ring focus:ring-2"
+            <InterpolatedTextField
+              multiline
+              scope={templateScope}
               value={String(params.text ?? '')}
               placeholder={isPaste ? t('typeText.placeholderPaste') : t('typeText.placeholderType')}
-              onChange={(event) => onChange({ text: event.target.value })}
+              onChange={(next) => onChange({ text: next })}
             />
+            <p className="text-[11px] text-muted-foreground">{t('template.hint')}</p>
           </label>
         ) : (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-foreground">

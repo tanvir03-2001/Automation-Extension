@@ -29,7 +29,7 @@ import {
   toFlowNodes,
 } from '@/planner/components/flow-graph-shared'
 import { useActiveRunLabel } from '@/planner/hooks/use-node-run-visual'
-import { usePlannerStore } from '@/planner/store/planner-store'
+import { usePlannerStore, registerCanvasGraphFlush } from '@/planner/store/planner-store'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/shared/utils/cn'
 import type { PlannerEdge, PlannerNode } from '@/planner/types/plan'
@@ -54,10 +54,59 @@ function fromFlow(nodes: Node[], edges: Edge[]): { nodes: PlannerNode[]; edges: 
   }
 }
 
+/** Structural + visible style equality — avoid new edge arrays that retrigger RF (#185). */
+function edgesVisuallyEqual(a: Edge[], b: Edge[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((edge, index) => {
+    const other = b[index]
+    if (!other) return false
+    return (
+      edge.id === other.id &&
+      edge.source === other.source &&
+      edge.target === other.target &&
+      (edge.sourceHandle ?? null) === (other.sourceHandle ?? null) &&
+      (edge.targetHandle ?? null) === (other.targetHandle ?? null) &&
+      Boolean(edge.selected) === Boolean(other.selected) &&
+      Boolean(edge.animated) === Boolean(other.animated) &&
+      edge.style?.stroke === other.style?.stroke &&
+      edge.style?.strokeWidth === other.style?.strokeWidth &&
+      (edge.className ?? '') === (other.className ?? '')
+    )
+  })
+}
+
+/**
+ * RF often emits deselect(old) + select(new) in one batch when switching routes.
+ * Prefer the edge being turned on; only clear when the current selection is turned off.
+ */
+function resolveSelectedEdgeId(
+  changes: EdgeChange[],
+  currentSelected: string | null,
+): string | null {
+  if (changes.some((change) => change.type === 'remove' && change.id === currentSelected)) {
+    currentSelected = null
+  }
+
+  const selectChanges = changes.filter(
+    (change): change is EdgeChange & { type: 'select'; id: string; selected: boolean } =>
+      change.type === 'select',
+  )
+  if (!selectChanges.length) return currentSelected
+
+  const turnedOn = [...selectChanges].reverse().find((change) => change.selected)
+  if (turnedOn) return turnedOn.id
+
+  if (selectChanges.some((change) => !change.selected && change.id === currentSelected)) {
+    return null
+  }
+  return currentSelected
+}
+
 function CanvasInner() {
   const workflowId = usePlannerStore((s) => s.selectedWorkflowId)
   const workflow = usePlannerStore((s) => s.workflows.find((wf) => wf.id === workflowId))
   const graphRevision = usePlannerStore((s) => s.graphRevision)
+  const layoutSync = usePlannerStore((s) => s.layoutSync)
   const updateWorkflowGraph = usePlannerStore((s) => s.updateWorkflowGraph)
   const addActionNode = usePlannerStore((s) => s.addActionNode)
   const selectNode = usePlannerStore((s) => s.selectNode)
@@ -69,8 +118,11 @@ function CanvasInner() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
+  const selectedEdgeIdRef = useRef<string | null>(null)
+  selectedEdgeIdRef.current = selectedEdgeId
   const loadedWorkflowId = useRef<string | null>(null)
   const loadedRevision = useRef(-1)
+  const loadedLayoutSync = useRef(0)
   const saveTimer = useRef<number | null>(null)
   const nodesRef = useRef(nodes)
   const edgesRef = useRef(edges)
@@ -99,10 +151,13 @@ function CanvasInner() {
 
     const workflowChanged = loadedWorkflowId.current !== workflowId
     const revisionChanged = loadedRevision.current !== graphRevision
+    const layoutFromStore = loadedLayoutSync.current !== layoutSync
     if (!workflowChanged && !revisionChanged) return
 
     const localPos = new Map(nodesRef.current.map((n) => [n.id, n.position]))
-    const keepLocalPositions = !workflowChanged
+    // Undo/redo must restore store positions/edges so routes recompute correctly.
+    // Other revision bumps (add node) keep local positions to avoid jump mid-drag.
+    const keepLocalPositions = !workflowChanged && !layoutFromStore
 
     const keepSelectedId = usePlannerStore.getState().selectedNodeId
     setNodes(
@@ -127,9 +182,24 @@ function CanvasInner() {
     )
     loadedWorkflowId.current = workflowId
     loadedRevision.current = graphRevision
-    if (workflowChanged) setSelectedEdgeId(null)
+    loadedLayoutSync.current = layoutSync
+    if (workflowChanged) {
+      selectedEdgeIdRef.current = null
+      setSelectedEdgeId(null)
+    }
     // Never auto fitView on drop/edit - keeps nodes where you placed them
-  }, [workflow, workflowId, graphRevision])
+  }, [workflow, workflowId, graphRevision, layoutSync])
+
+  useEffect(() => {
+    registerCanvasGraphFlush(() => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current)
+        saveTimer.current = null
+      }
+      flushSave()
+    })
+    return () => registerCanvasGraphFlush(null)
+  }, [flushSave])
 
   useEffect(() => {
     return () => {
@@ -137,7 +207,7 @@ function CanvasInner() {
     }
   }, [])
 
-  // Sync label/params from store only - never touch `selected` here (avoids RF #185 loops).
+  // Sync label/params from store only - never touch selection styling here (RF #185).
   useEffect(() => {
     if (!workflow) return
     setNodes((current) => {
@@ -151,54 +221,29 @@ function CanvasInner() {
       if (changed) nodesRef.current = next
       return changed ? next : current
     })
-    // Recolor routes when event accent/icon color changes.
     setEdges((current) => {
       const next = applyRunEdgeStyles(current, {
         workflowId,
         checkpoint: usePlannerStore.getState().checkpoint,
-        selectedEdgeId,
+        selectedEdgeId: selectedEdgeIdRef.current,
         nodes: workflow.nodes,
       })
-      const same =
-        current.length === next.length &&
-        current.every((edge, index) => {
-          const other = next[index]
-          return (
-            edge.id === other?.id &&
-            edge.style?.stroke === other?.style?.stroke &&
-            edge.style?.strokeWidth === other?.style?.strokeWidth &&
-            Boolean(edge.selected) === Boolean(other?.selected)
-          )
-        })
-      if (same) return current
+      if (edgesVisuallyEqual(current, next)) return current
       edgesRef.current = next
       return next
     })
-  }, [workflow, workflowId, selectedEdgeId])
+  }, [workflow, workflowId])
 
   useEffect(() => {
-    // Prefer store nodes — nodesRef is still [] on the first effect flush after open.
     const colorNodes = workflow?.nodes?.length ? workflow.nodes : nodesRef.current
     setEdges((current) => {
       const next = applyRunEdgeStyles(current, {
         workflowId,
         checkpoint,
-        selectedEdgeId,
+        selectedEdgeId: selectedEdgeIdRef.current,
         nodes: colorNodes,
       })
-      // Bail out if nothing visible changed - prevents selection thrash / update loops.
-      const same =
-        current.length === next.length &&
-        current.every((edge, index) => {
-          const other = next[index]
-          return (
-            edge.id === other?.id &&
-            edge.style?.stroke === other?.style?.stroke &&
-            edge.animated === other?.animated &&
-            Boolean(edge.selected) === Boolean(other?.selected)
-          )
-        })
-      if (same) return current
+      if (edgesVisuallyEqual(current, next)) return current
       edgesRef.current = next
       return next
     })
@@ -209,7 +254,6 @@ function CanvasInner() {
     checkpoint?.status,
     checkpoint?.updatedAt,
     checkpoint?.workflowId,
-    selectedEdgeId,
     workflowId,
     workflow?.nodes,
   ])
@@ -230,19 +274,11 @@ function CanvasInner() {
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const selected = changes.find(
-        (change): change is EdgeChange & { type: 'select'; selected: boolean; id: string } =>
-          change.type === 'select' && 'selected' in change,
-      )
-      let nextSelected = selectedEdgeId
-      if (selected?.selected) nextSelected = selected.id
-      if (selected && !selected.selected && selectedEdgeId === selected.id) {
-        nextSelected = null
+      const nextSelected = resolveSelectedEdgeId(changes, selectedEdgeIdRef.current)
+      if (nextSelected !== selectedEdgeIdRef.current) {
+        selectedEdgeIdRef.current = nextSelected
+        setSelectedEdgeId(nextSelected)
       }
-      if (changes.some((change) => change.type === 'remove')) {
-        nextSelected = null
-      }
-      if (nextSelected !== selectedEdgeId) setSelectedEdgeId(nextSelected)
 
       setEdges((current) => {
         const changed = applyEdgeChanges(changes, current)
@@ -252,15 +288,17 @@ function CanvasInner() {
           selectedEdgeId: nextSelected,
           nodes: nodesRef.current,
         })
+        // Critical: new array on every select notification loops RF → #185.
+        if (edgesVisuallyEqual(current, next)) return current
         edgesRef.current = next
         return next
       })
 
       if (changes.some((change) => change.type === 'remove')) {
-        scheduleSave()
+        queueMicrotask(() => flushSave())
       }
     },
-    [scheduleSave, selectedEdgeId, workflowId],
+    [flushSave, workflowId],
   )
 
   const onConnect = useCallback(
@@ -294,9 +332,9 @@ function CanvasInner() {
         edgesRef.current = next
         return next
       })
-      scheduleSave()
+      queueMicrotask(() => flushSave())
     },
-    [scheduleSave],
+    [flushSave],
   )
 
   const onReconnect = useCallback(
@@ -316,21 +354,23 @@ function CanvasInner() {
         edgesRef.current = next
         return next
       })
-      scheduleSave()
+      queueMicrotask(() => flushSave())
     },
-    [scheduleSave],
+    [flushSave],
   )
 
   const deleteSelectedEdge = useCallback(() => {
-    if (!selectedEdgeId) return
+    const edgeId = selectedEdgeIdRef.current
+    if (!edgeId) return
     setEdges((current) => {
-      const next = current.filter((edge) => edge.id !== selectedEdgeId)
+      const next = current.filter((edge) => edge.id !== edgeId)
       edgesRef.current = next
       return next
     })
+    selectedEdgeIdRef.current = null
     setSelectedEdgeId(null)
-    scheduleSave()
-  }, [scheduleSave, selectedEdgeId])
+    queueMicrotask(() => flushSave())
+  }, [flushSave])
 
   useEffect(() => {
     const isEditableTarget = (target: EventTarget | null) => {
@@ -485,9 +525,17 @@ function CanvasInner() {
       </div>
 
       {selectedEdgeId ? (
-        <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-lg">
+        <div className="absolute bottom-20 left-1/2 z-[90] flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-lg">
           <p className="text-xs text-foreground">Connection selected</p>
-          <Button size="sm" variant="destructive" className="rounded-xl" onClick={deleteSelectedEdge}>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="rounded-xl"
+            onClick={() => {
+              selectedEdgeIdRef.current = null
+              deleteSelectedEdge()
+            }}
+          >
             <Trash2 className="h-3.5 w-3.5" />
             Delete line
           </Button>
@@ -512,7 +560,10 @@ function CanvasInner() {
           const currentNodeId = usePlannerStore.getState().selectedNodeId
 
           if (nextNodeId) {
-            if (selectedEdgeId) setSelectedEdgeId(null)
+            if (selectedEdgeIdRef.current) {
+              selectedEdgeIdRef.current = null
+              setSelectedEdgeId(null)
+            }
             if (currentNodeId !== nextNodeId) {
               selectNode(nextNodeId)
               setDocsActionId(null)
@@ -521,16 +572,25 @@ function CanvasInner() {
           }
 
           if (nextEdgeId) {
-            if (selectedEdgeId !== nextEdgeId) setSelectedEdgeId(nextEdgeId)
+            if (selectedEdgeIdRef.current !== nextEdgeId) {
+              selectedEdgeIdRef.current = nextEdgeId
+              setSelectedEdgeId(nextEdgeId)
+            }
             if (currentNodeId !== null) selectNode(null)
           }
         }}
         onPaneClick={() => {
           if (usePlannerStore.getState().selectedNodeId !== null) selectNode(null)
-          if (selectedEdgeId) setSelectedEdgeId(null)
+          if (selectedEdgeIdRef.current) {
+            selectedEdgeIdRef.current = null
+            setSelectedEdgeId(null)
+          }
         }}
         onNodeClick={(_event, node) => {
-          if (selectedEdgeId) setSelectedEdgeId(null)
+          if (selectedEdgeIdRef.current) {
+            selectedEdgeIdRef.current = null
+            setSelectedEdgeId(null)
+          }
           if (usePlannerStore.getState().selectedNodeId !== node.id) {
             selectNode(node.id)
             setDocsActionId(null)

@@ -213,6 +213,16 @@ export const en: MessageDict = {
   'typeText.loopItemOutside':
     'Loop item binding only works inside a Map/For body. Switch to Dataset or move this step into the loop.',
 
+  'template.hint': 'Type ${ to pick dataset / loop variables (also supports {{…}})',
+  'template.noVariables': 'No matching variables',
+
+  'loop.iterableMode': 'Iterable mode',
+  'loop.iteratesOver': 'Array value',
+  'loop.itemVar': 'Item',
+  'loop.indexVar': 'Index',
+  'loop.sampleFields': 'Item fields',
+  'loop.nestedCount': 'Nested loops: {{count}}',
+
   'builder.workflows': 'Workflows',
   'builder.noPlan': 'No plan selected',
   'builder.runningElsewhere': 'Running elsewhere',

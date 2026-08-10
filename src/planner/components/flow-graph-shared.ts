@@ -134,7 +134,9 @@ export function applyRunEdgeStyles(
     const accent = sourceNode
       ? resolveNodeAccentColor(sourceNode)
       : (existingStroke ?? FALLBACK_ACCENT)
-    const selected = selectedEdgeId ? edge.id === selectedEdgeId : Boolean(edge.selected)
+    // Always prefer explicit selection id (null = none). Do not fall back to
+    // edge.selected — that fights RF batches when switching routes (#185).
+    const selected = selectedEdgeId != null && edge.id === selectedEdgeId
     if (selected) {
       return {
         ...edge,

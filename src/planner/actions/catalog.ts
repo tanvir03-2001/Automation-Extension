@@ -27,27 +27,28 @@ function def(
   }
 }
 
+/** One distinct hue per category — no shared colors; avoid black/white. */
 function categoryColor(category: ActionCategory): string {
   const map: Record<ActionCategory, string> = {
-    browser: '#0f766e',
-    mouse: '#2563eb',
-    keyboard: '#7c3aed',
-    input: '#0891b2',
-    element: '#059669',
-    clipboard: '#ca8a04',
-    storage: '#d97706',
-    variables: '#4f46e5',
-    conditions: '#db2777',
-    loops: '#ea580c',
-    data: '#0d9488',
-    downloads: '#0284c7',
-    upload: '#65a30d',
-    ai: '#16a34a',
-    wait: '#64748b',
-    screenshot: '#9333ea',
-    logging: '#475569',
-    flow: '#334155',
-    error: '#dc2626',
+    flow: '#f43f5e', // rose
+    browser: '#0d9488', // teal
+    mouse: '#2563eb', // blue
+    keyboard: '#7c3aed', // violet
+    input: '#0891b2', // cyan
+    element: '#059669', // emerald
+    ai: '#84cc16', // lime
+    wait: '#f59e0b', // amber
+    variables: '#4f46e5', // indigo
+    conditions: '#db2777', // pink
+    loops: '#ea580c', // orange
+    data: '#c026d3', // fuchsia
+    downloads: '#0284c7', // sky
+    clipboard: '#ca8a04', // gold
+    screenshot: '#9333ea', // purple
+    logging: '#b45309', // brown-amber
+    storage: '#e879f9', // fuchsia-light (typed; distinct from data fuchsia)
+    upload: '#65a30d', // olive lime
+    error: '#dc2626', // red
   }
   return map[category]
 }
@@ -1495,7 +1496,6 @@ const flowActions: ActionDefinition[] = [
       'Visual connector only. Rename the big title in Properties (Label). Edges still flow through it.',
     icon: 'Link',
     controlFlow: true,
-    color: '#64748b',
   }),
   def({
     id: 'flow.stop',
