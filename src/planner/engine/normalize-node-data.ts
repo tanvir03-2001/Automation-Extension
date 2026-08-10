@@ -12,6 +12,7 @@ const DEFAULT_INTERACTION: InteractionOptions = {
   dismissOverlays: false,
   waitEnabled: true,
   forceClick: false,
+  searchAnyTab: false,
   stabilizeMs: 0,
 }
 

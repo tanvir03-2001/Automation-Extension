@@ -22,10 +22,34 @@ export interface SmartPickResult {
 
 /** Real controls that should receive clicks (not tooltip/focus wrappers). */
 const CLICK_HOST_SELECTOR =
-  'button, [role="button"], [role="combobox"], [role="listbox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], [data-slot="dropdown-menu-trigger"], a[href], a[aria-label], summary, .ds-button, [class*="ds-button"], input[type="button"], input[type="submit"], input[type="reset"]'
+  'button, [role="button"], [role="combobox"], [role="listbox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], [data-slot="dropdown-menu-trigger"], a[href], a[aria-label], summary, .ds-button, [class*="ds-button"], input[type="button"], input[type="submit"], input[type="reset"], [data-identifier], [data-email]'
 
 const INTERACTIVE_SELECTOR =
-  'button, a[href], a[aria-label], [role="button"], [role="combobox"], [role="listbox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"])'
+  'button, a[href], a[aria-label], [role="button"], [role="combobox"], [role="listbox"], [role="link"], [role="menuitem"], [role="option"], [role="tab"], [data-slot="select-trigger"], input[type="button"], input[type="submit"], input[type="reset"], summary, [contenteditable="true"], textarea, select, input:not([type="hidden"]), [data-identifier], [data-email]'
+
+const EMAIL_IN_TEXT_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i
+
+function extractEmail(value: string): string {
+  const match = value.match(EMAIL_IN_TEXT_RE)
+  return match ? match[0].toLowerCase() : ''
+}
+
+function accountIdentity(el: Element): string {
+  const html = el as HTMLElement
+  return normalizeLabel(
+    html.getAttribute('data-identifier') ||
+      html.getAttribute('data-email') ||
+      html.getAttribute('data-email-address') ||
+      '',
+  )
+}
+
+function isAccountTile(el: Element): boolean {
+  const html = el as HTMLElement
+  if (html.hasAttribute('data-identifier') || html.hasAttribute('data-email')) return true
+  const label = visibleLabel(el)
+  return label.includes('@')
+}
 
 function cssEscape(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
@@ -78,6 +102,10 @@ function shortLabel(el: Element): string {
   if (aria.trim() && aria.trim().length <= 48) return normalizeLabel(aria)
 
   const text = normalizeLabel(html.innerText || '')
+  // Google account tiles: name + email often exceeds the normal 48-char short-label budget
+  if (text && (isAccountTile(el) || Boolean(accountIdentity(el)))) {
+    if (text.length <= 120) return text
+  }
   if (!text || text.length > 48) return ''
   // Avoid matching a toolbar that includes many labels
   if ((text.match(/\s/g) || []).length > 4) return ''
@@ -319,19 +347,28 @@ function listButtonLike(): HTMLElement[] {
   const found = new Set<HTMLElement>()
   for (const el of listInteractive()) found.add(promoteToClickHost(el))
 
-  // DeepSeek / Radix select / similar
+  // DeepSeek / Radix select / similar + Google account tiles
   const nodes = document.querySelectorAll<HTMLElement>(
-    'button, a[href], a[aria-label], [role="button"], [role="combobox"], [role="link"], [data-slot="select-trigger"], .ds-button, [class*="ds-button"], [aria-label]',
+    'button, a[href], a[aria-label], [role="button"], [role="combobox"], [role="link"], [data-slot="select-trigger"], .ds-button, [class*="ds-button"], [aria-label], [data-identifier], [data-email]',
   )
   for (const el of nodes) {
     if (!isVisible(el) || inIgnoredRegion(el)) continue
-    if (el.hasAttribute('aria-label') && !looksClickable(el) && el.tagName !== 'BUTTON' && el.tagName !== 'A') {
+    if (el.hasAttribute('aria-label') && !looksClickable(el) && el.tagName !== 'BUTTON' && el.tagName !== 'A' && !isAccountTile(el)) {
       continue
     }
     const host = promoteToClickHost(el)
     const label = shortLabel(host) || visibleLabel(host)
-    if (!label || label.length > 48) continue
+    const account = isAccountTile(host) || Boolean(accountIdentity(host))
+    // Google account rows often exceed 48 chars (name + email) — keep them.
+    if (!label && !account) continue
+    if (label && label.length > 48 && !account && !label.includes('@')) continue
     found.add(host)
+  }
+
+  // Explicit Google / OAuth account identity nodes
+  for (const el of document.querySelectorAll<HTMLElement>('[data-identifier], [data-email]')) {
+    if (!isVisible(el) || inIgnoredRegion(el)) continue
+    found.add(promoteToClickHost(el))
   }
 
   // Text "Continue" in content span → promote to parent role=button
@@ -431,12 +468,31 @@ function matchSemantic(el: Element, parts: ReturnType<typeof parseAeSelector>): 
 
   if (parts.btn || parts.text) {
     const spec = parts.btn ?? parts.text
+    const needle = spec!.value
     const label = shortLabel(el) || visibleLabel(el)
-    if (!labelMatches(label, spec!.value, spec!.op)) return false
-    // Contains match on long labels is too loose for btn
-    if (parts.btn && spec!.op === 'contains') {
+    const identity = accountIdentity(el)
+    const needleEmail = extractEmail(needle)
+    const identityEmail = extractEmail(identity) || identity.toLowerCase()
+    const labelEmail = extractEmail(label)
+
+    const labelOk = labelMatches(label, needle, spec!.op)
+    const identityOk =
+      Boolean(identity) &&
+      (labelMatches(identity, needle, spec!.op) ||
+        (needleEmail !== '' && identityEmail === needleEmail) ||
+        (needleEmail !== '' && identity.toLowerCase().includes(needleEmail)))
+    const emailBridgeOk =
+      needleEmail !== '' &&
+      (identityEmail === needleEmail ||
+        labelEmail === needleEmail ||
+        label.toLowerCase().includes(needleEmail))
+
+    if (!labelOk && !identityOk && !emailBridgeOk) return false
+
+    // Contains match on long labels is too loose for btn — unless account tile / email bridge
+    if (parts.btn && spec!.op === 'contains' && !identityOk && !emailBridgeOk) {
       const short = shortLabel(el)
-      if (!short || !labelMatches(short, spec!.value, 'contains')) return false
+      if (!short || !labelMatches(short, needle, 'contains')) return false
     }
   }
 
@@ -467,6 +523,12 @@ function scoreMatch(el: HTMLElement, parts: ReturnType<typeof parseAeSelector>):
     score += 45
   }
   if (el.tagName === 'A' || el.getAttribute('role') === 'link') score += 35
+  const identity = accountIdentity(el)
+  if (identity) {
+    score += 50
+    const needleEmail = extractEmail(needle)
+    if (needleEmail && identity.toLowerCase().includes(needleEmail)) score += 80
+  }
   if (el.className.toString().includes('ds-button')) score += 25
   if (looksClickable(el)) score += 10
   // Prefer real controls over tooltip/focus wrappers

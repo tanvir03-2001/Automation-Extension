@@ -22,6 +22,7 @@ export type MessageType =
   | 'STORAGE_SET'
   | 'PICK_ELEMENT_START'
   | 'PICK_ELEMENT_RESULT'
+  | 'PICK_ELEMENT_STOP'
   | 'CONTENT_PING'
   | 'OPEN_URL'
   | 'RUN_GUARD_LOCK'

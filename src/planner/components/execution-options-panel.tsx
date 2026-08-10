@@ -76,6 +76,7 @@ export function ExecutionOptionsPanel({
     dismissOverlays: interaction?.dismissOverlays ?? false,
     waitEnabled: interaction?.waitEnabled ?? true,
     forceClick: interaction?.forceClick ?? false,
+    searchAnyTab: interaction?.searchAnyTab ?? false,
     stabilizeMs: interaction?.stabilizeMs ?? 0,
   }
 
@@ -264,6 +265,7 @@ export function ExecutionOptionsPanel({
             ['dismissOverlays', t('exec.dismissOverlays')],
             ['waitEnabled', t('exec.waitEnabled')],
             ['forceClick', t('exec.forceClick')],
+            ['searchAnyTab', t('exec.searchAnyTab')],
           ] as const
         ).map(([key, label]) => (
           <label key={key} className="flex items-center gap-2 text-sm text-foreground">

@@ -106,20 +106,20 @@ export const SHARED_FEATURES: Record<SharedFeatureId, FeatureGuide> = {
     id: 'interaction',
     title: { en: 'Interaction options', bn: 'ইন্টারঅ্যাকশন অপশন' },
     what: {
-      en: 'Browser helpers before/during click-like actions: scroll into view, dismiss overlays, wait until enabled, force click, stabilize delay.',
-      bn: 'ক্লিক-জাতীয় অ্যাকশনের আগে/সময় ব্রাউজার হেল্পার: স্ক্রল করে দেখানো, ওভারলে সরানো, এনাবল না হওয়া পর্যন্ত ওয়েট, ফোর্স ক্লিক, স্ট্যাবিলাইজ ডিলে।',
+      en: 'Browser helpers before/during click-like actions: scroll into view, dismiss overlays, wait until enabled, force click, find on any open tab, stabilize delay.',
+      bn: 'ক্লিক-জাতীয় অ্যাকশনের আগে/সময় ব্রাউজার হেল্পার: স্ক্রল করে দেখানো, ওভারলে সরানো, এনাবল না হওয়া পর্যন্ত ওয়েট, ফোর্স ক্লিক, যেকোনো ওপেন ট্যাবে খোঁজা, স্ট্যাবিলাইজ ডিলে।',
     },
     why: {
-      en: 'Modern apps hide controls below the fold, under modals, or keep them disabled until validation passes.',
-      bn: 'আধুনিক অ্যাপে কন্ট্রোল নিচে থাকে, মোডালের নিচে লুকানো থাকে, বা ভ্যালিডেশন না হওয়া পর্যন্ত ডিজেবল থাকে।',
+      en: 'Modern apps hide controls below the fold, under modals, or keep them disabled until validation passes. Popups and new windows open outside the working tab.',
+      bn: 'আধুনিক অ্যাপে কন্ট্রোল নিচে থাকে, মোডালের নিচে লুকানো থাকে, বা ভ্যালিডেশন না হওয়া পর্যন্ত ডিজেবল থাকে। পপআপ/নতুন উইন্ডো ওয়ার্কিং ট্যাবের বাইরে খোলে।',
     },
     how: {
-      en: 'In Execution → Interaction, toggle the checkboxes you need. Leave Force click off unless normal click keeps failing.',
-      bn: 'Execution → Interaction-এ প্রয়োজনীয় চেকবক্স চালু করুন। সাধারণ ক্লিক বারবার ফেইল না হলে Force click বন্ধ রাখুন।',
+      en: 'In Execution → Interaction, toggle the checkboxes you need. Leave Force click off unless normal click keeps failing. Enable Find target on any open tab when the control may appear in a popup or another tab.',
+      bn: 'Execution → Interaction-এ প্রয়োজনীয় চেকবক্স চালু করুন। সাধারণ ক্লিক বারবার ফেইল না হলে Force click বন্ধ রাখুন। পপআপ বা অন্য ট্যাবে কন্ট্রোল থাকতে পারে এমন কেসে যেকোনো ওপেন ট্যাবে টার্গেট খুঁজো চালু করুন।',
     },
     example: {
-      en: 'Long settings page: Scroll into view + Wait until enabled. Cookie modal: Dismiss overlays first.',
-      bn: 'লম্বা সেটিংস পেজ: Scroll into view + Wait until enabled। কুকি মোডাল: Dismiss overlays first।',
+      en: 'Long settings page: Scroll into view + Wait until enabled. After a click opens a popup: Find target on any open tab.',
+      bn: 'লম্বা সেটিংস পেজ: Scroll into view + Wait until enabled। ক্লিকে পপআপ খুললে: যেকোনো ওপেন ট্যাবে টার্গেট খুঁজো।',
     },
   },
 }

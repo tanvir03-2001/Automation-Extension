@@ -85,7 +85,7 @@ export function ConditionFields({
   onChange,
 }: Props) {
   const updateNodeData = usePlannerStore((s) => s.updateNodeData)
-  const { picking, error, lastPicked, pickElement } = useElementPicker(workflow)
+  const { picking, error, lastPicked, pickElement, cancelPick } = useElementPicker(workflow)
   const [pickingActive, setPickingActive] = useState(false)
 
   const checkType = String(params.checkType ?? 'element_visible')
@@ -248,20 +248,32 @@ export function ConditionFields({
               placeholder="CSS selector or pick with mouse"
               onChange={(event) => onChange({ selector: event.target.value })}
             />
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full rounded-xl"
-              disabled={picking}
-              onClick={() => void pickSelector()}
-            >
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="min-w-0 flex-1 rounded-xl"
+                disabled={picking}
+                onClick={() => void pickSelector()}
+              >
+                {picking && pickingActive ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Crosshair className="h-3.5 w-3.5" />
+                )}
+                {picking ? 'Click an element on any tab…' : 'Pick with mouse'}
+              </Button>
               {picking && pickingActive ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Crosshair className="h-3.5 w-3.5" />
-              )}
-              {picking ? 'Click an element on the page…' : 'Pick with mouse'}
-            </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 rounded-xl"
+                  onClick={() => void cancelPick()}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
             {lastPicked ? (
               <p className="break-all font-mono text-[10px] text-muted-foreground">
                 Last: {lastPicked.selector}

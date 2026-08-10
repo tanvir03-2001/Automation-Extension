@@ -99,7 +99,7 @@ export function PropertyInspector() {
   const toggleNodeEnabled = usePlannerStore((s) => s.toggleNodeEnabled)
   const duplicateNode = usePlannerStore((s) => s.duplicateNode)
   const removeNode = usePlannerStore((s) => s.removeNode)
-  const { picking, error, lastPicked, pickElement } = useElementPicker(workflow)
+  const { picking, error, lastPicked, pickElement, cancelPick } = useElementPicker(workflow)
   const [activePickField, setActivePickField] = useState<string | null>(null)
 
   const node = workflow?.nodes.find((item) => item.id === nodeId)
@@ -302,26 +302,38 @@ export function PropertyInspector() {
                       ? 'পেজের Download বাটন/লিংক pick করুন। Runtime-এ ঠিক একবারই click হবে - কখনো double-click নয়।'
                       : 'বাটনে ক্লিক করুন → পেজ খুলবে → যেখানে ক্লিক করবেন সেই element selector হিসেবে সেভ হবে।'}
               </p>
-              <Button
-                size="sm"
-                className="mt-3 w-full rounded-xl"
-                disabled={picking}
-                onClick={() => void applyPickedSelector('selector')}
-              >
-                {picking && activePickField === 'selector' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Crosshair className="h-3.5 w-3.5" />
-                )}
-                {picking
-                  ? 'Click an element on the page…'
-                  : selectedNode.data.actionId === 'clipboard.copy_event' ||
-                      selectedNode.data.actionId === 'clipboard.click_to_clipboard'
-                    ? 'Pick Copy button'
-                    : selectedNode.data.actionId === 'downloads.click_download'
-                      ? 'Pick Download button'
-                      : 'Pick click target'}
-              </Button>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  size="sm"
+                  className="min-w-0 flex-1 rounded-xl"
+                  disabled={picking}
+                  onClick={() => void applyPickedSelector('selector')}
+                >
+                  {picking && activePickField === 'selector' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Crosshair className="h-3.5 w-3.5" />
+                  )}
+                  {picking
+                    ? 'Click an element on any tab…'
+                    : selectedNode.data.actionId === 'clipboard.copy_event' ||
+                        selectedNode.data.actionId === 'clipboard.click_to_clipboard'
+                      ? 'Pick Copy button'
+                      : selectedNode.data.actionId === 'downloads.click_download'
+                        ? 'Pick Download button'
+                        : 'Pick click target'}
+                </Button>
+                {picking ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 rounded-xl"
+                    onClick={() => void cancelPick()}
+                  >
+                    Cancel
+                  </Button>
+                ) : null}
+              </div>
               {lastPicked ? (
                 <p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">
                   Last: {lastPicked.selector}
@@ -593,20 +605,32 @@ export function PropertyInspector() {
                       }
                     />
                     {isSelectorField ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full rounded-xl"
-                        disabled={picking}
-                        onClick={() => void applyPickedSelector(field.key)}
-                      >
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="min-w-0 flex-1 rounded-xl"
+                          disabled={picking}
+                          onClick={() => void applyPickedSelector(field.key)}
+                        >
+                          {picking && activePickField === field.key ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Crosshair className="h-3.5 w-3.5" />
+                          )}
+                          {picking ? 'Click an element on any tab…' : t('inspector.pickMouse')}
+                        </Button>
                         {picking && activePickField === field.key ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Crosshair className="h-3.5 w-3.5" />
-                        )}
-                        {t('inspector.pickMouse')}
-                      </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0 rounded-xl"
+                            onClick={() => void cancelPick()}
+                          >
+                            Cancel
+                          </Button>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 )}
@@ -639,20 +663,32 @@ export function PropertyInspector() {
                     })
                   }
                 />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full rounded-xl"
-                  disabled={picking}
-                  onClick={() => void applyPickedSelector('__primary')}
-                >
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="min-w-0 flex-1 rounded-xl"
+                    disabled={picking}
+                    onClick={() => void applyPickedSelector('__primary')}
+                  >
+                    {picking && activePickField === '__primary' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Crosshair className="h-3.5 w-3.5" />
+                    )}
+                    {picking ? 'Click an element on any tab…' : t('inspector.pickMouse')}
+                  </Button>
                   {picking && activePickField === '__primary' ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Crosshair className="h-3.5 w-3.5" />
-                  )}
-                  {t('inspector.pickMouse')}
-                </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 rounded-xl"
+                      onClick={() => void cancelPick()}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                </div>
                 {(selectedNode.data.selector?.fallbacks?.length ?? 0) > 0 ? (
                   <div className="rounded-xl border border-border bg-muted/40 px-2.5 py-2">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">

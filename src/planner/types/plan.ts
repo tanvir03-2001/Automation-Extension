@@ -110,6 +110,8 @@ export const InteractionOptionsSchema = z.object({
   dismissOverlays: z.boolean().default(false),
   waitEnabled: z.boolean().default(true),
   forceClick: z.boolean().default(false),
+  /** Probe all open http(s) tabs (incl. popups) for the target selector. */
+  searchAnyTab: z.boolean().default(false),
   stabilizeMs: z.number().int().min(0).default(0),
 })
 

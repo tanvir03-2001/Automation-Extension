@@ -309,6 +309,7 @@ export const en: MessageDict = {
   'exec.dismissOverlays': 'Dismiss overlays first',
   'exec.waitEnabled': 'Wait until element enabled',
   'exec.forceClick': 'Force click (last resort)',
+  'exec.searchAnyTab': 'Find target on any open tab',
   'exec.stabilizeMs': 'Stabilize delay (ms)',
   'exec.dependencies': 'Dependencies',
   'exec.dependenciesHelp': 'Run this event only when variable / dataset / history rules pass.',

@@ -157,6 +157,29 @@ export const EVENT_GUIDE_OVERRIDES: Record<string, EventGuideOverride> = {
           bn: 'কাস্টম ক্যানভাস বাটন কখনো “enabled” না দেখালে → অন্য অপশন ফেল করলে Force click চেষ্টা করুন।',
         },
       },
+      {
+        id: 'searchAnyTab',
+        title: {
+          en: 'Find target on any open tab',
+          bn: 'যেকোনো ওপেন ট্যাবে টার্গেট খুঁজো',
+        },
+        what: {
+          en: 'Looks for the selector on every open http(s) tab and popup window, not only the working tab.',
+          bn: 'শুধু ওয়ার্কিং ট্যাব নয় — সব ওপেন http(s) ট্যাব ও পপআপ উইন্ডোতে সিলেক্টর খোঁজে।',
+        },
+        why: {
+          en: 'A prior click may open a new tab or popup; the next step’s target lives there.',
+          bn: 'আগের ক্লিকে নতুন ট্যাব/পপআপ খুলতে পারে; পরের ধাপের টার্গেট সেখানে থাকে।',
+        },
+        how: {
+          en: 'Enable on the step that must run on the other page. Popups may take a few seconds to appear — the step keeps searching until Timeout. On success that tab becomes the working tab for later steps.',
+          bn: 'যে ধাপ অন্য পেজে চলবে সেখানে চালু করুন। পপআপ আসতে কয়েক সেকেন্ড লাগতে পারে — Timeout পর্যন্ত খুঁজতে থাকবে। সফল হলে সেই ট্যাব পরের ধাপের ওয়ার্কিং ট্যাব হয়।',
+        },
+        example: {
+          en: 'Click “Sign in with Google” (opens popup) → next Click with Find target on any open tab on the account row.',
+          bn: '“Sign in with Google”-এ Click (পপআপ খোলে) → পরের Click-এ যেকোনো ওপেন ট্যাবে টার্গেট খুঁজো দিয়ে অ্যাকাউন্ট রো।',
+        },
+      },
     ],
   },
 

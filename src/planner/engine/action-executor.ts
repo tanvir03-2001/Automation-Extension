@@ -1,6 +1,6 @@
 import { interpolate, interpolateParams } from '@/shared/utils/interpolate'
 import { sendTabMessage } from '@/shared/messaging/bus'
-import { ensureContentScript } from '@/background/ensure-content-script'
+import { ensureContentScript, isRestrictedUrl } from '@/background/ensure-content-script'
 import { runGuardController } from '@/background/run-guard-controller'
 import { tabController } from '@/engine/automation/tab-controller'
 import { downloadManager } from '@/modules/download/download-manager'
@@ -52,6 +52,120 @@ async function ensureTab(activeTabId?: number): Promise<number> {
   }
   throw new Error(
     'No working tab. In a full Run, place Open URL (or New Tab / Open ChatGPT) before this step. For Event Test, focus a normal website tab first.',
+  )
+}
+
+/** Usable URL for restriction checks (pendingUrl while the tab is still loading). */
+function tabProbeUrl(tab: chrome.tabs.Tab): string | undefined {
+  const url = (tab.url || tab.pendingUrl || '').trim()
+  return url || undefined
+}
+
+function isSearchableTab(tab: chrome.tabs.Tab): boolean {
+  if (typeof tab.id !== 'number') return false
+  const url = tabProbeUrl(tab)
+  // Brand-new popup often has empty url+pendingUrl while status is loading — keep it.
+  if (!url) return tab.status === 'loading'
+  return !isRestrictedUrl(url)
+}
+
+/**
+ * Non-restricted tabs across windows for searchAnyTab.
+ * Order: popup windows (newest first), other tabs (newest first), preferred working tab last.
+ */
+async function listCandidateTabIds(preferredTabId?: number): Promise<number[]> {
+  const tabs = await chrome.tabs.query({})
+  const candidates = tabs.filter(isSearchableTab)
+  if (candidates.length === 0) return []
+
+  const windowTypes = new Map<number, string | undefined>()
+  await Promise.all(
+    [...new Set(candidates.map((t) => t.windowId))].map(async (windowId) => {
+      try {
+        const win = await chrome.windows.get(windowId)
+        windowTypes.set(windowId, win.type)
+      } catch {
+        windowTypes.set(windowId, undefined)
+      }
+    }),
+  )
+
+  const withMeta = candidates.map((tab) => ({
+    id: tab.id as number,
+    isPopup: windowTypes.get(tab.windowId) === 'popup',
+  }))
+  // Newer tabs usually have higher ids — prefer them within each group.
+  withMeta.sort((a, b) => b.id - a.id)
+
+  const popupIds = withMeta.filter((s) => s.isPopup).map((s) => s.id)
+  const otherIds = withMeta.filter((s) => !s.isPopup).map((s) => s.id)
+  const preferred =
+    preferredTabId != null && otherIds.includes(preferredTabId) ? preferredTabId : undefined
+  const rest = otherIds.filter((id) => id !== preferred)
+
+  return [...popupIds, ...rest, ...(preferred != null ? [preferred] : [])]
+}
+
+/**
+ * Probe open tabs for a selector until the step deadline (popup / other-window support).
+ * Re-queries tabs each round so newly opened OAuth windows are included.
+ */
+async function searchAnyTabForSelector(args: {
+  preferredTabId?: number
+  selector: string
+  fallbacks: string[]
+  timeoutMs: number
+}): Promise<number> {
+  const deadline = Date.now() + Math.max(args.timeoutMs, 1_000)
+  const probeMs = 1_200
+  let lastTabCount = 0
+  let preferredFailed = false
+
+  while (Date.now() < deadline) {
+    let tabIds = await listCandidateTabIds(args.preferredTabId)
+    if (tabIds.length === 0) {
+      await sleep(250)
+      continue
+    }
+
+    // After the working tab already missed once, skip it for a while and focus popups/others.
+    if (preferredFailed && args.preferredTabId != null) {
+      const withoutPreferred = tabIds.filter((id) => id !== args.preferredTabId)
+      if (withoutPreferred.length > 0) tabIds = withoutPreferred
+    }
+
+    lastTabCount = tabIds.length
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) break
+
+    for (const tabId of tabIds) {
+      const left = deadline - Date.now()
+      if (left <= 0) break
+      const timeoutMs = Math.max(400, Math.min(probeMs, left))
+      try {
+        const result = await sendDom(tabId, {
+          action: 'waitForElement',
+          selector: args.selector,
+          fallbacks: args.fallbacks.length ? args.fallbacks : undefined,
+          timeoutMs,
+        })
+        if (result.ok) return tabId
+        if (tabId === args.preferredTabId) preferredFailed = true
+      } catch {
+        if (tabId === args.preferredTabId) preferredFailed = true
+      }
+    }
+
+    if (Date.now() < deadline) await sleep(300)
+  }
+
+  throw Object.assign(
+    new Error(
+      lastTabCount === 0
+        ? 'No open website tabs to search. Open an http/https page (or popup window) and try again.'
+        : `Target not found on any open tab (${lastTabCount} checked). Selector: ${args.selector}`,
+    ),
+    { name: 'ElementNotFoundError' },
   )
 }
 
@@ -221,9 +335,26 @@ export async function executePlannerAction(args: {
           dismissOverlays?: boolean
           waitEnabled?: boolean
           forceClick?: boolean
+          searchAnyTab?: boolean
           stabilizeMs?: number
         })
       : undefined
+
+  /**
+   * When searchAnyTab is on and this step has a CSS selector, find the element
+   * on any open tab/popup; otherwise use the single working tab.
+   */
+  const resolveTab = async (): Promise<number> => {
+    if (interaction?.searchAnyTab && selector) {
+      return searchAnyTabForSelector({
+        preferredTabId: activeTabId,
+        selector,
+        fallbacks,
+        timeoutMs: args.timeoutMs,
+      })
+    }
+    return ensureTab(activeTabId)
+  }
 
   const runDom = async (tabId: number, command: AutomationCommand) => {
     if (interaction?.dismissOverlays && command.action === 'click') {
@@ -356,14 +487,14 @@ export async function executePlannerAction(args: {
 
       case 'browser.refresh':
       case 'browser.reload': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         await chrome.tabs.reload(activeTabId)
         await tabController.waitForComplete(activeTabId)
         return { status: 'success', activeTabId }
       }
 
       case 'browser.go_back': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const back = await tabController.goBack(activeTabId)
         const failIfNoHistory = Boolean(params.failIfNoHistory ?? false)
         if (!back.navigated) {
@@ -388,7 +519,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'browser.go_forward': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const forward = await tabController.goForward(activeTabId)
         const failIfNoHistory = Boolean(params.failIfNoHistory ?? false)
         if (!forward.navigated) {
@@ -412,7 +543,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'browser.close_tab': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         await chrome.tabs.remove(activeTabId)
         return { status: 'success', activeTabId: undefined }
       }
@@ -435,13 +566,13 @@ export async function executePlannerAction(args: {
       }
 
       case 'browser.wait_for_page': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         await tabController.waitForComplete(activeTabId, args.timeoutMs)
         return { status: 'success', activeTabId }
       }
 
       case 'browser.scroll': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'scroll',
           options: { y: Number(params.y ?? 600) },
@@ -451,7 +582,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'browser.scroll_to': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'scroll',
           selector,
@@ -471,7 +602,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'click',
           selector,
@@ -482,7 +613,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'downloads.click_download': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         if (!selector) {
           throw new Error('Download Click needs a picked Download button - use Pick with mouse')
         }
@@ -498,7 +629,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click_exact': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
         if (!text && !selector) {
           throw new Error('Provide exact text/label, or Pick with mouse on the target')
@@ -517,7 +648,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click_text': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
         if (!text && !selector) {
           throw new Error('Provide text to find, or Pick with mouse on the target')
@@ -536,7 +667,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click_aria': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? params.ariaLabel ?? '').trim()
         if (!text && !selector) {
           throw new Error('Provide aria-label, or Pick with mouse on the target')
@@ -555,7 +686,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click_button': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? params.buttonText ?? params.buttonName ?? '').trim()
         if (!text && !selector) {
           throw new Error('Provide button name, or Pick with mouse on the target')
@@ -574,7 +705,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click_link': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? params.href ?? '').trim()
         if (!text && !selector) {
           throw new Error('Provide link text or href, or Pick with mouse on the target')
@@ -593,7 +724,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'mouse.click_coordinates': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const x = Number(params.x)
         const y = Number(params.y)
         if (!Number.isFinite(x) || !Number.isFinite(y)) {
@@ -609,7 +740,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'ai.click_send': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         // Wait briefly so ChatGPT enables Send after Paste/Type
         await sleep(400)
         const sendSelector =
@@ -627,7 +758,7 @@ export async function executePlannerAction(args: {
       case 'mouse.double_click':
       case 'mouse.right_click':
       case 'mouse.hover': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'click',
           selector,
@@ -640,7 +771,7 @@ export async function executePlannerAction(args: {
 
       case 'keyboard.type_text':
       case 'keyboard.paste_text': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const pasteMode = args.actionId === 'keyboard.paste_text'
 
         const resolved = await resolveTypeText({
@@ -707,7 +838,7 @@ export async function executePlannerAction(args: {
 
       case 'input.fill':
       case 'ai.paste_prompt': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const value = String(params.text ?? params.value ?? params.prompt ?? '')
         const result = await runDom(activeTabId, {
           action: 'fill',
@@ -720,7 +851,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'input.clear': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'fill',
           selector,
@@ -732,7 +863,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'input.append': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const current = await runDom(activeTabId, {
           action: 'extractAttribute',
           selector,
@@ -751,7 +882,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'input.dropdown': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'select',
           selector,
@@ -764,7 +895,7 @@ export async function executePlannerAction(args: {
 
       case 'keyboard.press_key':
       case 'keyboard.shortcut': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const chordRaw =
           params.keys ??
           params.key ??
@@ -790,7 +921,7 @@ export async function executePlannerAction(args: {
       case 'element.wait_visible':
       case 'element.wait_icon':
       case 'wait.until_element': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         if (!selector) throw new Error('Selector is required - pick the element/icon with mouse')
         const result = await runDom(activeTabId, {
           action: 'waitForElementVisible',
@@ -806,7 +937,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'element.if_visible': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         if (!selector) throw new Error('Selector is required - pick the button/element with mouse')
         const pollMs = Math.max(
           0,
@@ -832,7 +963,7 @@ export async function executePlannerAction(args: {
 
       case 'element.wait_hidden':
       case 'wait.until_hidden': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         if (!selector) throw new Error('Selector is required - pick the element with mouse')
         const result = await runDom(activeTabId, {
           action: 'waitForElementHidden',
@@ -849,7 +980,7 @@ export async function executePlannerAction(args: {
 
       case 'element.wait_clickable':
       case 'wait.until_clickable': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         if (!selector) throw new Error('Selector is required - pick the element with mouse')
         const result = await runDom(activeTabId, {
           action: 'waitForClickable',
@@ -866,7 +997,7 @@ export async function executePlannerAction(args: {
 
       case 'element.wait_text':
       case 'wait.until_text': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? '')
         if (!text.trim()) throw new Error('Text is required')
         const result = await runDom(activeTabId, {
@@ -884,7 +1015,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'element.wait_exact_text': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? '')
         if (!text.trim()) throw new Error('Exact text is required')
         const result = await runDom(activeTabId, {
@@ -901,7 +1032,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'element.wait_text_gone': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const text = String(params.text ?? '')
         if (!text.trim()) throw new Error('Text is required')
         const result = await runDom(activeTabId, {
@@ -920,7 +1051,7 @@ export async function executePlannerAction(args: {
 
       case 'element.wait_button':
       case 'wait.until_button': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const buttonText = String(params.buttonText ?? params.text ?? '')
         if (!selector && !buttonText.trim()) {
           throw new Error('Provide a button label or pick a selector with mouse')
@@ -941,7 +1072,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'ai.wait_response': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         // Prefer waiting until streaming/generation fully ends
         const result = await runDom(activeTabId, {
           action: 'waitForGenerationEnd',
@@ -956,7 +1087,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'ai.collect_json_parts': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const outputKey = String(params.outputKey ?? 'finalStoryJson')
         const filename = interpolate(String(params.filename ?? 'chatgpt-story.json'), args.variables)
         // Always read the latest assistant message from the page (after Wait Response)
@@ -1001,7 +1132,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'element.find': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'assertElement',
           selector,
@@ -1013,7 +1144,7 @@ export async function executePlannerAction(args: {
 
       case 'element.extract_text':
       case 'ai.copy_response': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'extractText',
           selector,
@@ -1030,7 +1161,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'element.extract_attribute': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'extractAttribute',
           selector,
@@ -1061,7 +1192,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'wait.until_url': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const needle = String(params.includes ?? '')
         const started = Date.now()
         while (Date.now() - started < args.timeoutMs) {
@@ -1113,7 +1244,7 @@ export async function executePlannerAction(args: {
           ok = evaluateCondition(left, String(params.operator ?? 'equals'), right)
           detail = { left, right, operator: params.operator }
         } else {
-          activeTabId = await ensureTab(activeTabId)
+          activeTabId = await resolveTab()
           const kind =
             checkType === 'element_visible' ||
             checkType === 'element_exists' ||
@@ -1180,7 +1311,7 @@ export async function executePlannerAction(args: {
         if (sourceType === 'variable') {
           value = interpolate(String(params.value ?? ''), args.variables)
         } else {
-          activeTabId = await ensureTab(activeTabId)
+          activeTabId = await resolveTab()
           const kind =
             sourceType === 'element_attribute' ? 'element_attribute' : 'element_text'
           const result = await runDom(activeTabId, {
@@ -1312,7 +1443,7 @@ export async function executePlannerAction(args: {
         const clickDelayMs = Math.max(0, Number(params.clickDelayMs ?? 250))
         const outputKey = String(params.outputKey ?? 'clipboardText').trim() || 'clipboardText'
 
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const clicked = await runDom(activeTabId, {
           action: 'click',
           selector,
@@ -1387,7 +1518,7 @@ export async function executePlannerAction(args: {
           text = String(params.text ?? '')
         } else if (sourceMode === 'extract_from_element') {
           if (!selector) throw new Error('Pick the text element (selector required)')
-          activeTabId = await ensureTab(activeTabId)
+          activeTabId = await resolveTab()
           const extracted = await runDom(activeTabId, {
             action: 'extractText',
             selector,
@@ -1398,7 +1529,7 @@ export async function executePlannerAction(args: {
         } else {
           // click_copy_button (default): click picked Copy button → read OS clipboard
           if (!selector) throw new Error('Pick the Copy button with mouse (selector required)')
-          activeTabId = await ensureTab(activeTabId)
+          activeTabId = await resolveTab()
           const clicked = await runDom(activeTabId, {
             action: 'click',
             selector,
@@ -1516,7 +1647,7 @@ export async function executePlannerAction(args: {
         const key = String(params.outputKey ?? 'clipboard')
         let value = args.variables.__clipboard ?? ''
         try {
-          activeTabId = await ensureTab(activeTabId)
+          activeTabId = await resolveTab()
           const result = await runDom(activeTabId, { action: 'readClipboard' })
           if (result.ok && typeof result.data === 'string') {
             value = result.data
@@ -1878,7 +2009,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'wait.network_idle': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'waitNetworkIdle',
           timeoutMs: args.timeoutMs,
@@ -1893,7 +2024,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'wait.dom_stable': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'waitDomStable',
           timeoutMs: args.timeoutMs,
@@ -1908,7 +2039,7 @@ export async function executePlannerAction(args: {
       }
 
       case 'element.dismiss_overlay': {
-        activeTabId = await ensureTab(activeTabId)
+        activeTabId = await resolveTab()
         const result = await runDom(activeTabId, {
           action: 'dismissOverlays',
           timeoutMs: args.timeoutMs,

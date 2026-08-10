@@ -312,6 +312,7 @@ export const bn: MessageDict = {
   'exec.dismissOverlays': 'আগে ওভারলে বন্ধ করো',
   'exec.waitEnabled': 'এলিমেন্ট এনাবল না হওয়া পর্যন্ত অপেক্ষা',
   'exec.forceClick': 'ফোর্স ক্লিক (শেষ উপায়)',
+  'exec.searchAnyTab': 'যেকোনো ওপেন ট্যাবে টার্গেট খুঁজো',
   'exec.stabilizeMs': 'স্ট্যাবিলাইজ ডিলে (ms)',
   'exec.dependencies': 'ডিপেন্ডেন্সি',
   'exec.dependenciesHelp': 'ভেরিয়েবল / ডেটাসেট / হিস্টরি রুল মিললেই এই ইভেন্ট চলবে।',

@@ -16,7 +16,7 @@ import {
   loadDurableWorkflowStore,
 } from '@/engine/copy-store/durable'
 import { tabController } from '@/engine/automation/tab-controller'
-import { ensureContentScript } from '@/background/ensure-content-script'
+import { ensureContentScript, isRestrictedUrl } from '@/background/ensure-content-script'
 import { KEEPALIVE_ALARM, runGuardController } from '@/background/run-guard-controller'
 import { trustedClickAt, trustedKeyChord } from '@/background/trusted-click'
 import { sendTabMessage } from '@/shared/messaging/bus'
@@ -38,17 +38,46 @@ let pickWaiter: {
   timer: ReturnType<typeof setTimeout>
 } | null = null
 
-function beginPickWait(timeoutMs = 120_000): Promise<PickResult> {
-  if (pickWaiter) {
-    pickWaiter.resolve({ ok: false, error: 'Previous pick cancelled' })
-    clearTimeout(pickWaiter.timer)
-    pickWaiter = null
-  }
+/** Tabs that currently have an active pick overlay for this session. */
+let pickSessionTabIds: number[] = []
 
+async function stopPickOnTabs(tabIds: number[], reason = 'Pick session ended'): Promise<void> {
+  await Promise.allSettled(
+    tabIds.map((tabId) =>
+      sendTabMessage(tabId, {
+        type: 'PICK_ELEMENT_STOP',
+        payload: { reason },
+      }).catch(() => undefined),
+    ),
+  )
+}
+
+async function endPickSession(reason = 'Pick session ended'): Promise<void> {
+  const tabIds = pickSessionTabIds
+  pickSessionTabIds = []
+  if (tabIds.length === 0) return
+  await stopPickOnTabs(tabIds, reason)
+}
+
+/** Settle any in-flight waiter and tear down overlays before starting a new session. */
+async function cancelActivePickSession(error = 'Previous pick cancelled'): Promise<void> {
+  if (pickWaiter) {
+    const { resolve, timer } = pickWaiter
+    clearTimeout(timer)
+    pickWaiter = null
+    resolve({ ok: false, error })
+  }
+  await endPickSession(
+    error === 'Element pick cancelled' ? 'Pick session ended' : 'Previous pick cancelled',
+  )
+}
+
+function beginPickWait(timeoutMs = 120_000): Promise<PickResult> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       if (!pickWaiter) return
       pickWaiter = null
+      void endPickSession('Timed out waiting for element pick')
       resolve({ ok: false, error: 'Timed out waiting for element pick. Try again.' })
     }, timeoutMs)
 
@@ -69,6 +98,51 @@ function settlePickWait(value: PickResult): void {
   clearTimeout(pickWaiter.timer)
   pickWaiter = null
   resolve(value)
+}
+
+async function startPickerOnTab(tabId: number): Promise<boolean> {
+  try {
+    await ensureContentScript(tabId)
+  } catch {
+    return false
+  }
+
+  try {
+    const started = await sendTabMessage<{ ok?: boolean; started?: boolean; error?: string }>(
+      tabId,
+      { type: 'PICK_ELEMENT_START' },
+    )
+    if (started?.ok) return true
+  } catch {
+    // retry once after re-inject
+  }
+
+  try {
+    await ensureContentScript(tabId)
+    const started = await sendTabMessage<{ ok?: boolean; error?: string }>(tabId, {
+      type: 'PICK_ELEMENT_START',
+    })
+    return Boolean(started?.ok)
+  } catch {
+    return false
+  }
+}
+
+async function resolvePickTargetTabIds(payload: {
+  tabId?: number
+  urlHint?: string
+}): Promise<number[]> {
+  if (payload.tabId) return [payload.tabId]
+
+  if (payload.urlHint) {
+    const found = await tabController.findTabByUrl(payload.urlHint)
+    if (found?.id) return [found.id]
+  }
+
+  const tabs = await chrome.tabs.query({})
+  return tabs
+    .filter((tab) => typeof tab.id === 'number' && !isRestrictedUrl(tab.url))
+    .map((tab) => tab.id as number)
 }
 
 const WORKFLOWS_KEY = 'workflows'
@@ -354,105 +428,78 @@ onRuntimeMessage(async (message, sender) => {
 
     case 'PICK_ELEMENT_START': {
       const payload = (message.payload ?? {}) as { tabId?: number; urlHint?: string }
-      let tabId = payload.tabId
+      const candidateTabIds = await resolvePickTargetTabIds(payload)
 
-      // Prefer an explicit tabId. urlHint is optional legacy; do not open ChatGPT by default.
-      if (!tabId && payload.urlHint) {
-        const found = await tabController.findTabByUrl(payload.urlHint)
-        tabId = found?.id
-      }
-
-      if (!tabId) {
-        const active = await tabController.getActiveTab()
-        tabId = active?.id
-        const url = active?.url ?? ''
-        if (
-          !tabId ||
-          url.startsWith('chrome://') ||
-          url.startsWith('chrome-extension://') ||
-          url.startsWith('edge://') ||
-          url.startsWith('about:')
-        ) {
-          return {
-            ok: false,
-            error:
-              'No normal website tab is active. Focus the target http/https page, then pick again.',
-          }
-        }
-      }
-
-      if (!tabId) {
+      if (candidateTabIds.length === 0) {
         return {
           ok: false,
           error:
-            'No tab available for element picking. Focus a normal website tab and try again.',
+            'No normal website tab is open. Open an http/https page in any tab, then pick again.',
         }
       }
 
-      await tabController.switchToTab(tabId)
-      await tabController.waitForComplete(tabId).catch(() => undefined)
-
-      try {
-        await ensureContentScript(tabId)
-      } catch (error) {
-        return {
-          ok: false,
-          error: error instanceof Error ? error.message : String(error),
-        }
+      // Single-tab mode (explicit tabId / urlHint): focus that tab for convenience.
+      if (payload.tabId || payload.urlHint) {
+        const only = candidateTabIds[0]
+        await tabController.switchToTab(only).catch(() => undefined)
+        await tabController.waitForComplete(only).catch(() => undefined)
       }
 
+      await cancelActivePickSession('Previous pick cancelled')
       const resultPromise = beginPickWait()
 
-      try {
-        const started = await sendTabMessage<{ ok?: boolean; started?: boolean; error?: string }>(
-          tabId,
-          { type: 'PICK_ELEMENT_START' },
-        )
-        if (!started?.ok) {
-          settlePickWait({
-            ok: false,
-            error: started?.error ?? 'Failed to start element picker on the page',
-          })
-          return await resultPromise
-        }
-      } catch (error) {
-        try {
-          await ensureContentScript(tabId)
-          const started = await sendTabMessage<{ ok?: boolean; error?: string }>(tabId, {
-            type: 'PICK_ELEMENT_START',
-          })
-          if (!started?.ok) {
-            settlePickWait({
-              ok: false,
-              error: started?.error ?? 'Failed to start element picker on the page',
-            })
-            return await resultPromise
-          }
-        } catch (retryError) {
-          settlePickWait({
-            ok: false,
-            error:
-              retryError instanceof Error
-                ? retryError.message
-                : error instanceof Error
-                  ? error.message
-                  : 'Could not reach the page content script',
-          })
-          return await resultPromise
-        }
+      const startedTabIds: number[] = []
+      await Promise.all(
+        candidateTabIds.map(async (tabId) => {
+          if (await startPickerOnTab(tabId)) startedTabIds.push(tabId)
+        }),
+      )
+
+      if (startedTabIds.length === 0) {
+        settlePickWait({
+          ok: false,
+          error:
+            'Could not start the element picker on any open website tab. Refresh the target page(s) and try again.',
+        })
+        return await resultPromise
       }
 
+      pickSessionTabIds = startedTabIds
       return await resultPromise
     }
 
     case 'PICK_ELEMENT_RESULT': {
       const payload = (message.payload ?? {}) as PickResult
+      if (!pickWaiter) return { ok: true }
+
+      const sourceTabId = sender.tab?.id
+      const sessionTabs = [...pickSessionTabIds]
+
+      if (payload.ok && payload.picked) {
+        pickSessionTabIds = []
+        settlePickWait({ ok: true, picked: payload.picked })
+        const others = sessionTabs.filter((id) => id !== sourceTabId)
+        void stopPickOnTabs(others, 'Pick session ended')
+        return { ok: true }
+      }
+
+      // Esc / in-page cancel: end the whole multi-tab session once.
+      pickSessionTabIds = []
       settlePickWait({
-        ok: Boolean(payload.ok),
-        picked: payload.picked,
-        error: payload.error,
+        ok: false,
+        error: payload.error ?? 'Element pick cancelled',
       })
+      void stopPickOnTabs(
+        sessionTabs.filter((id) => id !== sourceTabId),
+        'Pick session ended',
+      )
       return { ok: true }
+    }
+
+    case 'PICK_ELEMENT_STOP': {
+      const hadWaiter = Boolean(pickWaiter) || pickSessionTabIds.length > 0
+      await cancelActivePickSession('Element pick cancelled')
+      return { ok: true, cancelled: hadWaiter }
     }
 
     case 'PLANNER_START': {

@@ -24,7 +24,7 @@ export function SelectorLabView() {
     setError(null)
     const trimmed = url.trim()
     if (!trimmed) {
-      setError('Enter a website URL first, or focus a tab and pick on the active page.')
+      setError('Enter a website URL first, or open a website tab and pick on any page.')
       return
     }
     await sendRuntimeMessage({
@@ -33,7 +33,7 @@ export function SelectorLabView() {
     })
   }
 
-  /** Pick on the currently active website tab (does not force-open a URL). */
+  /** Pick on any open website tab (first click wins). */
   async function pickElement() {
     setError(null)
     setPicking(true)
@@ -49,17 +49,31 @@ export function SelectorLabView() {
       })
 
       if (!response.ok || !response.picked) {
+        const raw = response.error ?? 'Pick failed'
+        if (raw.toLowerCase().includes('cancelled')) return
         throw new Error(
-          response.error ??
-            'Pick failed. Focus a normal website tab, then try again.',
+          `${raw}. Open a normal website tab, then try again.`,
         )
       }
 
       setPicked(response.picked)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.toLowerCase().includes('cancelled')) return
+      setError(message)
     } finally {
       setPicking(false)
+    }
+  }
+
+  async function cancelPick() {
+    try {
+      await sendRuntimeMessage({ type: 'PICK_ELEMENT_STOP', payload: {} })
+    } catch {
+      // ignore
+    } finally {
+      setPicking(false)
+      setError(null)
     }
   }
 
@@ -74,8 +88,8 @@ export function SelectorLabView() {
       <header>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Selector Lab</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Works on any website. Optionally open a URL, then pick on the{' '}
-          <strong>active</strong> tab. Use the selector in a planner step&apos;s Properties.
+          Works on any website. Optionally open a URL, then pick on{' '}
+          <strong>any open</strong> website tab. Use the selector in a planner step&apos;s Properties.
         </p>
       </header>
 
@@ -105,15 +119,20 @@ export function SelectorLabView() {
             onClick={() => void pickElement()}
           >
             <Crosshair className="h-4 w-4" />
-            {picking ? 'Click an element on the page…' : '2. Pick on active tab'}
+            {picking ? 'Click an element on any tab…' : '2. Pick on any tab'}
           </Button>
+          {picking ? (
+            <Button type="button" variant="outline" onClick={() => void cancelPick()}>
+              Cancel
+            </Button>
+          ) : null}
         </div>
 
         <div className="rounded-xl border border-dashed border-border bg-background/70 p-4 text-sm text-muted-foreground">
           <p className="flex items-start gap-2">
             <MousePointerClick className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            Focus the target site tab, then pick. Esc cancels. Primary selector and fallbacks are
-            captured for reliable targeting.
+            Pick starts on every open website tab — click an element on the tab you want. Esc or
+            Cancel exits. Primary selector and fallbacks are captured for reliable targeting.
           </p>
         </div>
 

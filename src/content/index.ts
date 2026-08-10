@@ -1,6 +1,10 @@
 import { onRuntimeMessage } from '@/shared/messaging/bus'
 import { executeDomCommand } from '@/engine/automation/dom-actions'
-import { startElementPicker } from '@/content/element-picker'
+import {
+  isElementPickerActive,
+  startElementPicker,
+  stopElementPicker,
+} from '@/content/element-picker'
 import {
   isRunGuardLocked,
   lockRunGuard,
@@ -51,25 +55,39 @@ onRuntimeMessage(async (message) => {
     // Result is delivered via PICK_ELEMENT_RESULT.
     void startElementPicker()
       .then((picked) => {
+        if (!isElementPickerActive()) picking = false
         void chrome.runtime.sendMessage({
           type: 'PICK_ELEMENT_RESULT',
           payload: { ok: true, picked },
         })
       })
       .catch((error: unknown) => {
+        if (!isElementPickerActive()) picking = false
+        const messageText = error instanceof Error ? error.message : String(error)
+        // Background already settled (another tab won / UI Cancel / superseded pick).
+        if (/pick session ended|previous pick cancelled/i.test(messageText)) {
+          return
+        }
         void chrome.runtime.sendMessage({
           type: 'PICK_ELEMENT_RESULT',
           payload: {
             ok: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: messageText,
           },
         })
       })
-      .finally(() => {
-        picking = false
-      })
 
     return { ok: true, started: true }
+  }
+
+  if (message.type === 'PICK_ELEMENT_STOP') {
+    const reason =
+      typeof (message.payload as { reason?: string } | undefined)?.reason === 'string'
+        ? (message.payload as { reason: string }).reason
+        : 'Pick session ended'
+    stopElementPicker(reason)
+    picking = false
+    return { ok: true, stopped: true }
   }
 
   return undefined

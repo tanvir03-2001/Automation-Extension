@@ -7,6 +7,13 @@ import {
 
 export type PickedElement = SmartPickResult
 
+type ActivePicker = {
+  cleanup: () => void
+  reject: (error: Error) => void
+}
+
+let activePicker: ActivePicker | null = null
+
 function isPickerUi(el: Element | null): boolean {
   if (!el) return false
   return Boolean(
@@ -21,9 +28,25 @@ function resolvePickTarget(raw: Element, snapToHost: boolean): Element {
   return snapToHost ? resolveInteractiveTarget(raw) : raw
 }
 
+export function isElementPickerActive(): boolean {
+  return activePicker != null
+}
+
+/** Stop an in-progress pick (Cancel button / background broadcast / Esc). */
+export function stopElementPicker(reason = 'Element pick cancelled'): void {
+  if (!activePicker) {
+    document.getElementById('ae-element-picker-root')?.remove()
+    return
+  }
+  const { cleanup, reject } = activePicker
+  activePicker = null
+  cleanup()
+  reject(new Error(reason))
+}
+
 export function startElementPicker(): Promise<PickedElement> {
   return new Promise((resolve, reject) => {
-    document.getElementById('ae-element-picker-root')?.remove()
+    stopElementPicker('Previous pick cancelled')
 
     const root = document.createElement('div')
     root.id = 'ae-element-picker-root'
@@ -66,13 +89,31 @@ export function startElementPicker(): Promise<PickedElement> {
     document.documentElement.append(root)
 
     let lastTarget: Element | null = null
+    let settled = false
 
     const cleanup = () => {
       document.removeEventListener('mousemove', onMouseMove, true)
       document.removeEventListener('click', onClick, true)
       document.removeEventListener('keydown', onKeyDown, true)
       root.remove()
+      if (activePicker?.cleanup === cleanup) activePicker = null
     }
+
+    const settleReject = (error: Error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+
+    const settleResolve = (picked: PickedElement) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(picked)
+    }
+
+    activePicker = { cleanup, reject: settleReject }
 
     const paintHighlight = (target: Element) => {
       const rect = target.getBoundingClientRect()
@@ -104,16 +145,14 @@ export function startElementPicker(): Promise<PickedElement> {
 
       const target = resolvePickTarget(raw, event.shiftKey)
       const picked = buildSmartPickExact(target)
-      cleanup()
-      resolve(picked)
+      settleResolve(picked)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
-      cleanup()
-      reject(new Error('Element pick cancelled'))
+      settleReject(new Error('Element pick cancelled'))
     }
 
     document.addEventListener('mousemove', onMouseMove, true)

@@ -21,7 +21,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function isRestrictedUrl(url: string | undefined): boolean {
+export function isRestrictedUrl(url: string | undefined): boolean {
   if (!url) return true
   return RESTRICTED_PREFIXES.some((prefix) => url.startsWith(prefix))
 }
